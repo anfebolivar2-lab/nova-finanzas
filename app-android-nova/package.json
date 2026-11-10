@@ -1,0 +1,20 @@
+{
+  "name": "nova-finanzas-app",
+  "private": true,
+  "description": "App para Android de NOVA (se arma con Capacitor a partir de app-finanzas)",
+  "scripts": {
+    "preparar": "node preparar.mjs && npx cap sync android"
+  },
+  "dependencies": {
+    "@capacitor-community/speech-recognition": "7.0.1",
+    "@capacitor/android": "8.5.2",
+    "@capacitor/app": "8.1.2",
+    "@capacitor/browser": "8.0.5",
+    "@capacitor/cli": "8.5.2",
+    "@capacitor/core": "8.5.2",
+    "@capacitor/filesystem": "8.1.5",
+    "@capacitor/local-notifications": "8.3.1",
+    "@capacitor/preferences": "8.0.1",
+    "@capacitor/share": "8.0.3"
+  }
+}

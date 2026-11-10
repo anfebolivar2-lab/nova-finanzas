@@ -1,0 +1,7 @@
+{
+  "appId": "co.novafinanzas.app",
+  "appName": "NOVA",
+  "webDir": "www",
+  "android": { "backgroundColor": "#070908" },
+  "server": { "androidScheme": "https" }
+}

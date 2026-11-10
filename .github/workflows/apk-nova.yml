@@ -1,0 +1,141 @@
+# Arma la app de NOVA para Android (APK) a partir de app-finanzas y la deja en
+# app-finanzas/descargas/NOVA.apk, para descargarla desde la pantalla de inicio de la app.
+name: NOVA Android (APK)
+
+on:
+  push:
+    paths:
+      - "app-finanzas/**"
+      - "!app-finanzas/descargas/**"
+      - "app-android-nova/**"
+      - ".github/workflows/apk-nova.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: apk-nova-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      # NOVA se mudó a este repositorio cuando iba en la 1.63. Aquí GitHub cuenta las corridas desde 1, así que se
+      # suma 63: la primera APK de aquí es la 1.64 y el celular la acepta como actualización (no deja instalar una menor).
+      - name: Número de versión
+        run: echo "NOVA_VERSION=$((GITHUB_RUN_NUMBER + 63))" >> "$GITHUB_ENV"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - name: Preparar el proyecto de Android
+        working-directory: app-android-nova
+        run: |
+          npm ci --no-audit --no-fund
+          node preparar.mjs
+          # Número de esta APK: la app lo compara con version.json para avisar cuando hay una nueva
+          echo '{"versionCode": ${{ env.NOVA_VERSION }}, "versionName": "1.${{ env.NOVA_VERSION }}"}' > www/version-app.json
+          npx cap add android
+          # Ícono y pantalla de inicio con el logo de NOVA
+          rm -rf android/app/src/main/res/mipmap-anydpi-v26
+          cp -r recursos/res/* android/app/src/main/res/
+          # Permiso de ubicación (guardar dónde se hizo cada pago)
+          sed -i 's#<uses-permission android:name="android.permission.INTERNET" />#&\n    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />\n    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />#' android/app/src/main/AndroidManifest.xml
+          grep -q ACCESS_FINE_LOCATION android/app/src/main/AndroidManifest.xml
+          # Micrófono (dictar gastos) y cámara (foto del recibo)
+          sed -i 's#<uses-permission android:name="android.permission.INTERNET" />#&\n    <uses-permission android:name="android.permission.RECORD_AUDIO" />\n    <uses-permission android:name="android.permission.CAMERA" />#' android/app/src/main/AndroidManifest.xml
+          # Android 11+ necesita declarar que la app usa el reconocimiento de voz
+          sed -i 's#</manifest>#    <queries>\n        <intent>\n            <action android:name="android.speech.RecognitionService" />\n        </intent>\n    </queries>\n</manifest>#' android/app/src/main/AndroidManifest.xml
+          # Avisos de vencimientos (SOAT, tecnomecánica…): Android 13+ pide permiso para mostrar notificaciones
+          sed -i 's#<uses-permission android:name="android.permission.INTERNET" />#&\n    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />#' android/app/src/main/AndroidManifest.xml
+          grep -q POST_NOTIFICATIONS android/app/src/main/AndroidManifest.xml
+          # Entrar con Google: Google vuelve a la app con el enlace co.novafinanzas.app://login-callback
+          sed -i '0,/<\/activity>/s#</activity>#    <intent-filter>\n                <action android:name="android.intent.action.VIEW" />\n                <category android:name="android.intent.category.DEFAULT" />\n                <category android:name="android.intent.category.BROWSABLE" />\n                <data android:scheme="co.novafinanzas.app" />\n            </intent-filter>\n        </activity>#' android/app/src/main/AndroidManifest.xml
+          grep -q 'android:scheme="co.novafinanzas.app"' android/app/src/main/AndroidManifest.xml
+          grep -q RECORD_AUDIO android/app/src/main/AndroidManifest.xml
+          grep -q RecognitionService android/app/src/main/AndroidManifest.xml
+          # Widget de la pantalla de inicio: muestra el saldo y cuánto se puede gastar hoy
+          mkdir -p android/app/src/main/java/co/novafinanzas/app
+          cp recursos/java/SaldoWidget.java android/app/src/main/java/co/novafinanzas/app/SaldoWidget.java
+          sed -i 's#</application>#    <receiver android:name=".SaldoWidget" android:exported="true" android:label="NOVA saldo">\n            <intent-filter>\n                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />\n            </intent-filter>\n            <meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_saldo_info" />\n        </receiver>\n    </application>#' android/app/src/main/AndroidManifest.xml
+          grep -q 'android:name=".SaldoWidget"' android/app/src/main/AndroidManifest.xml
+          test -f android/app/src/main/res/xml/widget_saldo_info.xml
+          test -f android/app/src/main/res/layout/widget_saldo.xml
+          # Número de versión: uno más en cada armado
+          sed -i "s/versionCode 1$/versionCode ${{ env.NOVA_VERSION }}/; s/versionName \"1.0\"/versionName \"1.${{ env.NOVA_VERSION }}\"/" android/app/build.gradle
+          grep -E "versionCode|versionName" android/app/build.gradle
+          # Versión de lanzamiento (no "debug"): sin la marca de depuración, que Google Play Protect mira con más desconfianza.
+          sed -i '0,/^android {/s//android {\n    lint {\n        checkReleaseBuilds = false\n        abortOnError = false\n    }/' android/app/build.gradle
+          grep -n "checkReleaseBuilds" android/app/build.gradle
+
+      # Firma fija (firma/debug.keystore): así cada versión nueva se instala encima de la anterior.
+      # Copiarla a ~/.android no bastaba: Gradle creaba otra firma en cada armado.
+      - name: Armar la APK
+        working-directory: app-android-nova/android
+        run: |
+          ./gradlew assembleRelease --no-daemon \
+            -Pandroid.injected.signing.store.file="$GITHUB_WORKSPACE/app-android-nova/firma/debug.keystore" \
+            -Pandroid.injected.signing.store.password=android \
+            -Pandroid.injected.signing.key.alias=androiddebugkey \
+            -Pandroid.injected.signing.key.password=android
+
+      - name: Comprobar que la APK quedó con la firma fija
+        run: |
+          APKSIGNER=$(ls -d "$ANDROID_HOME"/build-tools/*/apksigner | sort -V | tail -1)
+          "$APKSIGNER" verify --print-certs app-android-nova/android/app/build/outputs/apk/release/app-release.apk | tee firma.txt
+          grep -qi "SHA-256 digest: fe1d04b95f1cfc5efb06c5c40abce525f9813f9f9ef0c5f6f725a2a60c24c5aa" firma.txt
+          # Debe ser una APK de lanzamiento, no de depuración
+          AAPT=$(ls -d "$ANDROID_HOME"/build-tools/*/aapt | sort -V | tail -1)
+          if "$AAPT" dump xmltree app-android-nova/android/app/build/outputs/apk/release/app-release.apk AndroidManifest.xml | grep -E "debuggable.*0xffffffff"; then echo "La APK quedó como depuración"; exit 1; fi
+
+      - name: Guardar la APK en la app
+        run: |
+          mkdir -p app-finanzas/descargas
+          cp app-android-nova/android/app/build/outputs/apk/release/app-release.apk app-finanzas/descargas/NOVA.apk
+          # Número de esta APK, para que la app instalada sepa si hay una más nueva (se baja de la misma página)
+          echo '{"versionCode": ${{ env.NOVA_VERSION }}, "versionName": "1.${{ env.NOVA_VERSION }}"}' > app-finanzas/descargas/version.json
+          ls -la app-finanzas/descargas
+
+      # Enlace fijo a la última APK (y su número de versión), para la página y para el aviso de la app:
+      # https://github.com/<repo>/releases/download/nova-android/NOVA.apk
+      - name: Publicar la APK en la versión fija "nova-android"
+        if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          echo '{"versionCode": ${{ env.NOVA_VERSION }}, "versionName": "1.${{ env.NOVA_VERSION }}"}' > version.json
+          gh release view nova-android >/dev/null 2>&1 || gh release create nova-android --target "$GITHUB_SHA" --latest=false \
+            --title "NOVA para Android" --notes "La última APK de NOVA. Se reemplaza sola en cada versión nueva."
+          gh release upload nova-android app-finanzas/descargas/NOVA.apk version.json --clobber
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: NOVA-apk
+          path: app-finanzas/descargas/NOVA.apk
+
+      - name: Subir la APK al repositorio
+        if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add app-finanzas/descargas/NOVA.apk app-finanzas/descargas/version.json
+          if git diff --cached --quiet; then echo "Sin cambios"; exit 0; fi
+          git commit -m "APK de NOVA actualizada (versión 1.${{ env.NOVA_VERSION }})"
+          # Si otro armado guardó su APK mientras este corría, gana la APK de este armado (-X ours) en vez de fallar por el choque.
+          ok=0
+          for intento in 1 2 3; do
+            if git pull --no-rebase --no-edit -X ours origin "${GITHUB_REF_NAME}" && git push origin "HEAD:${GITHUB_REF_NAME}"; then ok=1; break; fi
+            sleep 5
+          done
+          [ "$ok" = 1 ]

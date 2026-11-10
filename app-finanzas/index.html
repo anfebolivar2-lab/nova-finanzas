@@ -1,0 +1,1235 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#070908">
+<title>NOVA</title>
+<meta name="author" content="OPITA-DIGITAL">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap">
+<link rel="stylesheet" href="estilos.css">
+<link rel="icon" type="image/png" href="iconos/favicon.png">
+<link rel="apple-touch-icon" href="iconos/apple-touch-icon.png">
+<link rel="manifest" href="manifest.webmanifest">
+</head>
+<body>
+
+<!-- Inicio de sesión -->
+<!-- Solo dentro de la app instalada: avisa cuando hay una APK más nueva -->
+<a id="aviso-version" class="boton-apk aviso-version" hidden>
+  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M7 10l5 5 5-5M5 21h14"/></svg>
+  <span><strong>Hay una versión nueva de NOVA</strong><small id="aviso-version-texto">Toca para descargarla. Al abrir el archivo, toca Actualizar.</small></span>
+</a>
+
+<section id="pantalla-auth" class="auth" hidden>
+  <div class="logo grande"><span>NOVA</span><svg class="chispa" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2l2.2 7.8L22 12l-7.8 2.2L12 22l-2.2-7.8L2 12l7.8-2.2z"/></svg></div>
+  <p class="auth-lema">Anota tus gastos escribiendo o hablando. NOVA hace las cuentas.</p>
+  <form id="form-auth" class="tarjeta auth-form" novalidate>
+    <label for="auth-email">Correo</label>
+    <input id="auth-email" type="email" autocomplete="email" required>
+    <label for="auth-clave">Contraseña</label>
+    <div class="campo-clave">
+      <input id="auth-clave" type="password" autocomplete="current-password" minlength="6" required>
+      <button type="button" class="ver-clave" data-ver-clave="auth-clave" aria-label="Mostrar la contraseña" aria-pressed="false"></button>
+    </div>
+    <button type="button" id="btn-olvide" class="enlace olvide">¿Olvidaste tu contraseña?</button>
+    <div class="fila-botones">
+      <button type="submit" class="primario" data-accion="entrar">Entrar</button>
+      <button type="submit" data-accion="registrar">Crear cuenta</button>
+    </div>
+    <div id="bloque-google">
+      <div class="separador"><span>o</span></div>
+      <button type="button" id="btn-google" class="boton-google">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="#4285F4" d="M23.5 12.3c0-.8-.1-1.6-.2-2.3H12v4.5h6.5a5.6 5.6 0 0 1-2.4 3.7v3h3.9c2.3-2.1 3.5-5.2 3.5-8.9z"/><path fill="#34A853" d="M12 24c3.2 0 6-1.1 7.9-2.9l-3.9-3c-1.1.7-2.5 1.2-4 1.2-3.1 0-5.7-2.1-6.6-4.9H1.4v3.1A12 12 0 0 0 12 24z"/><path fill="#FBBC05" d="M5.4 14.3a7.2 7.2 0 0 1 0-4.6V6.6H1.4a12 12 0 0 0 0 10.8z"/><path fill="#EA4335" d="M12 4.8c1.8 0 3.3.6 4.5 1.8l3.4-3.4A12 12 0 0 0 1.4 6.6l4 3.1C6.3 6.9 8.9 4.8 12 4.8z"/></svg>
+        Continuar con Google
+      </button>
+    </div>
+    <p id="auth-mensaje" class="mensaje" role="status"></p>
+    <button type="button" id="btn-tengo-codigo" class="enlace" hidden>Ya tengo el código del correo</button>
+    <button type="button" id="btn-reenviar" class="enlace" hidden>Reenviar el correo de verificación</button>
+  </form>
+
+  <!-- Al abrir el enlace del correo para cambiar la contraseña -->
+  <form id="form-nueva-clave" class="tarjeta auth-form" novalidate hidden>
+    <h2 class="titulo-tarjeta">Crea tu nueva contraseña</h2>
+    <label for="nueva-clave">Nueva contraseña</label>
+    <div class="campo-clave">
+      <input id="nueva-clave" type="password" autocomplete="new-password" minlength="6" required>
+      <button type="button" class="ver-clave" data-ver-clave="nueva-clave" aria-label="Mostrar la contraseña" aria-pressed="false"></button>
+    </div>
+    <label for="nueva-clave-2">Repítela</label>
+    <div class="campo-clave">
+      <input id="nueva-clave-2" type="password" autocomplete="new-password" minlength="6" required>
+      <button type="button" class="ver-clave" data-ver-clave="nueva-clave-2" aria-label="Mostrar la contraseña" aria-pressed="false"></button>
+    </div>
+    <button type="submit" class="primario">Guardar contraseña</button>
+    <p id="nueva-clave-mensaje" class="mensaje" role="status"></p>
+  </form>
+
+  <!-- Código que llega al correo al crear la cuenta -->
+  <form id="form-codigo" class="tarjeta auth-form" novalidate hidden>
+    <h2 class="titulo-tarjeta">Escribe el código</h2>
+    <p class="nota" id="codigo-texto"></p>
+    <label for="codigo-valor">Código del correo</label>
+    <input id="codigo-valor" class="campo-codigo" inputmode="numeric" autocomplete="one-time-code" maxlength="10" placeholder="123456">
+    <button type="submit" class="primario">Verificar y entrar</button>
+    <p id="codigo-mensaje" class="mensaje" role="status"></p>
+    <button type="button" id="codigo-reenviar" class="enlace">Reenviar el código</button>
+    <button type="button" id="codigo-volver" class="enlace">Volver</button>
+  </form>
+
+  <!-- Olvidé mi contraseña: código del correo y contraseña nueva -->
+  <form id="form-recuperar" class="tarjeta auth-form" novalidate hidden>
+    <h2 class="titulo-tarjeta">Cambiar mi contraseña</h2>
+    <p class="nota" id="recuperar-texto"></p>
+    <label for="recuperar-codigo">Código del correo</label>
+    <input id="recuperar-codigo" class="campo-codigo" inputmode="numeric" autocomplete="one-time-code" maxlength="10" placeholder="123456">
+    <label for="recuperar-clave">Nueva contraseña</label>
+    <div class="campo-clave">
+      <input id="recuperar-clave" type="password" autocomplete="new-password" minlength="6">
+      <button type="button" class="ver-clave" data-ver-clave="recuperar-clave" aria-label="Mostrar la contraseña" aria-pressed="false"></button>
+    </div>
+    <label for="recuperar-clave-2">Repítela</label>
+    <div class="campo-clave">
+      <input id="recuperar-clave-2" type="password" autocomplete="new-password" minlength="6">
+      <button type="button" class="ver-clave" data-ver-clave="recuperar-clave-2" aria-label="Mostrar la contraseña" aria-pressed="false"></button>
+    </div>
+    <button type="submit" class="primario">Cambiar contraseña y entrar</button>
+    <p id="recuperar-mensaje" class="mensaje" role="status"></p>
+    <button type="button" id="recuperar-reenviar" class="enlace">Reenviar el código</button>
+    <button type="button" id="recuperar-volver" class="enlace">Volver</button>
+  </form>
+
+  <a id="btn-apk" class="boton-apk" href="descargas/NOVA.apk" download="NOVA.apk">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M7 10l5 5 5-5M5 21h14"/></svg>
+    <span><strong>APK Android</strong><small>Descarga la versión más nueva de NOVA</small></span>
+  </a>
+  <p class="nota centro respaldo">¿No se descarga? <a class="apk-respaldo" href="#" target="_blank" rel="noopener">Prueba este otro enlace</a>.</p>
+  <div id="apk-app" class="apk-app" hidden>
+    <p class="nota centro" id="apk-app-version"></p>
+    <button type="button" id="apk-app-buscar" class="boton-apk-boton">🔄 Buscar actualización de NOVA</button>
+  </div>
+  <button type="button" id="btn-demo" class="enlace">Ver la demostración sin cuenta</button>
+  <p class="nota centro"><a href="privacidad.html">Política de privacidad</a></p>
+  <p class="nota centro creditos">NOVA · Creada por <strong>OPITA-DIGITAL</strong> · © 2026. Todos los derechos reservados.</p>
+  <details class="ayuda-instalar">
+    <summary>¿No te deja instalarla?</summary>
+    <ol>
+      <li>Al abrir el archivo, Android pide permiso: toca <b>Ajustes</b> y activa <b>Permitir de esta fuente</b>. Vuelve y toca Instalar.</li>
+      <li>Si dice <b>«App no instalada»</b> o <b>«conflicto con un paquete»</b>: desinstala la NOVA anterior (mantén presionado su ícono → Desinstalar) e instala esta. No pierdes nada: tus datos están en tu cuenta.</li>
+      <li>Si <b>Play Protect</b> la bloquea: toca <b>Más detalles → Instalar de todos modos</b>.</li>
+      <li>Si el navegador dice que el archivo puede ser dañino: toca <b>Descargar de todos modos</b>.</li>
+    </ol>
+  </details>
+</section>
+
+
+<!-- App -->
+<div id="pantalla-app" class="app" hidden>
+  <div id="banner-red" class="banner-red" role="status" hidden></div>
+  <p id="aviso-demo" class="aviso-demo" hidden>Modo demostración: los datos son de ejemplo y no se guardan.</p>
+
+  <header class="cabecera">
+    <div class="logo"><span>NOVA</span><svg class="chispa" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2l2.2 7.8L22 12l-7.8 2.2L12 22l-2.2-7.8L2 12l7.8-2.2z"/></svg></div>
+    <button type="button" id="btn-espacio" class="chip-espacio" aria-haspopup="dialog" aria-label="Cambiar de espacio"><span id="esp-ico" class="esp-ico" aria-hidden="true">👛</span><span id="esp-nombre">Principal</span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></button>
+    <button type="button" id="btn-ojo" class="icono-btn" aria-pressed="false" aria-label="Ocultar los valores"></button>
+    <button type="button" class="avatar" id="avatar" data-ir="ajustes" aria-label="Configuración"></button>
+  </header>
+
+  <main>
+    <!-- INICIO -->
+    <section class="vista" data-vista="inicio">
+      <p id="saludo" class="saludo"></p>
+      <div class="periodo-nav">
+        <button type="button" class="icono-btn" data-periodo-inicio="-1" aria-label="Periodo anterior"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button>
+        <strong id="inicio-periodo"></strong>
+        <button type="button" class="icono-btn" data-periodo-inicio="1" aria-label="Periodo siguiente"><svg viewBox="0 0 24 24"><path d="M9 5l7 7-7 7"/></svg></button><button type="button" class="icono-btn btn-calendario" data-calendario="inicio" aria-label="Ver calendario día por día"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg></button>
+      </div>
+      <div class="inf-barra"><span>Descargar informe</span><span class="inf-iconos"><button type="button" class="inf-ico" data-informe="pdf" data-ctx="inicio" aria-label="Descargar informe en PDF"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 2h8l5 5v13a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2z" fill="#e5483d"/><path d="M14 2v5h5" fill="#f2a29c"/><text x="12" y="17" text-anchor="middle" font-size="6.2" font-weight="800" fill="#fff" font-family="Arial,sans-serif">PDF</text></svg></button><button type="button" class="inf-ico" data-informe="excel" data-ctx="inicio" aria-label="Descargar informe en Excel"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 2h8l5 5v13a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2z" fill="#1f9d55"/><path d="M14 2v5h5" fill="#8fd1ac"/><text x="12" y="17" text-anchor="middle" font-size="6.2" font-weight="800" fill="#fff" font-family="Arial,sans-serif">XLS</text></svg></button></span></div>
+
+      <article class="tarjeta saldo">
+        <span class="etiqueta">Balance disponible</span>
+        <strong id="saldo-total" class="saldo-valor"></strong>
+        <div class="saldo-disponible"><span>Disponible</span><span id="saldo-pct"></span></div>
+        <div class="barra clara"><span id="saldo-barra"></span></div>
+        <div class="saldo-partes">
+          <div><small>↗ Ingresos</small><strong id="saldo-ingresos"></strong></div>
+          <div><small>↘ Gastos</small><strong id="saldo-gastos"></strong></div>
+        </div>
+        <span id="saldo-cuentas" class="pildora"></span>
+      </article>
+
+      <article id="tarjeta-deficit" class="tarjeta deficit" hidden>
+        <span class="etiqueta">⚠ Déficit del periodo</span>
+        <strong id="deficit-valor"></strong>
+        <span class="nota">Tus gastos superan tus ingresos</span>
+      </article>
+
+      <article id="tarjeta-seguro" class="tarjeta seguro" hidden>
+        <span class="etiqueta">🛡 Seguro para gastar</span>
+        <strong id="seguro-valor"></strong>
+        <span id="seguro-nota" class="nota"></span>
+      </article>
+      <button type="button" id="tarjeta-deudas" class="tarjeta tarjeta-deudas" hidden>
+        <span class="etiqueta">💸 Tus deudas</span>
+        <strong id="deudas-inicio-valor"></strong>
+        <span id="deudas-inicio-nota" class="nota"></span>
+      </button>
+
+      <article id="tarjeta-proyeccion" class="tarjeta seguro" hidden>
+        <span class="etiqueta">🔮 Proyección del periodo</span>
+        <strong id="proyeccion-valor"></strong>
+        <span id="proyeccion-nota" class="nota"></span>
+      </article>
+      <article id="tarjeta-racha" class="tarjeta seguro" hidden>
+        <span class="etiqueta">🔥 Tu racha</span>
+        <strong id="racha-valor"></strong>
+        <span id="racha-nota" class="nota"></span>
+      </article>
+
+      <article id="tarjeta-pago" class="tarjeta seguro" hidden>
+        <span class="etiqueta">💵 Tu próximo pago</span>
+        <strong id="pago-valor"></strong>
+        <span id="pago-nota" class="nota"></span>
+      </article>
+      <article id="tarjeta-semana" class="tarjeta seguro" hidden>
+        <span class="etiqueta">🗓 Tu semana</span>
+        <strong id="semana-valor"></strong>
+        <span id="semana-nota" class="nota"></span>
+        <button type="button" id="semana-compartir" class="mini">📤 Compartir resumen</button>
+      </article>
+
+      <div id="alertas-docs" class="alertas-docs"></div>
+
+      <article id="tarjeta-jornada" class="tarjeta jornada" hidden>
+        <div class="presupuesto-cabeza">
+          <span class="etiqueta">🚖 Mi jornada de hoy</span>
+          <button type="button" class="enlace" data-ir="trabajo">Ver mi trabajo</button>
+        </div>
+        <strong id="jornada-neto" class="jornada-neto"></strong>
+        <span class="nota">Ganancia de hoy después de gasolina y demás gastos</span>
+        <div class="saldo-partes">
+          <div><small>↗ Ganado</small><strong id="jornada-ganado"></strong></div>
+          <div><small>↘ Gastos</small><strong id="jornada-gastos"></strong></div>
+        </div>
+        <div class="barra" id="jornada-meta-barra-caja" hidden><span id="jornada-meta-barra"></span></div>
+        <span id="jornada-nota" class="nota"></span>
+        <div class="fila-botones">
+          <button type="button" class="primario" data-trabajo="ganancia">＋ Ganancia de viaje</button>
+          <button type="button" data-trabajo="gasto">＋ Gasto del trabajo</button>
+        </div>
+      </article>
+
+      <form id="form-rapido" class="tarjeta rapido" autocomplete="off">
+        <label for="entrada-rapida" class="etiqueta">¿Qué gastaste o recibiste?</label>
+        <div class="rapido-fila">
+          <input id="entrada-rapida" type="text" placeholder="gasté 20 mil en almuerzo" enterkeyhint="send">
+          <button type="button" id="btn-voz" class="icono-btn redondo" aria-label="Dictar" hidden><svg viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg></button>
+          <button type="button" id="btn-foto" class="icono-btn redondo" aria-label="Foto del recibo"><svg viewBox="0 0 24 24"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg></button>
+          <input type="file" id="foto-recibo" accept="image/*" capture="environment" hidden>
+          <button type="submit" class="icono-btn redondo primario" aria-label="Interpretar"><svg viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></svg></button>
+        </div>
+        <div id="vista-previa" class="vista-previa" hidden>
+          <div class="previa-datos">
+            <span id="previa-ia" class="chip ia" hidden>✦ IA</span>
+            <span id="previa-tipo" class="chip"></span>
+            <strong id="previa-monto"></strong>
+            <span id="previa-desc"></span>
+            <span id="previa-etiquetas" class="etiquetas"></span>
+          </div>
+          <label class="casilla"><input type="checkbox" id="previa-frecuente"> Guardar también como registro común</label>
+          <div class="previa-controles">
+            <label for="previa-categoria" class="sr">Categoría</label>
+            <select id="previa-categoria"></select>
+            <button type="button" id="btn-cancelar">Cancelar</button>
+            <button type="button" id="btn-guardar" class="primario">Guardar</button>
+          </div>
+        </div>
+        <p id="rapido-mensaje" class="mensaje" role="status"></p>
+        <button type="button" class="enlace enlace-manual" data-abrir="hoja-mas">+ Registrar a mano, con el asistente o chatear</button>
+        <div id="frecuentes" class="frecuentes" aria-label="Registros comunes"></div>
+      </form>
+
+      <button type="button" class="tarjeta acceso-ia" data-abrir="pantalla-chat">
+        <span class="acceso-ia-icono">✦</span>
+        <span><strong>Pregúntale a NOVA</strong><small>Chatea con la IA: pregúntale lo que quieras, de tu plata o de cualquier tema.</small></span>
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5l7 7-7 7"/></svg>
+      </button>
+
+      <article class="tarjeta presupuesto" id="tarjeta-presupuesto">
+        <div class="presupuesto-cabeza">
+          <span class="etiqueta" id="presupuesto-titulo">Presupuesto</span>
+          <button type="button" class="enlace" data-ir="ajustes-presupuesto">Editar</button>
+        </div>
+        <strong id="presupuesto-valor"></strong>
+        <div class="barra"><span id="presupuesto-barra"></span></div>
+        <span id="presupuesto-nota" class="nota"></span>
+      </article>
+
+      <div class="dos-col">
+        <article class="tarjeta mini" id="tarjeta-meta">
+          <svg class="mini-icono" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="4"/><circle cx="12" cy="12" r="1"/><path d="M12 1v4M12 19v4M1 12h4M19 12h4"/></svg>
+          <span class="etiqueta">Ahorro</span>
+          <strong id="meta-valor"></strong>
+          <div class="barra"><span id="meta-barra"></span></div>
+          <span id="meta-nota" class="nota"></span>
+        </article>
+        <article class="tarjeta mini">
+          <svg class="mini-icono" viewBox="0 0 24 24"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20M6 15h4"/></svg>
+          <span class="etiqueta">Gastos de la semana</span>
+          <strong id="semana-valor"></strong>
+          <div class="barra"><span id="semana-barra"></span></div>
+          <span id="semana-nota" class="nota"></span>
+        </article>
+      </div>
+
+      <article class="tarjeta">
+        <h2 class="titulo-tarjeta">Gastos de esta semana</h2>
+        <div id="grafico-semana" class="grafico" role="img"></div>
+      </article>
+
+      <div class="seccion-cabecera">
+        <h2>Movimientos</h2>
+        <button type="button" class="enlace" data-ir="buscar">Ver todo</button>
+      </div>
+      <div id="lista-inicio" class="dias"></div>
+    </section>
+
+    <!-- PLANES -->
+    <section class="vista" data-vista="planes" hidden>
+      <div class="seccion-cabecera"><h1 class="titulo-vista">Planes</h1><button type="button" class="icono-btn btn-calendario" data-calendario="planes" aria-label="Ver calendario día por día"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg></button></div>
+      <div class="inf-barra"><span>Informe con tus límites y metas</span><span class="inf-iconos"><button type="button" class="inf-ico" data-informe="pdf" data-ctx="planes" aria-label="Descargar informe en PDF"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 2h8l5 5v13a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2z" fill="#e5483d"/><path d="M14 2v5h5" fill="#f2a29c"/><text x="12" y="17" text-anchor="middle" font-size="6.2" font-weight="800" fill="#fff" font-family="Arial,sans-serif">PDF</text></svg></button><button type="button" class="inf-ico" data-informe="excel" data-ctx="planes" aria-label="Descargar informe en Excel"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 2h8l5 5v13a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2z" fill="#1f9d55"/><path d="M14 2v5h5" fill="#8fd1ac"/><text x="12" y="17" text-anchor="middle" font-size="6.2" font-weight="800" fill="#fff" font-family="Arial,sans-serif">XLS</text></svg></button></span></div>
+      <div id="planes-vacio" class="tarjeta vacio-grande" hidden>
+        <span class="vacio-icono">+</span>
+        <strong>No tienes ningún plan</strong>
+        <p class="nota">Crea límites de gasto o metas de ahorro para organizar tu dinero.</p>
+        <button type="button" class="enlace" data-nuevo-limite>Crear mi primer plan</button>
+      </div>
+      <div class="seccion-cabecera">
+        <h2>Límites de gasto</h2>
+        <button type="button" class="enlace" data-nuevo-limite>+ Nuevo límite</button>
+      </div>
+      <ul id="lista-limites" class="lista-simple"></ul>
+      <div class="seccion-cabecera">
+        <h2>Deudas</h2>
+        <button type="button" class="enlace" id="btn-nueva-deuda">+ Nueva deuda</button>
+      </div>
+      <div id="deudas-resumen" class="deudas-resumen" hidden></div>
+      <ul id="lista-deudas" class="lista-simple"></ul>
+      <div class="seccion-cabecera">
+        <h2>Gastos compartidos</h2>
+        <button type="button" class="enlace" id="btn-nuevo-grupo">+ Nuevo grupo</button>
+      </div>
+      <ul id="lista-grupos" class="lista-simple"></ul>
+      <div class="seccion-cabecera"><h2>Metas de ahorro</h2></div>
+      <ul id="lista-metas" class="lista-metas"></ul>
+      <form id="form-meta" class="tarjeta formulario">
+        <h2 class="titulo-tarjeta">Nueva meta</h2>
+        <label for="meta-nombre">¿Para qué ahorras?</label>
+        <input id="meta-nombre" required placeholder="Audífonos nuevos">
+        <label for="meta-objetivo">¿Cuánto necesitas?</label>
+        <input id="meta-objetivo" required inputmode="numeric" placeholder="2 millones">
+        <label for="meta-fecha">¿Para cuándo la quieres? (opcional)</label>
+        <input id="meta-fecha" type="date">
+        <button type="submit" class="primario">Crear meta</button>
+        <p class="mensaje" id="meta-mensaje" role="status"></p>
+      </form>
+    </section>
+
+    <!-- ANÁLISIS -->
+    <section class="vista" data-vista="analisis" hidden>
+      <div class="seccion-cabecera">
+        <h1 class="titulo-vista">Análisis</h1>
+        <button type="button" id="btn-personalizar" class="enlace">⚙ Personalizar</button>
+      </div>
+      <div id="analisis-ciclos" class="pestanas" role="group" aria-label="Ciclo"></div>
+      <div class="inf-barra"><span>Descargar informe</span><span class="inf-iconos"><button type="button" class="inf-ico" data-informe="pdf" data-ctx="analisis" aria-label="Descargar informe en PDF"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 2h8l5 5v13a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2z" fill="#e5483d"/><path d="M14 2v5h5" fill="#f2a29c"/><text x="12" y="17" text-anchor="middle" font-size="6.2" font-weight="800" fill="#fff" font-family="Arial,sans-serif">PDF</text></svg></button><button type="button" class="inf-ico" data-informe="excel" data-ctx="analisis" aria-label="Descargar informe en Excel"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 2h8l5 5v13a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2z" fill="#1f9d55"/><path d="M14 2v5h5" fill="#8fd1ac"/><text x="12" y="17" text-anchor="middle" font-size="6.2" font-weight="800" fill="#fff" font-family="Arial,sans-serif">XLS</text></svg></button></span></div>
+      <div class="periodo-nav">
+        <button type="button" class="icono-btn" data-periodo-analisis="-1" aria-label="Periodo anterior"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button>
+        <strong id="analisis-periodo"></strong>
+        <button type="button" class="icono-btn" data-periodo-analisis="1" aria-label="Periodo siguiente"><svg viewBox="0 0 24 24"><path d="M9 5l7 7-7 7"/></svg></button><button type="button" class="icono-btn btn-calendario" data-calendario="analisis" aria-label="Ver calendario día por día"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg></button>
+      </div>
+      <div id="personalizar" class="tarjeta formulario" hidden>
+        <h2 class="titulo-tarjeta">Personalizar análisis</h2>
+        <p class="nota">Muestra u oculta cada gráfico y cambia su orden con las flechas.</p>
+        <ul id="lista-widgets" class="lista-widgets"></ul>
+        <button type="button" id="btn-listo-widgets" class="primario">Listo</button>
+      </div>
+      <div id="widgets" class="widgets"></div>
+    </section>
+
+    <!-- NOVA IA: conversaciones -->
+    <section class="vista" data-vista="ia" hidden>
+      <div class="seccion-cabecera">
+        <h1 class="titulo-vista">NOVA IA</h1>
+        <button type="button" id="btn-chat-nuevo" class="icono-btn redondo" aria-label="Nueva conversación"><svg viewBox="0 0 24 24"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg></button>
+      </div>
+      <input id="chat-buscar" type="search" placeholder="Buscar conversaciones" autocomplete="off">
+      <ul id="lista-chats" class="lista-chats"></ul>
+      <p class="nota centro">Tus conversaciones se guardan en tu cuenta. NOVA IA responde con tus propios números.</p>
+    </section>
+
+    <!-- MI TRABAJO (modo conductor) -->
+    <section class="vista" data-vista="trabajo" hidden>
+      <div class="sub-cabecera"><button type="button" class="icono-btn" data-ir="inicio" aria-label="Volver"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button><h1>Mi trabajo</h1><button type="button" class="icono-btn btn-calendario" data-calendario="trabajo" aria-label="Ver calendario día por día"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg></button></div>
+      <div class="inf-barra"><span>Informe de mi trabajo</span><span class="inf-iconos"><button type="button" class="inf-ico" data-informe="pdf" data-ctx="trabajo" aria-label="Descargar informe en PDF"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 2h8l5 5v13a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2z" fill="#e5483d"/><path d="M14 2v5h5" fill="#f2a29c"/><text x="12" y="17" text-anchor="middle" font-size="6.2" font-weight="800" fill="#fff" font-family="Arial,sans-serif">PDF</text></svg></button><button type="button" class="inf-ico" data-informe="excel" data-ctx="trabajo" aria-label="Descargar informe en Excel"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 2h8l5 5v13a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2z" fill="#1f9d55"/><path d="M14 2v5h5" fill="#8fd1ac"/><text x="12" y="17" text-anchor="middle" font-size="6.2" font-weight="800" fill="#fff" font-family="Arial,sans-serif">XLS</text></svg></button></span></div>
+      <div id="trabajo-periodos" class="pestanas" role="group" aria-label="Periodo">
+        <button type="button" data-cual="hoy">Hoy</button>
+        <button type="button" data-cual="semana">Esta semana</button>
+        <button type="button" data-cual="mes">Este mes</button>
+      </div>
+      <article class="tarjeta saldo">
+        <span class="etiqueta">Ganancia neta (lo que te dejó trabajar)</span>
+        <strong id="trabajo-neto" class="saldo-valor"></strong>
+        <div class="saldo-partes">
+          <div><small>↗ Ganado con las apps</small><strong id="trabajo-ganado"></strong></div>
+          <div><small>↘ Gasolina, tinto y demás</small><strong id="trabajo-gastos"></strong></div>
+        </div>
+        <span id="trabajo-fijos" class="nota-clara"></span>
+        <span id="trabajo-viajes" class="pildora"></span>
+        <div class="barra clara" id="trabajo-meta-caja" hidden><span id="trabajo-meta-barra"></span></div>
+        <span id="trabajo-meta-nota" class="nota-clara"></span>
+      </article>
+
+      <h2 class="grupo-ajustes">Registrar una ganancia</h2>
+      <div id="trabajo-apps" class="chips-rapidos"></div>
+      <h2 class="grupo-ajustes">Registrar un gasto del trabajo</h2>
+      <div id="trabajo-gastos-rapidos" class="chips-rapidos"></div>
+
+      <article class="tarjeta widget">
+        <h2 class="titulo-widget">Ganancias por app</h2>
+        <ul id="trabajo-plataformas" class="por-categoria"></ul>
+      </article>
+      <article class="tarjeta widget">
+        <h2 class="titulo-widget">En qué gastas del trabajo</h2>
+        <ul id="trabajo-categorias" class="por-categoria"></ul>
+      </article>
+
+      <div class="seccion-cabecera">
+        <h2>Vencimientos de mi vehículo</h2>
+        <button type="button" class="enlace" id="btn-nuevo-documento">+ Agregar</button>
+      </div>
+      <p class="nota">Para que no se te olvide: pon la fecha y NOVA te avisa antes de que se venza (en el celular también con una notificación) y te insiste si ya se pasó.</p>
+      <div id="doc-rapidos" class="chips-rapidos"></div>
+      <ul id="lista-documentos" class="lista-simple"></ul>
+
+      <form id="form-vehiculo" class="tarjeta formulario" autocomplete="off">
+        <h2 class="titulo-tarjeta">Mi vehículo y mi meta</h2>
+        <label for="vehiculo-nombre">Vehículo</label>
+        <input id="vehiculo-nombre" maxlength="60" placeholder="Moto NKD 125 · placa ABC12D">
+        <label for="meta-diaria">Meta de ganancia por día</label>
+        <input id="meta-diaria" inputmode="numeric" placeholder="150 mil (opcional)">
+        <button type="submit" class="primario">Guardar</button>
+        <p class="mensaje" id="vehiculo-mensaje" role="status"></p>
+      </form>
+    </section>
+
+    <!-- BUSCAR -->
+    <section class="vista" data-vista="buscar" hidden>
+      <div class="seccion-cabecera"><h1 class="titulo-vista">Buscar</h1><button type="button" class="icono-btn btn-calendario" data-calendario="buscar" aria-label="Ver calendario día por día"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg></button></div>
+      <div class="inf-barra"><span>Descargar informe</span><span class="inf-iconos"><button type="button" class="inf-ico" data-informe="pdf" data-ctx="buscar" aria-label="Descargar informe en PDF"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 2h8l5 5v13a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2z" fill="#e5483d"/><path d="M14 2v5h5" fill="#f2a29c"/><text x="12" y="17" text-anchor="middle" font-size="6.2" font-weight="800" fill="#fff" font-family="Arial,sans-serif">PDF</text></svg></button><button type="button" class="inf-ico" data-informe="excel" data-ctx="buscar" aria-label="Descargar informe en Excel"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 2h8l5 5v13a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2z" fill="#1f9d55"/><path d="M14 2v5h5" fill="#8fd1ac"/><text x="12" y="17" text-anchor="middle" font-size="6.2" font-weight="800" fill="#fff" font-family="Arial,sans-serif">XLS</text></svg></button></span></div>
+      <input id="buscar-texto" type="search" placeholder="Buscar por nombre, categoría, nota o etiqueta" autocomplete="off">
+      <div class="fila-filtros">
+        <div class="segmentado" role="radiogroup" aria-label="Tipo" id="buscar-tipo">
+          <button type="button" role="radio" data-tipo="">Todo</button>
+          <button type="button" role="radio" data-tipo="gasto">Gastos</button>
+          <button type="button" role="radio" data-tipo="ingreso">Ingresos</button>
+        </div>
+        <button type="button" id="btn-filtros" aria-expanded="false">Filtros</button>
+      </div>
+      <div id="filtros" class="tarjeta formulario" hidden>
+        <div class="dos-col">
+          <div class="formulario"><label for="filtro-desde">Desde</label><input id="filtro-desde" type="date"></div>
+          <div class="formulario"><label for="filtro-hasta">Hasta</label><input id="filtro-hasta" type="date"></div>
+        </div>
+        <label for="filtro-categoria">Categoría</label>
+        <select id="filtro-categoria"></select>
+        <label for="filtro-etiqueta">Etiqueta</label>
+        <select id="filtro-etiqueta"></select>
+        <label for="filtro-estado">Estado</label>
+        <select id="filtro-estado"><option value="">Todos</option><option value="pagado">Pagado</option><option value="pendiente">Pendiente</option></select>
+        <button type="button" id="btn-limpiar-filtros">Limpiar filtros</button>
+      </div>
+      <div class="buscar-resumen">
+        <span id="buscar-resumen"></span>
+        <label for="buscar-orden" class="sr">Ordenar</label>
+        <select id="buscar-orden">
+          <option value="recientes">Recientes</option>
+          <option value="antiguos">Antiguos</option>
+          <option value="mayor">Mayor valor</option>
+          <option value="menor">Menor valor</option>
+        </select>
+        <button type="button" id="btn-exportar-busqueda" class="icono-btn" aria-label="Exportar estos movimientos a CSV"><svg viewBox="0 0 24 24"><path d="M12 3v12M7 10l5 5 5-5M5 21h14"/></svg></button>
+      </div>
+      <div id="lista-buscar" class="dias"></div>
+    </section>
+
+    <!-- CONFIGURACIÓN -->
+    <section class="vista" data-vista="ajustes" hidden>
+      <h1 class="titulo-vista">Configuración</h1>
+      <article class="tarjeta perfil-tarjeta">
+        <span class="avatar grande" id="perfil-avatar"></span>
+        <div class="mov-texto"><strong id="perfil-email"></strong><span class="chip ia">Todo gratis · sin anuncios</span></div>
+      </article>
+      <article class="tarjeta incluido">
+        <h2 class="titulo-tarjeta">Todo incluido, gratis</h2>
+        <ul class="lista-incluido">
+          <li>Experiencia 100% libre de anuncios</li>
+          <li>Registros con IA ilimitados (texto, audio, imagen)</li>
+          <li>Chat con la IA para preguntar sobre tus finanzas</li>
+          <li>Tu ciclo de presupuesto: semanal, quincenal, mensual, trimestral y más</li>
+          <li>Registros comunes y programados ilimitados</li>
+          <li>Etiquetas ilimitadas para filtrar y analizar por contexto</li>
+          <li>Mapa y otros pagos en el mismo lugar para cada pago</li>
+          <li>Informes en PDF y Excel con gráficos, CSV y respaldo</li>
+        </ul>
+      </article>
+
+      <h2 class="grupo-ajustes">Asistente</h2>
+      <div class="menu">
+        <button type="button" data-abrir="pantalla-chat"><span class="menu-icono">💬</span><span><strong>Pregúntale a NOVA</strong><small>Chatea con la IA sobre tus finanzas</small></span></button>
+        <button type="button" data-abrir="pantalla-asistente"><span class="menu-icono">✦</span><span><strong>Asistente inteligente</strong><small>Dicta, toma una foto o escribe varios gastos</small></span></button>
+      </div>
+
+      <h2 class="grupo-ajustes">Gestión de gastos</h2>
+      <div class="menu">
+        <button type="button" data-ir="ajustes-presupuesto"><span class="menu-icono">📅</span><span><strong>Período de presupuesto</strong><small id="aj-ciclo"></small></span></button>
+        <button type="button" data-ir="ajustes-categorias"><span class="menu-icono">🗂</span><span><strong id="aj-categorias">Categorías</strong><small>Administrar categorías</small></span></button>
+        <button type="button" data-ir="ajustes-comunes"><span class="menu-icono">⚡</span><span><strong>Registros comunes</strong><small>Movimientos repetidos de un toque</small></span></button>
+        <button type="button" data-ir="ajustes-etiquetas"><span class="menu-icono">#</span><span><strong>Etiquetas</strong><small>Separa tus gastos por contexto</small></span></button>
+        <button type="button" data-ir="ajustes-programadas"><span class="menu-icono">🔁</span><span><strong>Programadas</strong><small>Transacciones automáticas</small></span></button>
+        <button type="button" data-ir="ajustes-cuentas"><span class="menu-icono">💳</span><span><strong>Cuentas</strong><small>Nequi, banco, efectivo…</small></span></button>
+        <label class="menu-fila"><span class="menu-icono">🛡</span><span><strong>Seguro para gastar</strong><small>Visible en el inicio</small></span><input type="checkbox" id="perfil-seguro" class="interruptor"></label>
+        <label class="menu-fila"><span class="menu-icono">📍</span><span><strong>Guardar la ubicación</strong><small>Mapa y otros pagos en el mismo lugar</small></span><input type="checkbox" id="perfil-ubicacion" class="interruptor"></label>
+      </div>
+      <p class="mensaje" id="ajustes-mensaje" role="status"></p>
+
+      <h2 class="grupo-ajustes">Trabajo con apps de transporte</h2>
+      <div class="menu">
+        <label class="menu-fila"><span class="menu-icono">🚖</span><span><strong>Modo conductor</strong><small>Didi, Uber, inDrive… ganancias, gastos y vencimientos</small></span><input type="checkbox" id="perfil-conductor" class="interruptor"></label>
+        <button type="button" id="aj-trabajo" data-ir="trabajo" hidden><span class="menu-icono">📊</span><span><strong>Mi trabajo</strong><small>Cuánto voy ganando, mis gastos y el SOAT</small></span></button>
+      </div>
+
+      <h2 class="grupo-ajustes">Datos</h2>
+      <div class="menu">
+        <button type="button" data-ir="ajustes-tasas"><span class="menu-icono">💱</span><span><strong>Tasas de cambio</strong><small>Convertidor y las 162 monedas del mundo, con buscador</small></span></button>
+        <button type="button" data-ir="ajustes-exportar"><span class="menu-icono">⬇</span><span><strong>Exportar datos</strong><small>Informe PDF, Excel con dashboard, CSV y respaldo</small></span></button>
+      </div>
+
+      <h2 class="grupo-ajustes">Seguridad y respaldo</h2>
+      <div class="menu">
+        <button type="button" id="btn-pin"><span class="menu-icono">🔒</span><span><strong>Bloqueo con PIN</strong><small id="pin-estado">Pide un PIN cada vez que abres NOVA</small></span></button>
+        <button type="button" id="btn-pin2"><span class="menu-icono">🤫</span><span><strong>PIN discreto</strong><small id="pin2-estado">Un segundo PIN que abre NOVA con los valores ocultos</small></span></button>
+        <button type="button" id="btn-restaurar"><span class="menu-icono">♻️</span><span><strong>Restaurar respaldo</strong><small>Agrega los movimientos de un archivo de respaldo, sin borrar nada</small></span></button>
+        <input type="file" id="archivo-respaldo" accept=".json,application/json" hidden>
+        <button type="button" id="btn-importar"><span class="menu-icono">📥</span><span><strong>Importar desde Excel o CSV</strong><small>Columnas: fecha, descripcion, monto (y tipo, categoria si quieres)</small></span></button>
+        <input type="file" id="archivo-csv" accept=".csv,text/csv,text/plain" hidden>
+        <button type="button" id="btn-actualizar" hidden><span class="menu-icono">🔄</span><span><strong>Buscar actualización</strong><small id="actualizar-estado">Mira si hay una versión nueva de NOVA</small></span></button>
+        <button type="button" id="btn-pruebas"><span class="menu-icono">🧪</span><span><strong>Probar las funciones nuevas</strong><small>Prueba con un toque la foto, la IA, el widget y las teclas rápidas en tu celular</small></span></button>
+        <button type="button" id="btn-historial"><span class="menu-icono">🕘</span><span><strong>Historial de cambios</strong><small>Qué creaste, editaste o borraste y cuándo</small></span></button>
+        <button type="button" id="btn-papelera"><span class="menu-icono">🗑️</span><span><strong>Papelera</strong><small id="papelera-estado">Recupera lo que borraste en los últimos 30 días</small></span></button>
+        <label class="menu-fila"><span class="menu-icono">📳</span><span><strong>Sacudir para ocultar valores</strong><small>Sacude el celular 3 veces para ocultar o mostrar</small></span><input type="checkbox" id="sacudir-ocultar" class="interruptor"></label>
+      </div>
+      <p class="mensaje" id="respaldo-mensaje" role="status"></p>
+
+      <h2 class="grupo-ajustes">Apariencia</h2>
+      <article class="tarjeta formulario">
+        <span class="etiqueta">Tema</span>
+        <div class="segmentado" role="radiogroup" aria-label="Tema">
+          <button type="button" role="radio" data-tema="sistema">Automático</button>
+          <button type="button" role="radio" data-tema="oscuro">Oscuro</button>
+          <button type="button" role="radio" data-tema="claro">Claro</button>
+        </div>
+        <span class="etiqueta">Color de NOVA</span>
+        <div class="segmentado" role="radiogroup" aria-label="Color">
+          <button type="button" role="radio" data-acento="verde">Verde</button>
+          <button type="button" role="radio" data-acento="azul">Azul</button>
+          <button type="button" role="radio" data-acento="morado">Morado</button>
+          <button type="button" role="radio" data-acento="naranja">Naranja</button>
+        </div>
+        <span class="etiqueta">Tamaño de letra</span>
+        <div class="segmentado dos" role="radiogroup" aria-label="Tamaño de letra">
+          <button type="button" role="radio" data-letra="normal">Normal</button>
+          <button type="button" role="radio" data-letra="grande">Grande</button>
+        </div>
+      </article>
+      <h2 class="grupo-ajustes">Tu plata</h2>
+      <article class="tarjeta formulario">
+        <label for="dia-pago">¿Qué día del mes te pagan? (opcional)</label>
+        <input id="dia-pago" type="number" inputmode="numeric" min="1" max="31" placeholder="Por ejemplo 30">
+        <p class="nota">Con eso te digo cuántos días faltan y cuánto puedes gastar por día hasta tu próximo pago.</p>
+      </article>
+      <article class="tarjeta formulario">
+        <label class="menu-fila"><span class="menu-icono">🐖</span><span><strong>Apartar al cobrar</strong><small>Cuando anotes un ingreso, te propongo apartar una parte para una meta</small></span><input type="checkbox" id="apartar-activo" class="interruptor"></label>
+        <label for="apartar-pct">¿Qué porcentaje? (1 a 50)</label>
+        <input id="apartar-pct" type="number" inputmode="numeric" min="1" max="50" placeholder="10">
+        <label for="apartar-meta">¿Para qué meta?</label>
+        <select id="apartar-meta"></select>
+      </article>
+      <div class="menu">
+        <label class="menu-fila"><span class="menu-icono">🪙</span><span><strong>Redondeo ahorrador</strong><small>Cada gasto se redondea a mil y lo que sobra se aparta en una alcancía virtual</small></span><input type="checkbox" id="redondeo-activo" class="interruptor"></label>
+      </div>
+      <h2 class="grupo-ajustes">Recordatorios (app Android)</h2>
+      <div class="menu">
+        <label class="menu-fila"><span class="menu-icono">🌙</span><span><strong>Anotar mis gastos de hoy</strong><small>Un aviso cada noche a las 8 p. m.</small></span><input type="checkbox" id="rec-noche" class="interruptor"></label>
+        <label class="menu-fila"><span class="menu-icono">⚡</span><span><strong>Teclas rápidas en la notificación</strong><small>Una notificación con botones para anotar tus registros comunes de un toque</small></span><input type="checkbox" id="rec-rapido" class="interruptor"></label>
+        <label class="menu-fila"><span class="menu-icono">💾</span><span><strong>Respaldo semanal</strong><small>Cada domingo a las 6 p. m. un aviso para guardar tu copia en Drive</small></span><input type="checkbox" id="rec-respaldo" class="interruptor"></label>
+        <label class="menu-fila"><span class="menu-icono">🎁</span><span><strong>Prima y aguinaldo</strong><small>Un aviso en junio y diciembre para apartar plata</small></span><input type="checkbox" id="rec-prima" class="interruptor"></label>
+        <label class="menu-fila"><span class="menu-icono">🔔</span><span><strong>Antes de un pago programado</strong><small>Un aviso el día anterior</small></span><input type="checkbox" id="rec-programados" class="interruptor"></label>
+      </div>
+      <a id="perfil-apk" class="boton-apk" href="descargas/NOVA.apk" hidden>
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M7 10l5 5 5-5M5 21h14"/></svg>
+        <span><strong>Descargar la app para Android</strong><small>Ábrela y toca Instalar. Si Android pregunta, permite instalar desde esta fuente.</small></span>
+      </a>
+      <p class="nota centro respaldo">¿No se descarga? <a class="apk-respaldo" href="#" target="_blank" rel="noopener">Prueba este otro enlace</a>.</p>
+      <details class="ayuda-instalar">
+        <summary>¿No te deja instalarla?</summary>
+        <ol>
+          <li>Al abrir el archivo, Android pide permiso: toca <b>Ajustes</b> y activa <b>Permitir de esta fuente</b>. Vuelve y toca Instalar.</li>
+          <li>Si dice <b>«App no instalada»</b> o <b>«conflicto con un paquete»</b>: desinstala la NOVA anterior (mantén presionado su ícono → Desinstalar) e instala esta. No pierdes nada: tus datos están en tu cuenta.</li>
+          <li>Si <b>Play Protect</b> la bloquea: toca <b>Más detalles → Instalar de todos modos</b>.</li>
+          <li>Si el navegador dice que el archivo puede ser dañino: toca <b>Descargar de todos modos</b>.</li>
+        </ol>
+      </details>
+      <p class="nota centro creditos">NOVA · Creada por <strong>OPITA-DIGITAL</strong><br>© 2026. Todos los derechos reservados.</p>
+      <button type="button" id="btn-salir" class="peligro">Cerrar sesión</button>
+    </section>
+
+    <!-- Configuración: periodo de presupuesto -->
+    <section class="vista" data-vista="ajustes-presupuesto" hidden>
+      <div class="sub-cabecera"><button type="button" class="icono-btn" data-ir="ajustes" aria-label="Volver"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button><h1>Período de presupuesto</h1></div>
+      <p class="nota">Elige el ciclo en el que ves tus finanzas. El inicio, el presupuesto y lo que puedes gastar se organizan alrededor de este periodo.</p>
+      <form id="form-presupuesto" class="formulario">
+        <div id="lista-ciclos" class="lista-opciones" role="radiogroup" aria-label="Ciclo"></div>
+        <label for="presupuesto-monto">¿Cuánto quieres gastar como máximo en cada periodo?</label>
+        <input id="presupuesto-monto" inputmode="numeric" placeholder="1 millón (opcional)">
+        <button type="submit" class="primario">Guardar</button>
+        <p class="mensaje" id="presupuesto-mensaje" role="status"></p>
+      </form>
+    </section>
+
+    <!-- Configuración: categorías -->
+    <section class="vista" data-vista="ajustes-categorias" hidden>
+      <div class="sub-cabecera"><button type="button" class="icono-btn" data-ir="ajustes" aria-label="Volver"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button><h1>Categorías</h1>
+        <button type="button" class="icono-btn" data-nueva-categoria aria-label="Nueva categoría"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></button></div>
+      <div class="segmentado dos" role="radiogroup" aria-label="Tipo" id="cat-tipo">
+        <button type="button" role="radio" data-tipo="gasto">Gastos</button>
+        <button type="button" role="radio" data-tipo="ingreso">Ingresos</button>
+      </div>
+      <input id="cat-buscar" type="search" placeholder="Buscar categoría…" autocomplete="off">
+      <div id="lista-categorias"></div>
+      <button type="button" class="boton-borde" data-nueva-categoria>+ Nueva categoría</button>
+    </section>
+
+    <!-- Configuración: registros comunes -->
+    <section class="vista" data-vista="ajustes-comunes" hidden>
+      <div class="sub-cabecera"><button type="button" class="icono-btn" data-ir="ajustes" aria-label="Volver"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button><h1>Registros comunes</h1></div>
+      <article class="tarjeta">
+        <strong>⚡ Tus gastos de siempre, en un toque</strong>
+        <p class="nota">Guarda los movimientos que repites (la botella de agua, el tinto de la mañana, el parqueadero) y regístralos después desde el inicio sin escribir el valor ni buscar la categoría.</p>
+      </article>
+      <form id="form-comun" class="tarjeta formulario" autocomplete="off">
+        <label for="comun-texto">Nuevo registro común</label>
+        <div class="rapido-fila">
+          <input id="comun-texto" placeholder="tinto 3 mil #trabajo" maxlength="120">
+          <button type="submit" class="primario">Agregar</button>
+        </div>
+        <p class="mensaje" id="comun-mensaje" role="status"></p>
+      </form>
+      <ul id="lista-comunes" class="lista-simple"></ul>
+    </section>
+
+    <!-- Configuración: etiquetas -->
+    <section class="vista" data-vista="ajustes-etiquetas" hidden>
+      <div class="sub-cabecera"><button type="button" class="icono-btn" data-ir="ajustes" aria-label="Volver"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button><h1>Etiquetas</h1></div>
+      <form id="form-etiqueta" class="rapido-fila" autocomplete="off">
+        <label for="etiqueta-nueva" class="sr">Nueva etiqueta</label>
+        <input id="etiqueta-nueva" placeholder="# Escribe y presiona Agregar" maxlength="30">
+        <button type="submit" class="primario">Agregar</button>
+      </form>
+      <p class="nota">Usa las etiquetas al registrar un gasto (por ejemplo #trabajo o #viaje) para filtrarlos y analizarlos juntos.</p>
+      <ul id="lista-etiquetas" class="lista-simple"></ul>
+    </section>
+
+    <!-- Configuración: programadas -->
+    <section class="vista" data-vista="ajustes-programadas" hidden>
+      <div class="sub-cabecera"><button type="button" class="icono-btn" data-ir="ajustes" aria-label="Volver"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button><h1>Programadas</h1></div>
+      <article class="tarjeta">
+        <strong>🔁 Pagos e ingresos que se repiten solos</strong>
+        <p class="nota">Elige un gasto o ingreso, define cada cuánto se repite y NOVA lo registra automáticamente cuando llegue la fecha (al abrir la app).</p>
+      </article>
+      <ul id="lista-programadas" class="lista-simple"></ul>
+      <button type="button" class="primario" id="btn-nueva-programada">Crear programación</button>
+    </section>
+
+    <!-- Configuración: cuentas -->
+    <section class="vista" data-vista="ajustes-cuentas" hidden>
+      <div class="sub-cabecera"><button type="button" class="icono-btn" data-ir="ajustes" aria-label="Volver"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button><h1>Cuentas</h1></div>
+      <ul id="lista-cuentas" class="lista-simple"></ul>
+      <form id="form-cuenta" class="tarjeta formulario">
+        <h2 class="titulo-tarjeta">Agregar cuenta</h2>
+        <label for="cuenta-nombre">Nombre</label>
+        <input id="cuenta-nombre" required placeholder="Nequi, Bancolombia, Efectivo…">
+        <label for="cuenta-tipo">Tipo</label>
+        <select id="cuenta-tipo"><option value="debito">Débito</option><option value="ahorro">Ahorros</option><option value="efectivo">Efectivo</option><option value="credito">Crédito</option></select>
+        <label for="cuenta-saldo">Saldo actual</label>
+        <input id="cuenta-saldo" inputmode="numeric" placeholder="0">
+        <button type="submit" class="primario">Agregar cuenta</button>
+        <p class="mensaje" id="cuenta-mensaje" role="status"></p>
+      </form>
+    </section>
+
+    <!-- Tasas de cambio: convertidor y todas las monedas -->
+    <section class="vista" data-vista="ajustes-tasas" hidden>
+      <div class="sub-cabecera"><button type="button" class="icono-btn" data-ir="ajustes" aria-label="Volver"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button><h1>Tasas de cambio</h1></div>
+      <article class="tarjeta formulario conversor">
+        <strong>Convertidor</strong>
+        <label for="conv-monto">Tengo</label>
+        <div class="conv-fila"><input id="conv-monto" inputmode="decimal" placeholder="0" autocomplete="off"><button type="button" id="conv-de" class="chip-opcion"></button></div>
+        <button type="button" id="conv-cambiar" class="chip-opcion" aria-label="Cambiar de lugar las dos monedas">⇅ Cambiar de lugar</button>
+        <label for="conv-resultado">Equivale a</label>
+        <div class="conv-fila"><input id="conv-resultado" inputmode="decimal" placeholder="0" autocomplete="off"><button type="button" id="conv-a" class="chip-opcion"></button></div>
+        <span id="conv-nota" class="nota"></span>
+      </article>
+      <div class="seccion-cabecera"><h2>Todas las monedas</h2><button type="button" id="tasas-actualizar" class="enlace">🔄 Actualizar ahora</button></div>
+      <input id="tasas-buscar" type="search" placeholder="Buscar moneda (nombre o código)" autocomplete="off">
+      <ul id="lista-tasas" class="lista-simple"></ul>
+      <p id="tasas-fecha" class="nota"></p>
+    </section>
+
+    <!-- Configuración: exportar -->
+    <section class="vista" data-vista="ajustes-exportar" hidden>
+      <div class="sub-cabecera"><button type="button" class="icono-btn" data-ir="ajustes" aria-label="Volver"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button><h1>Exportar datos</h1></div>
+      <article class="tarjeta"><strong>Informes completos</strong><p class="nota">Con tu nombre, cifras, gráficos y todos tus movimientos, listos para guardar, imprimir o enviar. Salen del periodo que ves en Inicio.</p></article>
+      <div class="inf-barra"><span>Elige el periodo y descarga</span><span class="inf-iconos"><button type="button" class="inf-ico" data-informe="pdf" data-ctx="exportar" aria-label="Descargar informe en PDF"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 2h8l5 5v13a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2z" fill="#e5483d"/><path d="M14 2v5h5" fill="#f2a29c"/><text x="12" y="17" text-anchor="middle" font-size="6.2" font-weight="800" fill="#fff" font-family="Arial,sans-serif">PDF</text></svg></button><button type="button" class="inf-ico" data-informe="excel" data-ctx="exportar" aria-label="Descargar informe en Excel"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 2h8l5 5v13a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2z" fill="#1f9d55"/><path d="M14 2v5h5" fill="#8fd1ac"/><text x="12" y="17" text-anchor="middle" font-size="6.2" font-weight="800" fill="#fff" font-family="Arial,sans-serif">XLS</text></svg></button></span></div>
+      <div class="menu">
+        <button type="button" data-exportar="excel"><span class="menu-icono">📗</span><span><strong>Excel con dashboard</strong><small>Hoja de resumen con gráficos, transacciones, categorías, cuentas y límites</small></span></button>
+        <button type="button" data-exportar="pdf"><span class="menu-icono">📕</span><span><strong>Informe PDF</strong><small>Documento con tus cifras, gráficos y movimientos</small></span></button>
+      </div>
+      <article class="tarjeta"><strong>Datos en CSV y respaldo</strong><p class="nota">Los archivos CSV se pueden abrir en Excel, Google Sheets y otras hojas de cálculo. En la app de Android se abre el menú para guardarlos o enviarlos.</p></article>
+      <div class="menu">
+        <button type="button" data-exportar="movimientos"><span class="menu-icono">📄</span><span><strong>Transacciones</strong><small id="exp-movimientos"></small></span></button>
+        <button type="button" data-exportar="categorias"><span class="menu-icono">🗂</span><span><strong>Categorías</strong><small id="exp-categorias"></small></span></button>
+        <button type="button" data-exportar="limites"><span class="menu-icono">🎯</span><span><strong>Presupuestos y límites</strong><small id="exp-limites"></small></span></button>
+        <button type="button" data-exportar="respaldo"><span class="menu-icono">💾</span><span><strong>Todo (respaldo)</strong><small>Un archivo con todos tus datos</small></span></button>
+        <button type="button" data-exportar="respaldo-drive"><span class="menu-icono">☁️</span><span><strong>Guardar copia en Google Drive</strong><small>Se abre el menú de compartir: elige Drive</small></span></button>
+        <button type="button" data-exportar="hojas"><span class="menu-icono">📊</span><span><strong>Abrir en Hojas de cálculo de Google</strong><small>Descarga el Excel y te lleva a Google Sheets</small></span></button>
+      </div>
+      <p class="mensaje" id="exportar-mensaje" role="status"></p>
+      <p class="nota">Tus datos ya se guardan en la nube con tu cuenta: si cambias de celular, solo entra con tu correo.</p>
+    </section>
+  </main>
+
+  <button type="button" id="btn-mas" class="fab" aria-label="Agregar"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></button>
+
+  <nav class="nav-inferior" aria-label="Secciones">
+    <button type="button" data-ir="inicio"><svg viewBox="0 0 24 24"><path d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6h-6v6H4a1 1 0 0 1-1-1z"/></svg>Inicio</button>
+    <button type="button" data-ir="planes"><svg viewBox="0 0 24 24"><rect x="3" y="6" width="18" height="13" rx="2"/><path d="M3 10h18M7 3h10"/></svg>Planes</button>
+    <button type="button" data-ir="ia" class="centro-ia"><span class="pastilla-ia"><svg viewBox="0 0 24 24"><path d="M4 5h16v11H9l-5 4z"/><path d="M8.5 10.5h.01M12 10.5h.01M15.5 10.5h.01"/></svg></span>NOVA IA</button>
+    <button type="button" data-ir="analisis"><svg viewBox="0 0 24 24"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>Análisis</button>
+    <button type="button" data-ir="buscar"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg>Buscar</button>
+  </nav>
+</div>
+
+<!-- Hoja del botón + -->
+<div id="hoja-mas" class="hoja-fondo" hidden>
+  <div class="hoja" role="dialog" aria-label="Agregar">
+    <button type="button" class="opcion-ia" data-abrir="pantalla-asistente">
+      <span class="acceso-ia-icono">✦</span>
+      <span><strong>Asistente inteligente</strong><small>Dicta, toma una foto o escribe</small></span>
+    </button>
+    <div class="dos-col">
+      <button type="button" class="opcion-tipo gasto" data-nuevo="gasto"><span>↘</span><strong>Gasto</strong><small>Manual</small></button>
+      <button type="button" class="opcion-tipo ingreso" data-nuevo="ingreso"><span>↗</span><strong>Ingreso</strong><small>Manual</small></button>
+    </div>
+    <div id="mas-conductor" class="dos-col" hidden>
+      <button type="button" class="opcion-tipo ingreso" data-trabajo="ganancia"><span>🚖</span><strong>Ganancia de viaje</strong><small>Didi, Uber…</small></button>
+      <button type="button" class="opcion-tipo gasto" data-trabajo="gasto"><span>⛽</span><strong>Gasto del trabajo</strong><small>Gasolina, tinto…</small></button>
+    </div>
+    <button type="button" class="opcion-ia chat" data-abrir="pantalla-chat">
+      <span class="acceso-ia-icono">💬</span>
+      <span><strong>Pregúntale a NOVA</strong><small>Chatea con la IA sobre tus finanzas</small></span>
+    </button>
+  </div>
+</div>
+
+<!-- Elegir categoría -->
+<div id="hoja-categoria" class="hoja-fondo" hidden>
+  <div class="hoja alta" role="dialog" aria-labelledby="hoja-categoria-titulo">
+    <h2 id="hoja-categoria-titulo">Categoría</h2>
+    <input id="hoja-categoria-buscar" type="search" placeholder="Buscar categoría…" autocomplete="off">
+    <div id="hoja-categoria-lista" class="hoja-lista"></div>
+    <button type="button" class="boton-borde" id="hoja-categoria-nueva">+ Nueva categoría</button>
+  </div>
+</div>
+
+<!-- Nuevo o editar movimiento -->
+<section id="pantalla-registro" class="capa" hidden>
+  <div class="sub-cabecera"><button type="button" class="icono-btn" data-cerrar aria-label="Volver"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button><h1 id="reg-titulo">Nuevo gasto</h1></div>
+  <form id="form-registro" class="formulario" autocomplete="off">
+    <div class="segmentado dos" role="radiogroup" aria-label="Tipo" id="reg-tipo">
+      <button type="button" role="radio" data-tipo="gasto">Gasto</button>
+      <button type="button" role="radio" data-tipo="ingreso">Ingreso</button>
+    </div>
+    <div class="monto-fila">
+      <button type="button" id="reg-monto" class="monto-grande" aria-label="Valor"><span>$</span><strong id="reg-monto-texto">0</strong></button>
+      <button type="button" id="reg-borrar-digito" class="icono-btn" data-tecla="borrar" aria-label="Borrar el último número"><svg viewBox="0 0 24 24"><path d="M21 5H9l-6 7 6 7h12zM13 9l4 6M17 9l-4 6"/></svg></button>
+    </div>
+    <span id="reg-resultado" class="nota centro"></span>
+    <button type="button" id="reg-moneda" class="chip-opcion moneda-boton" aria-label="Cambiar la moneda"><span id="reg-moneda-bandera">🇨🇴</span><span id="reg-moneda-codigo">COP</span><span aria-hidden="true">▾</span></button>
+    <div id="reg-bloque-moneda" class="tarjeta formulario moneda-bloque" hidden>
+      <strong id="reg-conversion"></strong>
+      <label for="reg-orig" id="reg-orig-etiqueta">Valor en dólares</label>
+      <input id="reg-orig" inputmode="decimal" autocomplete="off" placeholder="0">
+      <label for="reg-cop" id="reg-cop-etiqueta">Equivale en pesos (COP)</label>
+      <input id="reg-cop" inputmode="numeric" autocomplete="off" placeholder="0">
+      <label for="reg-tasa" id="reg-tasa-etiqueta">Tasa</label>
+      <input id="reg-tasa" inputmode="decimal" autocomplete="off" placeholder="¿Cuántos pesos vale 1?">
+      <span id="reg-tasa-nota" class="nota"></span>
+      <button type="button" id="reg-tasa-auto" class="chip-opcion" hidden>Volver a la tasa del día</button>
+    </div>
+    <div id="teclado" class="teclado">
+      <button type="button" data-tecla="7">7</button><button type="button" data-tecla="8">8</button><button type="button" data-tecla="9">9</button><button type="button" data-tecla="÷" class="op">÷</button>
+      <button type="button" data-tecla="4">4</button><button type="button" data-tecla="5">5</button><button type="button" data-tecla="6">6</button><button type="button" data-tecla="×" class="op">×</button>
+      <button type="button" data-tecla="1">1</button><button type="button" data-tecla="2">2</button><button type="button" data-tecla="3">3</button><button type="button" data-tecla="−" class="op">−</button>
+      <button type="button" data-tecla=",">,</button><button type="button" data-tecla="0">0</button><button type="button" data-tecla="000">000</button><button type="button" data-tecla="+" class="op">+</button>
+    </div>
+    <label for="reg-fecha">Fecha</label>
+    <input id="reg-fecha" type="date" required>
+    <div id="reg-bloque-viajes" class="formulario" hidden>
+      <label for="reg-viajes">¿Cuántos viajes fueron? (opcional)</label>
+      <input id="reg-viajes" inputmode="numeric" maxlength="4" placeholder="Ej. 6">
+    </div>
+    <label for="reg-desc">Descripción (opcional)</label>
+    <input id="reg-desc" maxlength="120" placeholder="¿En qué gastaste?" list="lista-desc" autocomplete="off">
+    <datalist id="lista-desc"></datalist>
+    <label>Categoría</label>
+    <button type="button" id="reg-categoria" class="selector"><span class="mov-icono chico" id="reg-cat-icono"></span><span id="reg-cat-nombre">Seleccionar categoría</span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5l7 7-7 7"/></svg></button>
+    <label id="reg-cuenta-etiqueta" for="reg-cuenta">Cuenta</label>
+    <select id="reg-cuenta"></select>
+    <label for="reg-etiqueta">Etiquetas (opcional)</label>
+    <div class="etiquetas-editor">
+      <span id="reg-etiquetas" class="etiquetas"></span>
+      <input id="reg-etiqueta" placeholder="+ #" maxlength="30" enterkeyhint="done">
+    </div>
+    <div id="reg-sugerencias" class="etiquetas sugeridas"></div>
+    <div class="chips-opciones">
+      <button type="button" id="reg-btn-estado" class="chip-opcion">+ Estado</button>
+      <button type="button" id="reg-btn-nota" class="chip-opcion">+ Agregar nota</button>
+      <button type="button" id="reg-btn-recurrente" class="chip-opcion">+ Hacer recurrente</button>
+    </div>
+    <div id="reg-bloque-estado" class="formulario" hidden>
+      <label for="reg-estado">Estado</label>
+      <select id="reg-estado"><option value="pagado">Pagado</option><option value="pendiente">Pendiente</option></select>
+    </div>
+    <div id="reg-bloque-nota" class="formulario" hidden>
+      <label for="reg-nota">Nota</label>
+      <textarea id="reg-nota" rows="3" maxlength="500" placeholder="Algo que quieras recordar"></textarea>
+    </div>
+    <div id="reg-bloque-recurrente" class="formulario" hidden>
+      <label for="reg-frecuencia">Se repite</label>
+      <select id="reg-frecuencia"></select>
+      <span class="nota">NOVA lo registrará solo cada vez que llegue la fecha.</span>
+    </div>
+    <label class="casilla" id="reg-otro-fila"><input type="checkbox" id="reg-otro"> Guardar y agregar otro</label>
+    <p class="mensaje" id="reg-mensaje" role="status"></p>
+    <button type="submit" class="primario" id="reg-guardar">Guardar</button>
+    <button type="button" class="peligro" id="reg-borrar" hidden>Borrar movimiento</button>
+  </form>
+</section>
+
+<!-- Nueva o editar categoría -->
+<section id="pantalla-categoria" class="capa" hidden>
+  <div class="sub-cabecera"><button type="button" class="icono-btn" data-cerrar aria-label="Volver"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button><h1 id="cat-titulo">Nueva categoría</h1></div>
+  <form id="form-categoria" class="formulario" autocomplete="off">
+    <span id="cat-vista" class="mov-icono enorme"></span>
+    <div class="segmentado dos" role="radiogroup" aria-label="Tipo" id="cat-form-tipo">
+      <button type="button" role="radio" data-tipo="gasto">Gasto</button>
+      <button type="button" role="radio" data-tipo="ingreso">Ingreso</button>
+    </div>
+    <label for="cat-nombre">Nombre</label>
+    <input id="cat-nombre" maxlength="40" required placeholder="Nombre de la categoría">
+    <label for="cat-grupo">Grupo</label>
+    <select id="cat-grupo"></select>
+    <div class="segmentado dos" role="tablist" id="cat-pestanas">
+      <button type="button" role="tab" data-pestana="iconos" aria-selected="true">Ícono</button>
+      <button type="button" role="tab" data-pestana="colores" aria-selected="false">Color</button>
+    </div>
+    <div id="cat-panel-iconos" class="formulario">
+      <input id="cat-icono-buscar" type="search" placeholder="Buscar ícono… (ej. moto, perro, regalo)">
+      <div id="cat-iconos" class="rejilla-iconos"></div>
+    </div>
+    <div id="cat-panel-colores" class="rejilla-colores" hidden></div>
+    <p class="mensaje" id="cat-mensaje" role="status"></p>
+    <button type="submit" class="primario">Guardar</button>
+    <button type="button" class="peligro" id="cat-borrar" hidden>Borrar categoría</button>
+  </form>
+</section>
+
+<!-- Nuevo o editar límite -->
+<section id="pantalla-limite" class="capa" hidden>
+  <div class="sub-cabecera"><button type="button" class="icono-btn" data-cerrar aria-label="Volver"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button><h1 id="lim-titulo">Nuevo límite</h1></div>
+  <form id="form-limite" class="formulario" autocomplete="off">
+    <label for="lim-monto" class="centro">Límite máximo</label>
+    <input id="lim-monto" class="monto-entrada" inputmode="numeric" placeholder="$ 0" required>
+    <label>Categoría</label>
+    <button type="button" id="lim-categoria" class="selector"><span class="mov-icono chico" id="lim-cat-icono"></span><span id="lim-cat-nombre">Todas las categorías</span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5l7 7-7 7"/></svg></button>
+    <label for="lim-ciclo">Periodo</label>
+    <select id="lim-ciclo"></select>
+    <span id="lim-rango" class="nota"></span>
+    <label class="menu-fila"><span class="menu-icono">🔁</span><span><strong>Recurrente</strong><small>Renovar automáticamente al finalizar</small></span><input type="checkbox" id="lim-recurrente" class="interruptor" checked></label>
+    <p class="mensaje" id="lim-mensaje" role="status"></p>
+    <button type="submit" class="primario">Guardar</button>
+    <button type="button" class="peligro" id="lim-borrar" hidden>Borrar límite</button>
+  </form>
+</section>
+
+<!-- Detalle de un movimiento: datos, etiquetas, presupuesto, mapa y otros pagos en el mismo lugar -->
+<section id="pantalla-detalle" class="capa" hidden>
+  <div class="sub-cabecera">
+    <button type="button" class="icono-btn" data-cerrar aria-label="Volver"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button>
+    <h1>Detalle</h1>
+    <button type="button" id="det-ojo" class="icono-btn" aria-label="Ocultar los valores"></button>
+    <button type="button" id="det-editar" class="icono-btn" aria-label="Editar"><svg viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16zM13.5 6.5l4 4"/></svg></button>
+    <button type="button" id="det-borrar" class="icono-btn" aria-label="Borrar este movimiento"><svg viewBox="0 0 24 24"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg></button>
+  </div>
+  <div id="det-contenido" class="detalle"></div>
+</section>
+
+<!-- Nueva o editar deuda -->
+<section id="pantalla-deuda" class="capa" hidden>
+  <div class="sub-cabecera"><button type="button" class="icono-btn" data-cerrar aria-label="Volver"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button><h1 id="deuda-titulo">Nueva deuda</h1></div>
+  <form id="form-deuda" class="formulario" autocomplete="off">
+    <div class="segmentado dos" id="deuda-tipo" role="radiogroup" aria-label="Tipo de deuda">
+      <button type="button" role="radio" data-t="debo">Yo debo</button>
+      <button type="button" role="radio" data-t="me_deben">Me deben</button>
+    </div>
+    <label for="deuda-monto" class="centro">¿Cuánto es?</label>
+    <input id="deuda-monto" class="monto-entrada" inputmode="numeric" placeholder="$ 0" required>
+    <label for="deuda-persona" id="deuda-persona-et">¿A quién le debes?</label>
+    <input id="deuda-persona" maxlength="60" required placeholder="Banco, mamá, Juan…">
+    <label for="deuda-concepto">¿Para qué fue? (opcional)</label>
+    <input id="deuda-concepto" maxlength="100" placeholder="Préstamo para la moto">
+    <div id="deuda-cuenta-bloque" hidden><label for="deuda-cuenta">¿Con qué cuenta?</label><select id="deuda-cuenta"></select></div>
+    <label for="deuda-fecha">Fecha del préstamo</label>
+    <input id="deuda-fecha" type="date" required>
+    <label for="deuda-vence">¿Para cuándo hay que pagar? (opcional)</label>
+    <input id="deuda-vence" type="date">
+    <label class="menu-fila" id="deuda-anotar-fila"><span class="menu-icono">🧾</span><span><strong>Anotarlo en mis movimientos</strong><small id="deuda-anotar-nota"></small></span><input type="checkbox" id="deuda-anotar" class="interruptor" checked></label>
+    <p class="mensaje" id="deuda-mensaje" role="status"></p>
+    <button type="submit" class="primario">Guardar</button>
+    <button type="button" class="peligro" id="deuda-borrar" hidden>Borrar esta deuda</button>
+  </form>
+</section>
+
+<!-- Detalle de una deuda y sus abonos -->
+<section id="pantalla-abonos" class="capa" hidden>
+  <div class="sub-cabecera"><button type="button" class="icono-btn" data-cerrar aria-label="Volver"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button><h1 id="abono-titulo">Deuda</h1>
+    <button type="button" id="abono-editar-icono" class="icono-btn" aria-label="Editar la deuda"><svg viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16zM13.5 6.5l4 4"/></svg></button>
+    <button type="button" id="abono-borrar-icono" class="icono-btn" aria-label="Borrar la deuda"><svg viewBox="0 0 24 24"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg></button></div>
+  <article id="abono-resumen" class="tarjeta"></article>
+  <button type="button" id="abono-whatsapp" class="mini" hidden>📲 Recordarle por WhatsApp</button>
+  <div id="abono-foto"></div>
+  <form id="form-abono" class="formulario" autocomplete="off">
+    <label for="abono-monto" class="centro" id="abono-et">Registrar un abono</label>
+    <input id="abono-monto" class="monto-entrada" inputmode="numeric" placeholder="$ 0">
+    <button type="button" class="chip-opcion" id="abono-todo">Es todo lo que falta</button>
+    <div id="abono-cuenta-bloque" hidden><label for="abono-cuenta">¿Con qué cuenta?</label><select id="abono-cuenta"></select></div>
+    <label for="abono-nota">Nota (opcional)</label>
+    <input id="abono-nota" maxlength="200" placeholder="Pago de la quincena">
+    <label class="menu-fila"><span class="menu-icono">🧾</span><span><strong>Anotarlo en mis movimientos</strong><small id="abono-anotar-nota"></small></span><input type="checkbox" id="abono-anotar" class="interruptor" checked></label>
+    <p class="mensaje" id="abono-mensaje" role="status"></p>
+    <button type="submit" class="primario" id="abono-guardar">Registrar abono</button>
+  </form>
+  <div class="seccion-cabecera"><h2>Abonos</h2></div>
+  <ul id="lista-abonos" class="lista-simple"></ul>
+  <button type="button" id="abono-editar">✏️ Editar esta deuda</button>
+  <button type="button" id="abono-borrar" class="peligro">🗑 Borrar esta deuda</button>
+</section>
+
+<!-- Nuevo o editar vencimiento (SOAT, tecnomecánica…) -->
+<section id="pantalla-grupo-nuevo" class="capa" hidden>
+  <div class="sub-cabecera"><button type="button" class="icono-btn" data-cerrar aria-label="Volver"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button><h1>Nuevo grupo</h1></div>
+  <form id="form-grupo" class="formulario" autocomplete="off">
+    <label for="grupo-nombre">¿Para qué es el grupo?</label>
+    <input id="grupo-nombre" maxlength="60" required placeholder="Viaje a la costa, apartamento…">
+    <label for="grupo-miembros">¿Con quién? (nombres separados por coma)</label>
+    <input id="grupo-miembros" maxlength="200" required placeholder="Ana, Pedro, Laura">
+    <p class="nota">Tú ya estás incluido como «Yo». Cada persona es solo un nombre: no necesita cuenta en NOVA.</p>
+    <p class="mensaje" id="grupo-mensaje" role="status"></p>
+    <button type="submit" class="primario">Crear grupo</button>
+  </form>
+</section>
+<section id="pantalla-grupo" class="capa" hidden>
+  <div class="sub-cabecera"><button type="button" class="icono-btn" data-cerrar aria-label="Volver"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button><h1 id="grupo-titulo">Grupo</h1>
+    <button type="button" id="grupo-compartir" class="icono-btn" aria-label="Compartir las cuentas del grupo"><svg viewBox="0 0 24 24"><path d="M4 12v7a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-7M16 6l-4-4-4 4M12 2v14"/></svg></button>
+    <button type="button" id="grupo-editar" class="icono-btn" aria-label="Editar el grupo"><svg viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16zM13.5 6.5l4 4"/></svg></button></div>
+  <article id="grupo-balance" class="tarjeta"></article>
+  <article id="grupo-meta" class="tarjeta"></article>
+  <form id="form-gasto-grupo" class="formulario" autocomplete="off">
+    <label for="gg-desc">Nuevo gasto del grupo</label>
+    <input id="gg-desc" maxlength="100" required placeholder="Cena, hotel, gasolina…">
+    <input id="gg-monto" class="monto-entrada" inputmode="numeric" placeholder="$ 0" required aria-label="Valor del gasto">
+    <label for="gg-pagador">¿Quién pagó?</label>
+    <select id="gg-pagador"></select>
+    <label>¿Entre quiénes se divide?</label>
+    <div id="gg-reparto" class="chips-reparto"></div>
+    <label for="gg-fecha">Fecha</label>
+    <input id="gg-fecha" type="date" required>
+    <p class="mensaje" id="gg-mensaje" role="status"></p>
+    <button type="submit" class="primario">Agregar gasto</button>
+  </form>
+  <div class="seccion-cabecera"><h2>Movimientos del grupo</h2></div>
+  <ul id="lista-gastos-grupo" class="lista-simple"></ul>
+  <button type="button" id="grupo-borrar" class="peligro">🗑 Borrar este grupo</button>
+</section>
+<section id="pantalla-papelera" class="capa" hidden>
+  <div class="sub-cabecera"><button type="button" class="icono-btn" data-cerrar aria-label="Volver"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button><h1>Papelera</h1></div>
+  <p class="nota">Lo que borras queda aquí 30 días en este dispositivo. Después se elimina para siempre.</p>
+  <ul id="lista-papelera" class="lista-simple"></ul>
+</section>
+<section id="pantalla-historial" class="capa" hidden>
+  <div class="sub-cabecera"><button type="button" class="icono-btn" data-cerrar aria-label="Volver"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button><h1>Historial de cambios</h1></div>
+  <p class="nota">Aquí ves lo que creaste, editaste o borraste en tus movimientos, metas, deudas, abonos, límites y cuentas (los últimos 100 cambios).</p>
+  <ul id="lista-historial" class="lista-simple"></ul>
+</section>
+<section id="pantalla-calor" class="capa" hidden>
+  <div class="sub-cabecera"><button type="button" class="icono-btn" data-cerrar aria-label="Volver"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button><h1>Mapa de calor de gastos</h1></div>
+  <p class="nota">Cada círculo es un lugar donde pagaste: entre más grande y rojo, más gastaste ahí.</p>
+  <div id="mapa-calor" class="det-mapa mapa-calor"></div>
+</section>
+<section id="pantalla-calendario" class="capa" hidden>
+  <div class="sub-cabecera"><button type="button" class="icono-btn" data-cerrar aria-label="Volver"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button><h1>Calendario</h1></div>
+  <p id="cal-contexto" class="nota"></p>
+  <div class="periodo-nav">
+    <button type="button" class="icono-btn" data-cal-mes="-1" aria-label="Mes anterior"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button>
+    <strong id="cal-mes"></strong>
+    <button type="button" class="icono-btn" data-cal-mes="1" aria-label="Mes siguiente"><svg viewBox="0 0 24 24"><path d="M9 5l7 7-7 7"/></svg></button>
+  </div>
+  <div class="segmentado dos" role="radiogroup" aria-label="Qué ver" id="cal-tipo">
+    <button type="button" role="radio" data-cal-tipo="gasto">Gastos</button>
+    <button type="button" role="radio" data-cal-tipo="ingreso">Ingresos</button>
+  </div>
+  <div id="cal-resumen" class="cal-resumen"></div>
+  <div class="cal-grilla" role="grid" aria-label="Días del mes">
+    <span class="cal-sem">L</span><span class="cal-sem">M</span><span class="cal-sem">M</span><span class="cal-sem">J</span><span class="cal-sem">V</span><span class="cal-sem">S</span><span class="cal-sem">D</span>
+    <div id="cal-dias" class="cal-dias"></div>
+  </div>
+  <div class="cal-leyenda" aria-hidden="true"><span>Menos</span><i class="n0"></i><i class="n1"></i><i class="n2"></i><i class="n3"></i><i class="n4"></i><span>Más</span></div>
+  <div id="cal-detalle" class="cal-detalle"></div>
+</section>
+<section id="pantalla-espacio" class="capa" hidden>
+  <div class="sub-cabecera"><button type="button" class="icono-btn" data-cerrar aria-label="Volver"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button><h1 id="espacio-titulo">Nuevo espacio</h1></div>
+  <form id="form-espacio" class="formulario">
+    <label for="espacio-nombre">Nombre</label>
+    <input id="espacio-nombre" required maxlength="40" placeholder="Ahorro, viaje a Cartagena, mi negocio…" autocomplete="off">
+    <span class="etiqueta-campo">Ícono</span>
+    <div id="espacio-iconos" class="esp-iconos" role="radiogroup" aria-label="Ícono"></div>
+    <span class="etiqueta-campo">Moneda</span>
+    <button type="button" id="espacio-moneda" class="fila-boton"><span id="espacio-moneda-texto"></span><small>Cambiar</small></button>
+    <div id="espacio-bloque-saldo">
+      <label for="espacio-saldo">¿Cuánto tiene ya? (opcional)</label>
+      <input id="espacio-saldo" inputmode="decimal" placeholder="0" autocomplete="off">
+    </div>
+    <p class="nota">Puedes poner su presupuesto, límites y programadas cuando estés dentro del espacio.</p>
+    <button type="submit" class="primario" id="espacio-guardar">Crear espacio</button>
+    <button type="button" class="peligro" id="espacio-borrar" hidden>Borrar este espacio</button>
+    <p class="mensaje" id="espacio-mensaje" role="status"></p>
+  </form>
+</section>
+<section id="pantalla-pasar" class="capa" hidden>
+  <div class="sub-cabecera"><button type="button" class="icono-btn" data-cerrar aria-label="Volver"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button><h1>Pasar plata entre espacios</h1></div>
+  <form id="form-pasar" class="formulario">
+    <label for="pasar-desde">Sale de</label>
+    <select id="pasar-desde"></select>
+    <label for="pasar-hacia">Llega a</label>
+    <select id="pasar-hacia"></select>
+    <label for="pasar-monto" id="pasar-monto-etiqueta">¿Cuánto?</label>
+    <input id="pasar-monto" inputmode="decimal" required placeholder="0" autocomplete="off">
+    <div id="pasar-bloque-llega" hidden>
+      <label for="pasar-llega" id="pasar-llega-etiqueta">Llega</label>
+      <input id="pasar-llega" inputmode="decimal" placeholder="0" autocomplete="off">
+      <p class="nota" id="pasar-tasa"></p>
+    </div>
+    <label for="pasar-nota">Nota (opcional)</label>
+    <input id="pasar-nota" maxlength="120" placeholder="Para el viaje de diciembre" autocomplete="off">
+    <p class="nota">Sale de un espacio como gasto y entra al otro como ingreso, y quedan unidos.</p>
+    <button type="submit" class="primario">Pasar plata</button>
+    <p class="mensaje" id="pasar-mensaje" role="status"></p>
+  </form>
+</section>
+<section id="pantalla-pruebas" class="capa" hidden>
+  <div class="sub-cabecera"><button type="button" class="icono-btn" data-cerrar aria-label="Volver"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button><h1>Probar las funciones</h1></div>
+  <p class="nota">Toca «Ejecutar pruebas». NOVA prueba de verdad en tu celular la foto, el historial, la IA que lee recibos, el widget y las teclas rápidas, y te dice qué funcionó. No toca tus datos: usa archivos y notificaciones de prueba.</p>
+  <button type="button" class="primario" id="pruebas-ejecutar">▶ Ejecutar pruebas</button>
+  <ul id="lista-pruebas" class="lista-simple"></ul>
+  <button type="button" class="mini" id="pruebas-copiar" hidden>📋 Copiar el resultado</button>
+  <article id="pruebas-widget" class="tarjeta" hidden>
+    <strong>Widget</strong>
+    <p class="nota">1) Deja el dedo presionado en la pantalla de inicio → Widgets → NOVA y agrégalo. Debe decir «✓ Widget OK». 2) Luego toca el botón de abajo para que vuelva a mostrar tus datos reales.</p>
+    <button type="button" class="mini" id="pruebas-widget-real">Volver a mostrar mis datos reales</button>
+  </article>
+</section>
+<section id="pantalla-documento" class="capa" hidden>
+  <div class="sub-cabecera"><button type="button" class="icono-btn" data-cerrar aria-label="Volver"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button><h1 id="doc-titulo">Nuevo vencimiento</h1></div>
+  <form id="form-documento" class="formulario" autocomplete="off">
+    <label for="doc-tipo">¿Qué se vence?</label>
+    <select id="doc-tipo"></select>
+    <label for="doc-nombre">Nombre</label>
+    <input id="doc-nombre" maxlength="60" required>
+    <label for="doc-vence">Fecha de vencimiento</label>
+    <input id="doc-vence" type="date" required>
+    <label for="doc-costo">Cuánto cuesta renovarlo (opcional)</label>
+    <input id="doc-costo" inputmode="numeric" placeholder="Ej. 400 mil">
+    <label for="doc-aviso">Avisarme con anticipación</label>
+    <select id="doc-aviso"><option value="60">60 días antes</option><option value="30">30 días antes</option><option value="15">15 días antes</option><option value="7">7 días antes</option><option value="5">5 días antes</option><option value="3">3 días antes</option><option value="1">1 día antes</option></select>
+    <label for="doc-repetir">Se renueva cada</label>
+    <select id="doc-repetir"><option value="1">1 mes</option><option value="3">3 meses</option><option value="6">6 meses</option><option value="12">12 meses (1 año)</option><option value="24">24 meses</option><option value="36">36 meses</option></select>
+    <p class="mensaje" id="doc-mensaje" role="status"></p>
+    <button type="submit" class="primario">Guardar</button>
+    <button type="button" id="doc-renovar" hidden>Ya lo renové: anotar el gasto</button>
+    <button type="button" class="peligro" id="doc-borrar" hidden>Borrar este vencimiento</button>
+  </form>
+</section>
+
+<!-- Asistente inteligente: varios registros a la vez -->
+<section id="pantalla-asistente" class="capa" hidden>
+  <div class="sub-cabecera"><button type="button" class="icono-btn" data-cerrar aria-label="Volver"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button><h1>Asistente inteligente</h1></div>
+  <p class="nota">Escribe, dicta o toma la foto de un recibo. Puedes poner varios gastos o ingresos, uno por línea.</p>
+  <textarea id="asis-texto" rows="6" placeholder="Almuerzo 50.000&#10;Taxi 20.000&#10;Café 8.500&#10;Me pagaron 2 millones"></textarea>
+  <div class="fila-botones tres">
+    <button type="button" id="asis-dictar">🎙 Dictar</button>
+    <button type="button" id="asis-foto">📷 Foto</button>
+    <button type="button" id="asis-leer" class="primario">✦ Interpretar</button>
+  </div>
+  <input type="file" id="asis-foto-archivo" accept="image/*" capture="environment" hidden>
+  <p class="mensaje" id="asis-mensaje" role="status"></p>
+  <ul id="asis-lista" class="lista-simple"></ul>
+  <button type="button" id="asis-guardar" class="primario" hidden>Guardar</button>
+</section>
+
+<!-- Chat con NOVA IA -->
+<section id="pantalla-chat" class="capa chat-capa" hidden>
+  <div class="sub-cabecera"><button type="button" class="icono-btn" data-cerrar aria-label="Volver"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button><h1 id="chat-titulo">Nueva conversación</h1>
+    <button type="button" id="chat-borrar" class="icono-btn" aria-label="Borrar esta conversación" hidden><svg viewBox="0 0 24 24"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg></button></div>
+  <div id="chat-bienvenida" class="chat-bienvenida">
+    <span class="chat-logo"><svg viewBox="0 0 24 24"><path d="M3 17l6-6 4 4 8-8M15 7h6v6"/></svg></span>
+    <h2>Hola, soy NOVA IA.</h2>
+    <p>Pregúntame lo que quieras, de cualquier tema. Si es sobre tu dinero, respondo con tus propios números: cuánto gastaste y en qué, si te alcanza para algo o cómo ahorrar más.</p>
+    <div id="chat-sugerencias" class="sugerencias"></div>
+  </div>
+  <ol id="chat" class="chat" aria-live="polite"></ol>
+  <form id="form-chat" class="rapido-fila chat-entrada" autocomplete="off">
+    <label for="chat-pregunta" class="sr">Tu pregunta</label>
+    <input id="chat-pregunta" type="text" placeholder="Pregúntame lo que quieras" maxlength="1500" enterkeyhint="send">
+    <button type="submit" class="icono-btn redondo primario" aria-label="Preguntar"><svg viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></svg></button>
+  </form>
+  <p id="chat-mensaje" class="mensaje" role="status"></p>
+</section>
+
+<!-- Elegir moneda -->
+<div id="hoja-informe" class="hoja-fondo" hidden>
+  <div class="hoja" role="dialog" aria-labelledby="hoja-informe-titulo">
+    <h2 id="hoja-informe-titulo" class="centro">Descargar informe</h2>
+    <div class="segmentado dos" id="informe-formato" role="radiogroup" aria-label="Formato">
+      <button type="button" role="radio" data-f="pdf">PDF</button>
+      <button type="button" role="radio" data-f="excel">Excel</button>
+    </div>
+    <p class="nota">¿De qué periodo?</p>
+    <div id="informe-ciclos" class="pestanas" role="group" aria-label="Periodo">
+      <button type="button" data-c="diario">Diario</button><button type="button" data-c="semanal">Semanal</button><button type="button" data-c="quincenal">Quincenal</button>
+      <button type="button" data-c="mensual">Mensual</button><button type="button" data-c="trimestral">Trimestral</button><button type="button" data-c="semestral">Semestral</button><button type="button" data-c="anual">Anual</button>
+    </div>
+    <div id="informe-cual" class="pestanas" role="group" aria-label="Cuál">
+      <button type="button" data-d="0">Actual</button><button type="button" data-d="-1">Anterior</button><button type="button" data-d="-2">Hace 2</button><button type="button" data-d="-3">Hace 3</button>
+    </div>
+    <p id="informe-nombre" class="informe-nombre"></p>
+    <button type="button" id="informe-descargar" class="primario">Descargar</button>
+    <button type="button" class="enlace" data-cerrar>Cancelar</button>
+  </div>
+</div>
+
+<!-- Editor general: se usa para corregir o borrar metas, abonos, cuentas, registros comunes y programaciones -->
+<div id="hoja-editar" class="hoja-fondo" hidden>
+  <div class="hoja" role="dialog" aria-labelledby="editar-titulo">
+    <h2 id="editar-titulo" class="centro">Editar</h2>
+    <form id="form-editar" class="formulario" autocomplete="off">
+      <div id="editar-campos" class="editar-campos"></div>
+      <p class="mensaje" id="editar-mensaje" role="status"></p>
+      <button type="submit" class="primario">Guardar los cambios</button>
+      <button type="button" class="peligro" id="editar-borrar" hidden>Borrar</button>
+      <button type="button" class="enlace" data-cerrar>Cancelar</button>
+    </form>
+  </div>
+</div>
+
+<div id="hoja-espacios" class="hoja-fondo" hidden>
+  <div class="hoja" role="dialog" aria-labelledby="hoja-espacios-titulo">
+    <h2 id="hoja-espacios-titulo" class="centro">Tus espacios</h2>
+    <p class="nota centro">Tu plata por propósitos. Cada espacio tiene su saldo, sus presupuestos, sus programadas, sus análisis y su moneda.</p>
+    <div id="hoja-espacios-lista" class="esp-lista"></div>
+    <p id="espacios-aviso" class="nota centro" hidden></p>
+    <div class="dos-col">
+      <button type="button" id="btn-espacio-nuevo">+ Crear espacio</button>
+      <button type="button" id="btn-espacio-pasar">⇄ Pasar plata</button>
+    </div>
+  </div>
+</div>
+
+<div id="hoja-moneda" class="hoja-fondo" hidden>
+  <div class="hoja alta" role="dialog" aria-labelledby="hoja-moneda-titulo">
+    <h2 id="hoja-moneda-titulo" class="centro">¿En qué moneda fue?</h2>
+    <input id="hoja-moneda-buscar" type="search" placeholder="Buscar moneda" autocomplete="off">
+    <div id="hoja-moneda-lista" class="hoja-lista"></div>
+    <p class="nota centro">Tasas de cambio de <a href="https://www.exchangerate-api.com" target="_blank" rel="noopener">ExchangeRate-API</a>, que se actualizan una vez al día. Puedes corregir la tasa al registrar.</p>
+  </div>
+</div>
+
+<section id="novedades" class="novedades" role="dialog" aria-modal="true" aria-labelledby="nov-titulo" hidden>
+  <div class="nov-arriba"><span class="nov-chip">NOVEDAD</span><button type="button" class="icono-btn" id="nov-cerrar" aria-label="Cerrar"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
+  <div id="nov-cuerpo" class="nov-cuerpo"></div>
+  <div id="nov-puntos" class="nov-puntos" aria-hidden="true"></div>
+  <button type="button" class="primario nov-boton" id="nov-siguiente">Siguiente</button>
+</section>
+<div id="tutorial" class="bloqueo" hidden>
+  <div class="bloqueo-caja">
+    <div class="logo grande"><span>NOVA</span><svg class="chispa" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2l2.2 7.8L22 12l-7.8 2.2L12 22l-2.2-7.8L2 12l7.8-2.2z"/></svg></div>
+    <h2 id="tutorial-titulo"></h2>
+    <p id="tutorial-texto" class="nota"></p>
+    <button type="button" class="primario" id="tutorial-siguiente">Siguiente</button>
+    <button type="button" class="enlace" id="tutorial-saltar">Saltar</button>
+  </div>
+</div>
+<div id="bloqueo" class="bloqueo" hidden>
+  <div class="bloqueo-caja">
+    <div class="logo grande"><span>NOVA</span><svg class="chispa" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2l2.2 7.8L22 12l-7.8 2.2L12 22l-2.2-7.8L2 12l7.8-2.2z"/></svg></div>
+    <h2 id="bloqueo-titulo">Escribe tu PIN</h2>
+    <input id="bloqueo-pin" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="6" autocomplete="off" aria-label="PIN">
+    <p class="mensaje" id="bloqueo-mensaje" role="alert"></p>
+    <button type="button" class="primario" id="bloqueo-ok">Continuar</button>
+    <button type="button" class="enlace" id="bloqueo-cancelar" hidden>Cancelar</button>
+    <button type="button" class="enlace" id="bloqueo-olvide" hidden>Olvidé mi PIN</button>
+  </div>
+</div>
+<div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+
+
+<p id="cargando" class="cargando">Cargando…</p>
+
+<script src="config.js"></script>
+<script src="parser.js"></script>
+<script src="periodos.js"></script>
+<script src="analisis.js"></script>
+<script src="consejos.js"></script>
+<script src="monedas.js"></script>
+<script src="recibo.js"></script>
+<script src="informes.js"></script>
+<script src="espacios.js"></script>
+<script src="respuestas.js"></script>
+<script src="sincronizacion.js"></script>
+<script src="vendor/supabase.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
