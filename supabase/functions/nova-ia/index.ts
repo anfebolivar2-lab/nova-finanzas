@@ -153,7 +153,7 @@ Datos de la persona: ${contexto}`;
   if (flujo && r.body) {
     // Respuesta en vivo: se reenvía el texto a medida que Gemini lo escribe, para que la app lo muestre de inmediato.
     const lector = r.body.getReader(), dec = new TextDecoder(), enc = new TextEncoder();
-    let buf = "";
+    let buf = "", trozos = 0;
     const fuentes: Fuente[] = [...fuentesWeb];
     const salida = new ReadableStream({
       async pull(ctrl) {
@@ -165,8 +165,10 @@ Datos de la persona: ${contexto}`;
             const linea = buf.trim();
             if (linea.startsWith("data:")) { try { const d = JSON.parse(linea.slice(5)); resto = (d.candidates?.[0]?.content?.parts || []).map((p: { text?: string }) => p.text || "").join(""); fuentesDe(d, fuentes); } catch (_e) { /* incompleta */ } }
             const f = marcasFuentes(fuentes) + (sinWeb && pideDatosDeHoy ? "\n[[SINWEB]]" : "");
+            console.log("flujo ok", trozos, "trozos", sinWeb ? "sin internet" : "con internet o sin buscar");
             ctrl.enqueue(enc.encode(resto + f)); ctrl.close(); return;
           }
+          trozos++;
           buf += dec.decode(value, { stream: true });
           let texto = "", i: number;
           while ((i = buf.indexOf("\n")) >= 0) {
@@ -180,7 +182,12 @@ Datos de la persona: ${contexto}`;
             } catch (_e) { /* línea incompleta */ }
           }
           if (texto) ctrl.enqueue(enc.encode(texto));
-        } catch (_e) { ctrl.close(); }
+        } catch (e) {
+          // El flujo de Gemini se cortó: se deja el motivo en el registro y se cierra bien, con las fuentes y el aviso, para que la app no se quede sin ellos.
+          console.error("flujo", String(e));
+          try { ctrl.enqueue(enc.encode(marcasFuentes(fuentes) + (sinWeb && pideDatosDeHoy ? "\n[[SINWEB]]" : ""))); } catch (_e2) { /* ya cerrado */ }
+          try { ctrl.close(); } catch (_e3) { /* ya cerrado */ }
+        }
       },
       cancel() { lector.cancel(); },
     });
