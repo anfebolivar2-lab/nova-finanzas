@@ -141,7 +141,7 @@
   }
   // En los campos de plata se van poniendo los puntos de miles mientras se escribe: 10000 → 10.000.
   // Si la persona escribe letras ("500 mil", "1 millón") se deja tal cual.
-  var CAMPOS_PLATA = "input.monto-entrada, #meta-objetivo, #meta-diaria, #presupuesto-monto, #cuenta-saldo, #doc-costo, .campo-plata, #reg-orig, #reg-cop, #conv-monto, #conv-resultado, .asis-monto, .meta-abono input";
+  var CAMPOS_PLATA = "#cuadrar-real, #pasar-monto, #pasar-llega, #espacio-saldo, input.monto-entrada, #meta-objetivo, #meta-diaria, #presupuesto-monto, #cuenta-saldo, #doc-costo, .campo-plata, #reg-orig, #reg-cop, #conv-monto, #conv-resultado, .asis-monto, .meta-abono input";
   function formatearMontoEscrito(campo) {
     var v = campo.value;
     if (/[^\d.,$\s\u00a0]/.test(v) || /\s$/.test(v)) return;   // letras o un espacio al final (va a escribir "mil"): no se toca
@@ -472,6 +472,11 @@
     tabla.movimientos.push(
       { id: 900, cuenta_id: 1, fecha: hace(3, 9, 0), tipo: "gasto", descripcion: "Pasé a Ahorro", monto: 200000, estado: "pagado", nota: null, categoria_id: null, etiquetas: [], transferencia: "demo-1", espacio_id: null },
       { id: 901, cuenta_id: 2, fecha: hace(3, 9, 0), tipo: "ingreso", descripcion: "Llegó de Principal", monto: 200000, estado: "pagado", nota: null, categoria_id: null, etiquetas: [], transferencia: "demo-1", espacio_id: 1 });
+    // Suscripciones de ejemplo: Netflix (que subió de precio) y Spotify, cobradas cada mes.
+    [[32, 24900, "Netflix"], [62, 24900, "Netflix"], [10, 16900, "Spotify"], [40, 16900, "Spotify"], [71, 16900, "Spotify"]].forEach(function (x, i) {
+      tabla.movimientos.push({ id: 920 + i, cuenta_id: 1, fecha: hace(x[0], 18, 30), tipo: "gasto", descripcion: x[2], monto: x[1], estado: "pagado", nota: null,
+        categoria_id: cat("Suscripciones"), etiquetas: [] });
+    });
     Object.keys(tabla).forEach(function (n) { if (!Array.isArray(tabla[n])) tabla[n] = []; });
     TABLAS.forEach(function (n) { if (!tabla[n]) tabla[n] = []; });
     var perfil = { presupuesto_monto: 1500000, presupuesto_ciclo: "mensual", guardar_ubicacion: false, mostrar_seguro: true, modo_conductor: false, vehiculo: null, meta_diaria: null };
@@ -788,7 +793,42 @@
     return { rango: rango, vigente: vigente, gastado: vigente ? gastadoEn(rango, l.categoria_id) : 0 };
   }
 
+  // Suscripciones: lo que se cobra cada mes con el mismo nombre (Netflix, Spotify, plan del celular, gimnasio…).
+  // La misma lista sale en Planes y en el gráfico «Suscripciones y pagos fijos» de Análisis.
+  function pintarSuscripciones(destino) {
+    var cont = destino || $("suscripciones");
+    if (!cont) return;
+    var s = A.suscripciones(datos.movimientos, new Date());
+    if (!destino) cont.replaceChildren();
+    if (!s.lista.length) {
+      cont.append(el("p", "nota", "Cuando NOVA vea un cobro que se repite cada mes con el mismo nombre (Netflix, Spotify, el plan del celular, el arriendo…), aparece aquí con lo que suma al año."));
+      return;
+    }
+    var res = el("div", "sus-resumen");
+    res.append(el("strong", null, dinero(s.mensual) + " al mes"), el("small", null, s.activas + (s.activas === 1 ? " pago que se repite" : " pagos que se repiten") + " · " + dinero(s.anual) + " al año"));
+    cont.append(res);
+    var ul = el("ul", "sus-lista");
+    s.lista.forEach(function (x) {
+      var li = el("li", "sus-fila" + (x.cancelada ? " cancelada" : ""));
+      li.tabIndex = 0; li.setAttribute("role", "button");
+      var c = categoria(x.categoriaId) || { icono: "otro" };
+      var txt = el("div", "sus-texto");
+      txt.append(el("strong", null, x.nombre), el("small", null, x.cancelada
+        ? "Hace rato no se cobra: ¿la cancelaste?"
+        : "Cada mes · próximo cobro " + fechaCorta.format(new Date(x.proximo))));
+      if (x.subio > 0) txt.append(el("span", "chip sus-subio", "▲ subió " + dinero(x.subio)));
+      var val = el("div", "sus-valor");
+      val.append(el("strong", null, dinero(x.monto)), el("small", null, x.cancelada ? x.veces + " cobros" : dinero(x.anual) + " al año"));
+      li.append(pintarIcono(el("span", "mov-icono"), c), txt, val);
+      function ver() { abrirBusqueda({ texto: x.nombre, tipo: "gasto" }); }
+      li.addEventListener("click", ver);
+      li.addEventListener("keydown", function (e) { if (e.key === "Enter") ver(); });
+      ul.append(li);
+    });
+    cont.append(ul);
+  }
   function pintarPlanes() {
+    pintarSuscripciones();
     var ul = $("lista-limites");
     ul.replaceChildren();
     $("planes-vacio").hidden = !!(datos.limites.length || datos.metas.length);
@@ -1077,12 +1117,8 @@
   // Salud financiera: puntaje, fondo de emergencia, deudas y mejor/peor mes.
   function wSuscripciones(art) {
     titulo(art, "Suscripciones y pagos fijos");
-    var s = NovaConsejos.suscripciones(datos.movimientos);
-    if (!s.lista.length) return art.append(el("p", "nota", "Cuando algo se repita cada mes con el mismo valor (como Netflix o el internet), lo muestro aquí."));
-    art.append(el("p", "calc-res", ocultos ? "••••" : "Pagas cerca de " + dinero(s.mensual) + " al mes (" + dinero(s.mensual * 12) + " al año)."));
-    var ul = el("ul", "lista-simple");
-    s.lista.forEach(function (x) { var li = el("li", "consejo"); li.append(el("span", "consejo-icono", "🔁")); var d = el("div"); d.append(el("strong", null, x.nombre), el("small", null, ocultos ? "••••" : dinero(x.monto) + " al mes · " + dinero(x.anual) + " al año · " + x.meses + " meses seguidos")); li.append(d); ul.append(li); });
-    art.append(ul, el("p", "nota", "¿Ya no lo usas? Cancelarlo es plata que vuelve a tu bolsillo."));
+    pintarSuscripciones(art);
+    art.append(el("p", "nota", "¿Ya no lo usas? Cancelarlo es plata que vuelve a tu bolsillo."));
   }
   function wInflacion(art) {
     titulo(art, "Tu inflación personal");
@@ -2690,9 +2726,14 @@
   function avisosRecordatorios() {
     var lista = [], ahora = new Date();
     if (leerLocal("nova-rec-noche", false)) {
+      // A la hora que la persona eligió (9 p. m. si no eligió). Hoy no suena si ya anotó algo: cada vez que anota,
+      // NOVA vuelve a programar los avisos (ver pintar()). Trae los botones de los registros comunes.
+      var horaRec = Number(leerLocal("nova-rec-noche-hora", 21)) || 21, hoyK = A.claveDia(ahora);
+      var yaAnoto = datos.movimientos.some(function (m) { return A.claveDia(m.fecha) === hoyK; });
       for (var k = 0; k < 7; k++) {
-        var d = new Date(); d.setDate(d.getDate() + k); d.setHours(20, 0, 0, 0);
-        if (d > ahora) lista.push({ id: 700000001 + k, titulo: "¿Ya anotaste tus gastos de hoy?", texto: "Tómate un minuto para registrar lo de hoy en NOVA.", cuando: d });
+        var d = new Date(); d.setDate(d.getDate() + k); d.setHours(horaRec, 0, 0, 0);
+        if (k === 0 && yaAnoto) continue;
+        if (d > ahora) lista.push({ id: 700000001 + k, titulo: "¿Gastaste algo hoy?", texto: datos.frecuentes.length ? "Anótalo en un segundo con los botones, o abre NOVA." : "Tómate un minuto para anotar lo de hoy en NOVA.", cuando: d, botones: true });
       }
     }
     if (leerLocal("nova-rec-respaldo", false)) {
@@ -2719,6 +2760,8 @@
     return lista;
   }
   $("rec-noche").checked = !!leerLocal("nova-rec-noche", false);
+  $("rec-noche-hora").value = String(Number(leerLocal("nova-rec-noche-hora", 21)) || 21);
+  $("rec-noche-hora").addEventListener("change", function (e) { guardarLocal("nova-rec-noche-hora", Number(e.target.value)); programarAvisos(); toast("Recordatorio a las " + e.target.selectedOptions[0].textContent); });
   $("rec-programados").checked = !!leerLocal("nova-rec-programados", false);
   $("rec-respaldo").checked = !!leerLocal("nova-rec-respaldo", false);
   $("rec-rapido").checked = !!leerLocal("nova-rec-rapido", false);
@@ -2748,7 +2791,8 @@
     if (!N || !N.addListener) return;
     N.addListener("localNotificationActionPerformed", function (ev) {
       if (ev && ev.notification && ev.notification.id === 700000900) { toast("Botón tocado", "Tecla rápida: " + (ev.actionId === "uno" ? "Botón 1" : ev.actionId === "dos" ? "Botón 2" : String(ev.actionId))); return; }
-      if (!ev || !ev.notification || ev.notification.id !== RAPIDO_ID || !/^f\d+$/.test(String(ev.actionId))) return;
+      var idAviso = ev && ev.notification && ev.notification.id;
+      if (!ev || !ev.notification || !(idAviso === RAPIDO_ID || (idAviso >= 700000001 && idAviso <= 700000007)) || !/^f\d+$/.test(String(ev.actionId))) return;
       if (fuente && datos && datos.frecuentes.length) anotarTeclaRapida(ev.actionId); else accionesPendientes.push(ev.actionId);   // si la app aún está abriendo, queda en espera
     });
   })();
@@ -2764,11 +2808,12 @@
       return N.requestPermissions().then(function (perm) {
         if (!perm || perm.display !== "granted") return null;
         var teclas = datos.frecuentes.slice(0, 3).map(function (f) { return { id: "f" + f.id, title: String(f.texto).slice(0, 24) }; });
-        var tipos = avisos.some(function (a) { return a.rapido; }) && teclas.length ? N.registerActionTypes({ types: [{ id: "RAPIDO", actions: teclas }] }) : Promise.resolve();
+        var tipos = avisos.some(function (a) { return a.rapido || a.botones; }) && teclas.length ? N.registerActionTypes({ types: [{ id: "RAPIDO", actions: teclas }] }) : Promise.resolve();
         return tipos.then(function () {
           return N.schedule({ notifications: avisos.map(function (a) {
             var n = { id: a.id, title: a.titulo, body: a.texto, schedule: { at: a.cuando, allowWhileIdle: true } };
             if (a.rapido) { n.ongoing = true; n.autoCancel = false; n.actionTypeId = "RAPIDO"; }
+            if (a.botones && teclas.length) n.actionTypeId = "RAPIDO";
             return n;
           }) });
         });
@@ -3003,7 +3048,10 @@
   });
 
   // ---------- Pintar todo ----------
+  var hoyAnotadoAvisos = null;
   function pintar() {
+    var hoyAnotado = !!datos.movimientos.length && datos.movimientos.some(function (m) { return A.claveDia(m.fecha) === A.claveDia(new Date()); });
+    if (fuente && hoyAnotado !== hoyAnotadoAvisos) { var antes = hoyAnotadoAvisos; hoyAnotadoAvisos = hoyAnotado; if (antes !== null && leerLocal("nova-rec-noche", false)) programarAvisos(); }
     if (!fuente) return;
     pintarInicio(); pintarPlanes(); pintarAnalisis(); pintarBuscar(); pintarAjustes(); pintarIA(); pintarConductor(); pintarDeudas(); pintarGrupos(); pintarCalendario(); pintarEspacioCabecera(); if (pilaCapas.indexOf("pantalla-detalle") >= 0) pintarDetalle(); if (deudaAbierta && pilaCapas.indexOf("pantalla-abonos") >= 0) pintarAbonos();
   }
@@ -4016,21 +4064,21 @@
   // ---------- Novedades ----------
   // Al actualizar NOVA sale una vez una pantalla con lo nuevo. Quien recién empieza ve el tutorial y no esto.
   // Para una próxima tanda de novedades: subir NOVEDADES_VERSION y cambiar las páginas.
-  var NOVEDADES_VERSION = 1;
+  var NOVEDADES_VERSION = 2;
   var NOVEDADES = [
-    { iconos: ["👛", "🐷", "✈️", "💼"], titulo: "Espacios", texto: "Tu plata por propósitos: Principal para el día a día y, aparte, un espacio para el ahorro, un viaje o tu negocio.",
-      puntos: [["🗂️", "Cada espacio funciona completo", "Saldo, presupuesto, límites, programadas, análisis, informes y NOVA IA, solo con lo de ese espacio. Y cada uno con su moneda."],
-        ["✦", "Cambia desde arriba", "Toca el nombre del espacio, arriba al lado de NOVA: ahí están tus espacios y el botón para crear uno."],
-        ["⇄", "Pasa plata entre espacios", "Lo que mandas al ahorro sale de Principal y entra allá como ingreso, unidos. Si las monedas son distintas, calcula cuánto llega."]] },
-    { titulo: "NOVA IA con gráficos", texto: "Pregúntale por tu plata y, además de la respuesta, verás tus propios números.",
-      puntos: [["💬", "Pregunta como hablas", "«¿Cuánto gasté en comida los últimos 3 meses?», «¿En qué gasto más este mes?»."],
-        ["📊", "Gráfico y movimientos", "Debajo de la respuesta sale un gráfico y los movimientos que hay detrás del número."],
-        ["⚡", "Botones para actuar", "Crea un límite para esa categoría, mira los movimientos o ábrelos en el calendario con un toque."]] },
-    { titulo: "Pagos en otra moneda", texto: "Un pago en otra moneda ahora llega convertido a la tuya con la tasa del día.",
-      puntos: [["💲", "Lo detecta solo", "Escribe o dicta «gasté 20 dólares en Amazon», o pega el mensaje del banco de una compra en USD o EUR: llega convertido, listo para guardar."],
-        ["🪙", "O elígela tú", "En el formulario toca la moneda para escribir el valor en otra. Y entre espacios con monedas distintas, NOVA calcula cuánto llega."],
-        ["🧾", "Siempre ves lo que fue", "Cada movimiento guarda el valor original y la tasa. Si tu banco cobró distinto, corriges el valor."]],
-      pie: "📅 Y recuerda: el calendario día por día está en Inicio, Planes, Análisis, Buscar y Mi trabajo." }
+    { iconos: ["🌐", "🧮", "📋", "🎯"], titulo: "NOVA IA busca en internet", texto: "Ahora puedes preguntarle precios y cosas de hoy: busca en internet y te responde con cuadros.",
+      puntos: [["🌐", "Precios de hoy", "«¿Cuánto cuesta el iPhone 18 Pro Max?»: busca en tiendas de Colombia y te muestra de dónde sacó el dato."],
+        ["🧮", "¿Me alcanza?", "«¿Me alcanza para comprar…?»: compara el precio con tu saldo y con lo que te sobra cada mes, y te dice en cuántos meses lo juntas."],
+        ["📋", "Cuadros fáciles de leer", "Pídele «hazme un cuadro» y te responde con una tabla. Y con un toque creas la meta de ahorro para esa compra."]] },
+    { titulo: "Tus pagos fijos y tu saldo", texto: "Tres ayudas para que lo que dice NOVA sea igual a lo que tienes de verdad.",
+      puntos: [["🔁", "Suscripciones y pagos fijos", "En Planes: Netflix, Spotify, arriendo… cuánto pagas al mes y al año, cuándo es el próximo cobro y si te subieron el precio."],
+        ["⚖️", "Cuadrar el saldo", "Toca «Saldo en cuentas» en Inicio, escribe cuánto tienes de verdad y NOVA anota la diferencia por ti."],
+        ["🌙", "¿Gastaste algo hoy?", "El aviso de la noche sale solo si ese día no anotaste nada, a la hora que elijas, con botones para anotar rápido."]] },
+    { titulo: "Anotar desde el banco", texto: "En la app de Android, NOVA puede leer los avisos de tu banco y ofrecerte anotarlos.",
+      puntos: [["🏦", "Te pregunta «¿Lo anoto?»", "Cuando Nequi, Bancolombia, Nu, Davivienda… te avisan un pago o un ingreso, NOVA te lo muestra listo para guardar."],
+        ["✅", "Tú decides", "Ves el valor, el comercio, la fecha y la cuenta. Tocas Anotar y Guardar; o Descartar. Nada se guarda solo."],
+        ["⚙️", "Actívalo una vez", "Toca tu foto arriba a la derecha → Configuración → «Leer los avisos del banco». Android te pide el permiso «Acceso a notificaciones»."]],
+      pie: "🔒 Los avisos se leen solo en tu celular: no se envían a ningún lado." }
   ];
   var paginaNovedad = 0;
   function novedadesSiHaceFalta() {
@@ -4065,6 +4113,220 @@
   $("nov-siguiente").addEventListener("click", function () {
     if (paginaNovedad < NOVEDADES.length - 1) { paginaNovedad++; pintarNovedad(); } else cerrarNovedades();
   });
+
+  // ---------- Cuadrar el saldo ----------
+  // La persona escribe cuánto tiene de verdad en una cuenta y NOVA le dice la diferencia con lo anotado. Puede anotar
+  // esa diferencia como un gasto o ingreso ("lo que se me olvidó anotar") o solo corregir el saldo de la cuenta.
+  var cuadre = { diferencia: 0 };
+  function abrirCuadrar(cuentaId) {
+    var sel = $("cuadrar-cuenta");
+    sel.replaceChildren();
+    datos.cuentas.forEach(function (c) { var o = el("option", null, c.nombre); o.value = c.id; o.selected = c.id === cuentaId; sel.append(o); });
+    $("cuadrar-real").value = "";
+    mensaje("cuadrar-mensaje", "");
+    abrirCapa("pantalla-cuadrar");
+    pintarCuadrar();
+  }
+  function cuentaDelCuadre() { var id = Number($("cuadrar-cuenta").value); return datos.cuentas.find(function (c) { return c.id === id; }); }
+  function pintarCuadrar() {
+    var c = cuentaDelCuadre();
+    if (!c) return;
+    var app = saldoCuenta(c), txt = $("cuadrar-real").value.trim(), real = txt ? leerValor(txt) : NaN;
+    $("cuadrar-nova").textContent = pesos.format(app);
+    var hay = isFinite(real);
+    $("cuadrar-resultado").hidden = !hay;
+    if (!hay) return;
+    var d = Math.round((real - app) * 100) / 100;
+    cuadre.diferencia = d;
+    var r = $("cuadrar-resultado");
+    r.classList.toggle("bien", d === 0); r.classList.toggle("falta", d < 0); r.classList.toggle("sobra", d > 0);
+    $("cuadrar-anotar").hidden = $("cuadrar-ajustar").hidden = d === 0;
+    if (d === 0) {
+      $("cuadrar-diferencia").textContent = "✅ ¡Cuadra perfecto!";
+      $("cuadrar-explica").textContent = "Lo que tienes es justo lo que NOVA tiene anotado en " + c.nombre + ".";
+      return;
+    }
+    $("cuadrar-diferencia").textContent = d < 0 ? "Te faltan " + pesos.format(-d) : "Tienes " + pesos.format(d) + " de más";
+    $("cuadrar-explica").textContent = d < 0
+      ? "Tienes menos de lo que dice NOVA: seguramente hay gastos sin anotar. Anótalos si los recuerdas, o anota la diferencia de una vez."
+      : "Tienes más de lo que dice NOVA: seguramente hay un ingreso sin anotar. Anótalo si lo recuerdas, o anota la diferencia de una vez.";
+    $("cuadrar-anotar").textContent = d < 0 ? "Anotar " + pesos.format(-d) + " como gasto" : "Anotar " + pesos.format(d) + " como ingreso";
+  }
+  $("cuadrar-cuenta").addEventListener("change", pintarCuadrar);
+  $("cuadrar-real").addEventListener("input", pintarCuadrar);
+  $("form-cuadrar").addEventListener("submit", function (e) { e.preventDefault(); });
+  function terminarCuadre(aviso) {
+    pintar();
+    cerrarCapa();
+    toast("⚖️ Saldo cuadrado", aviso);
+  }
+  $("cuadrar-anotar").addEventListener("click", function () {
+    var c = cuentaDelCuadre(), d = cuadre.diferencia, b = $("cuadrar-anotar");
+    if (!c || !d) return;
+    var tipo = d < 0 ? "gasto" : "ingreso";
+    b.disabled = true;
+    categoriaPorNombre(tipo === "gasto" ? "Otros gastos" : "Otros ingresos", tipo).then(function (cat) {
+      return fuente.crear("movimientos", { cuenta_id: c.id, categoria_id: cat.id, tipo: tipo, descripcion: tipo === "gasto" ? "Gastos sin anotar" : "Ingreso sin anotar",
+        monto: Math.abs(d), fecha: new Date().toISOString(), etiquetas: [], estado: "pagado", nota: "Cuadre de saldo de " + c.nombre, moneda: monedaBase() });
+    }).then(function (m) {
+      datos.movimientos.push(m); ordenarMovimientos();
+      terminarCuadre(c.nombre + " ahora tiene " + pesos.format(saldoCuenta(c)));
+    }).catch(function (err) { mensaje("cuadrar-mensaje", "No se pudo guardar: " + err.message, true); })
+      .then(function () { b.disabled = false; });
+  });
+  $("cuadrar-ajustar").addEventListener("click", function () {
+    var c = cuentaDelCuadre(), d = cuadre.diferencia, b = $("cuadrar-ajustar");
+    if (!c || !d) return;
+    b.disabled = true;
+    fuente.actualizar("cuentas", c.id, { saldo_inicial: Math.round((num(c.saldo_inicial) + d) * 100) / 100 }).then(function (n) {
+      Object.assign(c, n);
+      terminarCuadre(c.nombre + " ahora tiene " + pesos.format(saldoCuenta(c)) + " (sin tocar tus gastos ni ingresos)");
+    }).catch(function (err) { mensaje("cuadrar-mensaje", "No se pudo guardar: " + err.message, true); })
+      .then(function () { b.disabled = false; });
+  });
+  $("btn-cuadrar").addEventListener("click", function () { abrirCuadrar(datos.cuentas[0] && datos.cuentas[0].id); });
+  $("saldo-cuentas").addEventListener("click", function () { abrirCuadrar(datos.cuentas[0] && datos.cuentas[0].id); });
+
+  // ---------- Anotar desde los avisos del banco (app Android) ----------
+  // Un servicio de Android (BancoListener) lee los avisos de bancos y billeteras, solo si la persona le dio a NOVA el
+  // permiso «Acceso a notificaciones», y los deja en una lista (Preferences «nova-banco», la llena Android). Aquí se
+  // revisan: nada se guarda hasta que la persona toca «Anotar» y luego «Guardar». Los ya revisados se recuerdan en
+  // este celular («nova-banco-listos»), así la lista de Android nunca se reescribe desde aquí.
+  var plugBanco = enApp && window.Capacitor.Plugins && window.Capacitor.Plugins.NovaBanco;
+  var plugPref = enApp && window.Capacitor.Plugins && window.Capacitor.Plugins.Preferences;
+  var bancoCola = [], bancoPermiso = null, abrirBancoAlEntrar = false, bancoEnCurso = null;
+  var horaBanco = new Intl.DateTimeFormat("es-CO", { hour: "numeric", minute: "2-digit" });
+  function bancoListos() { var l = leerLocal("nova-banco-listos", []); return Array.isArray(l) ? l : []; }
+  function marcarBancoListo(id) {
+    var l = bancoListos();
+    if (l.indexOf(id) < 0) l.push(id);
+    guardarLocal("nova-banco-listos", l.slice(-200));
+    bancoCola = bancoCola.filter(function (x) { return x.id !== id; });
+  }
+  function itemBanco(o) {
+    if (!o || !o.texto) return null;
+    var frase = NovaConsejos.mensajeBancoATexto(String(o.texto), { deBanco: !!o.deBanco });
+    var r = frase ? Parser.interpretar(frase) : null;
+    if (!r || !r.ok) return null;
+    var app = String(o.app || "Tu banco").slice(0, 40), texto = String(o.texto).slice(0, 400);
+    // Un SMS llega por la app de Mensajes: se muestra el banco que nombra el texto (y «por SMS»).
+    var nombrado = o.deBanco ? null : bancoEnTexto(texto);
+    return { id: String(o.id), app: app, banco: nombrado || app, via: nombrado ? "por SMS" : "", texto: texto, fecha: Number(o.fecha) || Date.now(), frase: frase, r: r, moneda: Mon.detectar(frase) };
+  }
+  var BANCOS = ["Bancolombia", "Nequi", "Davivienda", "DaviPlata", "BBVA", "Banco de Bogotá", "AV Villas", "Scotiabank Colpatria", "Colpatria", "Lulo Bank", "Lulo", "Movii", "Falabella", "Itaú", "Banco Popular", "Banco de Occidente", "Banco Caja Social", "Bancamía", "Pichincha", "Serfinanza", "Ualá", "RappiPay", "Nu"];
+  function bancoEnTexto(texto) {
+    var sin = function (x) { return x.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, ""); }, t = " " + sin(texto).replace(/[^a-z0-9]+/g, " ") + " ";
+    return BANCOS.filter(function (b) { return t.indexOf(" " + sin(b) + " ") >= 0; })[0] || null;
+  }
+  function cuandoBanco(ms) {
+    var d = new Date(ms), min = Math.round((Date.now() - ms) / 60000);
+    if (min < 1) return "ahora";
+    if (min < 60) return "hace " + min + " min";
+    if (A.claveDia(d) === A.claveDia(new Date())) return "hoy " + horaBanco.format(d);
+    var ayer = new Date(); ayer.setDate(ayer.getDate() - 1);
+    if (A.claveDia(d) === A.claveDia(ayer)) return "ayer " + horaBanco.format(d);
+    return fechaCorta.format(d) + " · " + horaBanco.format(d);
+  }
+  // La cuenta de NOVA que se llama como el banco del aviso (Nequi, Bancolombia…), si la hay.
+  var PALABRAS_COMUNES = ["cuenta", "cuentas", "ahorro", "ahorros", "tarjeta", "credito", "debito", "corriente", "principal", "banco", "mi", "de", "la", "el", "y"];
+  function cuentaParaBanco(texto) {
+    var t = " " + String(texto).toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^a-z0-9]+/g, " ") + " ";
+    var c = (datos.cuentas || []).filter(function (cta) {
+      return String(cta.nombre || "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").split(/[^a-z0-9]+/)
+        .some(function (p) { return p.length >= 2 && PALABRAS_COMUNES.indexOf(p) < 0 && t.indexOf(" " + p + " ") >= 0; });
+    })[0];
+    return c || null;
+  }
+  function revisarBanco() {
+    if (!plugBanco || !plugPref) return Promise.resolve();
+    return Promise.all([
+      plugPref.get({ key: "nova-banco" }).catch(function () { return null; }),
+      plugBanco.estado().catch(function () { return null; })
+    ]).then(function (res) {
+      var crudo = [];
+      try { crudo = JSON.parse((res[0] && res[0].value) || "[]"); } catch (e) { crudo = []; }
+      if (!Array.isArray(crudo)) crudo = [];
+      bancoPermiso = !!(res[1] && res[1].permiso);
+      var ids = crudo.map(function (o) { return String(o && o.id); });
+      var listos = bancoListos(), quedan = listos.filter(function (id) { return ids.indexOf(id) >= 0; });   // Android guarda solo los últimos 30
+      if (quedan.length !== listos.length) guardarLocal("nova-banco-listos", quedan);
+      bancoCola = crudo.filter(function (o) { return o && quedan.indexOf(String(o.id)) < 0; }).map(itemBanco).filter(Boolean).reverse();   // lo más nuevo arriba
+      pintarBanco();
+    });
+  }
+  function pintarBanco() {
+    var n = bancoCola.length, activo = leerLocal("nova-banco-activo", true) !== false;
+    $("aviso-banco").hidden = !plugBanco || !n;
+    $("aviso-banco-texto").textContent = n === 1 ? "1 movimiento del banco por anotar" : n + " movimientos del banco por anotar";
+    $("banco-titulo").hidden = $("banco-menu").hidden = !plugBanco;
+    $("banco-activo").checked = !!bancoPermiso && activo;
+    $("banco-aviso").checked = leerLocal("nova-banco-aviso", true) !== false;
+    $("banco-aviso").disabled = !bancoPermiso || !activo;
+    $("banco-estado").textContent = !bancoPermiso ? "Falta dar el permiso de Android" : !activo ? "Apagado" : n ? n + (n === 1 ? " por anotar" : " por anotar") : "Todo al día";
+    if (pilaCapas.indexOf("pantalla-banco") >= 0) pintarListaBanco();
+  }
+  function pintarListaBanco() {
+    $("banco-permiso-tarjeta").hidden = !!bancoPermiso;
+    var ul = $("lista-banco");
+    ul.replaceChildren();
+    $("banco-vacio").hidden = !!bancoCola.length;
+    bancoCola.forEach(function (it) {
+      var li = el("li", "banco-item"), cab = el("div", "banco-cab");
+      cab.append(el("span", "banco-app", "🏦 " + it.banco), el("small", null, (it.via ? it.via + " · " : "") + cuandoBanco(it.fecha)));
+      var res = el("div", "banco-resumen"), chip = el("span", "chip " + it.r.tipo, it.r.tipo === "ingreso" ? "Ingreso" : "Gasto");
+      var valor = it.moneda && it.r.montoExacto > 0 ? Mon.formatoMonto(it.r.montoExacto, it.moneda) : pesos.format(it.r.monto);
+      res.append(chip, el("strong", null, valor), el("span", null, it.r.descripcion));
+      var cta = cuentaParaBanco(it.app + " " + it.texto);
+      if (cta) res.append(el("small", "banco-cuenta", "→ " + cta.nombre));
+      var botones = el("div", "banco-botones"), anotar = el("button", "primario mini", "Anotar"), descartar = el("button", "mini", "Descartar");
+      anotar.type = descartar.type = "button";
+      anotar.addEventListener("click", function () { anotarBanco(it); });
+      descartar.addEventListener("click", function () { marcarBancoListo(it.id); pintarBanco(); toast("Descartado", it.banco + ": " + it.texto.slice(0, 60)); });
+      botones.append(anotar, descartar);
+      li.append(cab, el("p", "banco-texto", it.texto), res, botones);
+      ul.append(li);
+    });
+  }
+  function abrirBanco() {
+    if (!fuente) { abrirBancoAlEntrar = true; return; }
+    if (pilaCapas.indexOf("pantalla-banco") < 0) abrirCapa("pantalla-banco");
+    pintarListaBanco();
+    revisarBanco();
+  }
+  // «Anotar»: el aviso pasa a la caja de Inicio y sale la vista previa de siempre, con la fecha del aviso y la cuenta del banco.
+  function anotarBanco(it) {
+    var cta = cuentaParaBanco(it.app + " " + it.texto);
+    bancoEnCurso = { frase: it.frase, fecha: new Date(it.fecha).toISOString(), cuentaId: cta ? cta.id : null,
+      origen: "🏦 Del aviso de " + it.banco + " · " + cuandoBanco(it.fecha) + (cta ? " · cuenta " + cta.nombre : "") };
+    marcarBancoListo(it.id);
+    pintarBanco();
+    cerrarYLuego(function () {
+      ir("inicio");
+      $("entrada-rapida").value = it.frase;
+      $("form-rapido").requestSubmit();
+      setTimeout(function () { try { $("form-rapido").scrollIntoView({ block: "center", behavior: "smooth" }); } catch (e) { /* sin scroll */ } }, 60);
+    });
+  }
+  function guardarPreferencia(clave, valor) { if (plugPref) plugPref.set({ key: clave, value: valor }).catch(function () { /* se intenta la próxima vez */ }); }
+  $("aviso-banco").addEventListener("click", abrirBanco);
+  $("banco-revisar").addEventListener("click", abrirBanco);
+  $("banco-dar-permiso").addEventListener("click", function () {
+    toast("Busca NOVA y actívalo", "Luego vuelve con Atrás");
+    if (plugBanco) plugBanco.abrirAjustes().catch(function () { toast("No se pudo abrir", "Ve a Ajustes → Notificaciones → Acceso a notificaciones"); });
+  });
+  $("banco-info-app").addEventListener("click", function () { if (plugBanco) plugBanco.abrirInfoApp().catch(function () { /* nada */ }); });
+  $("banco-activo").addEventListener("change", function (e) {
+    var si = e.target.checked;
+    guardarLocal("nova-banco-activo", si);
+    guardarPreferencia("nova-banco-activo", si ? "si" : "no");
+    if (si && !bancoPermiso) abrirBanco();     // ahí se explica el permiso y está el botón para darlo
+    pintarBanco();
+  });
+  $("banco-aviso").addEventListener("change", function (e) {
+    guardarLocal("nova-banco-aviso", e.target.checked);
+    guardarPreferencia("nova-banco-aviso", e.target.checked ? "si" : "no");
+  });
+  document.addEventListener("visibilitychange", function () { if (!document.hidden && fuente && !fuente.demo) revisarBanco(); });
 
   // ---------- Calendario día por día ----------
   // Cada pantalla abre el calendario con sus propios movimientos: en Buscar, lo que encontraste; en Mi trabajo,
@@ -4648,8 +4910,125 @@
     return lista;
   }
 
+
+  // ---------- Texto de NOVA IA: cuadros (tablas), fuentes y precio ----------
+  // La IA puede responder con un cuadro (filas con | entre columnas), con las páginas de internet que usó
+  // ([[FUENTE:título|enlace]]) y, si la pregunta es de una compra, con el precio que encontró ([[PRECIO:valor|producto]]).
+  // Esas marcas no se muestran: se quitan del texto y se usan para las fuentes y el cuadro «¿Me alcanza?».
+  function marcasIA(texto) {
+    var t = String(texto || ""), precio = null, producto = "", fuentes = [];
+    t = t.replace(/\[\[PRECIO:\s*([\d.,]+)\s*(?:\|([^\]]*))?\]\]/g, function (_m, v, n) { precio = Number(String(v).replace(/[.,]/g, "")); producto = (n || "").trim(); return ""; });
+    t = t.replace(/\[\[FUENTE:([^|\]]*)\|([^\]\s]+)\]\]/g, function (_m, titulo, url) { if (/^https:\/\//.test(url) && fuentes.length < 5 && !fuentes.some(function (f) { return f.url === url; })) fuentes.push({ titulo: titulo.trim() || url, url: url }); return ""; });
+    t = t.replace(/\[\[[^\]]*$/, "");                 // una marca a medio llegar (mientras la respuesta va en vivo)
+    t = t.replace(/\*\*(.+?)\*\*/g, "$1").replace(/^#{1,6}\s*/gm, "").replace(/\n{3,}/g, "\n\n").trim();
+    return { texto: t, precio: precio > 0 ? precio : null, producto: producto, fuentes: fuentes };
+  }
+  function esFilaTabla(linea) { var l = linea.trim(); return l.indexOf("|") >= 0 && l.replace(/^\||\|$/g, "").split("|").length >= 2; }
+  function pintarTextoIA(li, crudo) {
+    var m = marcasIA(crudo), lineas = m.texto.split("\n"), i = 0, parrafo = [];
+    li.replaceChildren();
+    function soltarParrafo() { if (parrafo.length) { li.append(el("span", "ia-parrafo", parrafo.join("\n"))); parrafo = []; } }
+    while (i < lineas.length) {
+      if (esFilaTabla(lineas[i])) {
+        soltarParrafo();
+        var filas = [];
+        while (i < lineas.length && esFilaTabla(lineas[i])) {
+          var celdas = lineas[i].trim().replace(/^\||\|$/g, "").split("|").map(function (c) { return c.trim(); });
+          if (!celdas.every(function (c) { return /^:?-{2,}:?$/.test(c) || c === ""; })) filas.push(celdas);   // la línea |---|---| no se muestra
+          i++;
+        }
+        var cont = el("div", "ia-tabla-caja"), tabla = el("table", "ia-tabla");
+        filas.forEach(function (f, n) {
+          var tr = el("tr");
+          f.forEach(function (c) { tr.append(el(n === 0 ? "th" : "td", /^[-−+]?\$?\s?[\d.,]+\s?%?$/.test(c) ? "num" : null, c)); });
+          tabla.append(tr);
+        });
+        cont.append(tabla); li.append(cont);
+        continue;
+      }
+      parrafo.push(lineas[i]); i++;
+    }
+    soltarParrafo();
+    if (m.fuentes.length) {
+      var f = el("div", "ia-fuentes");
+      f.append(el("small", null, "🌐 Busqué en internet:"));
+      m.fuentes.forEach(function (x) {
+        var a = el("a", null, x.titulo.replace(/^www\./, "")); a.href = x.url; a.target = "_blank"; a.rel = "noopener";
+        f.append(a);
+      });
+      li.append(f);
+    }
+    return m;
+  }
+
+  // ---------- ¿Me alcanza? ----------
+  // Cuadro debajo de la respuesta cuando la pregunta es de una compra: el precio (el que la IA encontró en internet, o
+  // el que la persona escribió), el saldo, lo que le sobra en un mes normal y si le alcanza o en cuántos meses lo junta.
+  var PREGUNTA_COMPRA = /alcanza|puedo comprar|me puedo comprar|me compro|comprarme|darme el gusto|ahorrar para|cu[aá]nto me demoro/i;
+  function nombreDeCompra(pregunta) {
+    var p = String(pregunta || "").replace(/[¿?¡!]/g, "").trim();
+    var m = p.match(/(?:para (?:comprar(?:me)? )?|comprar(?:me)? |me compro |ahorrar para )(?:un |una |el |la |los |las |unos |unas )?(.+)$/i);
+    var n = (m ? m[1] : p).replace(/\s+(de|por|que cuesta|que vale|en)\s+\$?\s?[\d.,]+.*$/i, "").replace(/\s+(este|esta|el próximo|el proximo)\s+(mes|año|semana).*$/i, "").trim();
+    n = n.charAt(0).toUpperCase() + n.slice(1);
+    return n.slice(0, 40) || "esa compra";
+  }
+  function tarjetaAlcanza(pregunta, respuesta) {
+    var m = marcasIA(respuesta), precio = m.precio, deInternet = !!precio;
+    if (!PREGUNTA_COMPRA.test(pregunta) && !precio) return null;
+    if (!precio) { var r = Parser.interpretar(pregunta); if (r.ok && r.monto >= 1000) precio = r.monto; }
+    if (!precio) return null;
+    var nombre = m.producto || nombreDeCompra(pregunta), a = A.alcanza(precio, datos.movimientos, saldoTotal(), new Date());
+    var li = el("li", "nova tarjeta-ia alcanza-tarjeta " + a.veredicto);
+    li.append(el("small", "tia-titulo", "¿Te alcanza para " + nombre + "?"));
+    li.append(el("strong", "alc-veredicto", { si: "✅ Sí te alcanza", justo: "⚠️ Te alcanza, pero quedas justo", no: "❌ Todavía no te alcanza" }[a.veredicto]));
+    var tabla = el("table", "ia-tabla alc-tabla");
+    function fila(n, v, clase) { var tr = el("tr", clase || null); tr.append(el("td", null, n), el("td", "num", v)); tabla.append(tr); }
+    fila("Precio" + (deInternet ? " (internet)" : ""), dinero(precio));
+    fila("Tu saldo en cuentas", dinero(a.saldo));
+    if (a.veredicto === "no") fila("Te faltan", dinero(a.faltan), "malo");
+    else fila("Te quedaría", dinero(a.quedaria), a.veredicto === "justo" ? "malo" : "bueno");
+    if (a.mesesConDatos) {
+      fila("Te sobra en un mes normal", (a.ahorroMes < 0 && !ocultos ? "−" : "") + dinero(Math.abs(a.ahorroMes)));
+      fila("Gastas en un mes normal", dinero(a.gastoMes));
+    }
+    if (a.meses) fila("Lo juntas en", a.meses + (a.meses === 1 ? " mes" : " meses") + " (" + new Intl.DateTimeFormat("es-CO", { month: "long", year: "numeric" }).format(new Date(a.cuando)) + ")", "bueno");
+    li.append(tabla);
+    var barra = el("div", "barra alc-barra"), lleno = el("span");
+    lleno.style.width = Math.max(2, Math.min(100, a.saldo > 0 ? (a.saldo / precio) * 100 : 0)) + "%";
+    barra.append(lleno);
+    li.append(barra, el("small", "nota", Math.min(100, Math.round(a.saldo > 0 ? (a.saldo / precio) * 100 : 0)) + "% del precio ya lo tienes en tus cuentas."));
+    var consejo = a.veredicto === "si" ? "Puedes comprarlo y seguir con un mes de gastos de respaldo. Igual compara precios antes de pagar."
+      : a.veredicto === "justo" ? "Si lo compras ya, te quedas con menos de lo que gastas en un mes. Mejor junta un poco más o busca una cuota sin intereses."
+      : a.meses ? "Ahorrando lo que te sobra cada mes, lo tienes en " + a.meses + (a.meses === 1 ? " mes" : " meses") + ". Crea una meta y NOVA te va mostrando cuánto llevas."
+      : !a.mesesConDatos ? "Cuando NOVA tenga tus ingresos y gastos de los meses pasados te dirá en cuánto tiempo lo juntas."
+      : "Hoy gastas más de lo que te entra, así que no alcanzas a ahorrar para esto. Mira en Análisis dónde puedes recortar.";
+    li.append(el("p", "nota alc-consejo", consejo));
+    if (deInternet) li.append(el("small", "nota", "El precio lo buscó NOVA IA en internet: puede cambiar según la tienda y el día."));
+    var acc = el("div", "tia-acciones");
+    if (a.veredicto !== "si") {
+      var b = el("button", "tia-accion", "🎯 Crear meta: " + nombre); b.type = "button";
+      b.addEventListener("click", function () {
+        b.disabled = true;
+        var meta = { nombre: nombre, objetivo: precio };
+        if (a.cuando) meta.fecha_limite = A.claveDia(new Date(a.cuando));
+        fuente.crear("metas", meta).then(function (n) {
+          datos.metas.push(n); pintar();
+          b.textContent = "✓ Meta creada"; toast("🎯 Meta creada", nombre + " · " + dinero(precio));
+        }).catch(function (e) { b.disabled = false; toast("No se pudo crear la meta", e.message); });
+      });
+      acc.append(b);
+    }
+    var v = el("button", "tia-accion", "📊 Ver mis metas"); v.type = "button";
+    v.addEventListener("click", function () { cerrarCapa(); setTimeout(function () { ir("planes"); }, 80); });
+    acc.append(v);
+    li.append(acc);
+    return li;
+  }
+
   // Tarjeta debajo de una respuesta de NOVA IA: el número, un gráfico, los movimientos detrás y botones para actuar.
-  function tarjetaIA(pregunta) {
+  function tarjetaIA(pregunta, respuesta) {
+    var compra = tarjetaAlcanza(pregunta, respuesta);
+    if (compra) return compra;
     var t = NovaRespuestas.tarjeta(pregunta, datos, new Date());
     if (!t) return null;
     var li = el("li", "nova tarjeta-ia");
@@ -4710,10 +5089,12 @@
   function pintarChat() {
     $("chat").replaceChildren();
     chatActual.mensajes.forEach(function (m, i) {
-      $("chat").append(el("li", m.rol === "usuario" ? "yo" : "nova", m.texto));
+      var li = el("li", m.rol === "usuario" ? "yo" : "nova");
+      if (m.rol === "usuario") li.textContent = m.texto; else pintarTextoIA(li, m.texto);
+      $("chat").append(li);
       // Debajo de cada respuesta, la tarjeta con los números de la pregunta (se calcula de nuevo con los datos de hoy).
       var antes = chatActual.mensajes[i - 1];
-      if (m.rol !== "usuario" && antes && antes.rol === "usuario") { var t = tarjetaIA(antes.texto); if (t) $("chat").append(t); }
+      if (m.rol !== "usuario" && antes && antes.rol === "usuario") { var t = tarjetaIA(antes.texto, m.texto); if (t) $("chat").append(t); }
     });
     $("chat-bienvenida").hidden = chatActual.mensajes.length > 0;
     $("chat-titulo").textContent = chatActual.titulo || "Nueva conversación";
@@ -4801,7 +5182,7 @@
     Promise.resolve().then(function () {
       return preguntarEnFlujo({ pregunta: pregunta, historial: historial, contexto: contextoFinanzas() }, function (texto) {
         if (mio !== chatToken) return;
-        espera.textContent = texto;
+        pintarTextoIA(espera, texto);
         espera.classList.remove("pensando");
         espera.scrollIntoView({ block: "nearest" });
       }, control);
@@ -4809,9 +5190,9 @@
       if (mio !== chatToken) return;
       respuesta = (respuesta || "").trim();
       if (!respuesta) throw new Error("La IA no pudo responder. Intenta otra vez en un momento.");
-      espera.textContent = respuesta;
+      pintarTextoIA(espera, respuesta);
       espera.classList.remove("pensando");
-      var tar = tarjetaIA(pregunta);
+      var tar = tarjetaIA(pregunta, respuesta);
       if (tar) { espera.after(tar); tar.scrollIntoView({ block: "nearest" }); }
       chat.mensajes.push({ rol: "nova", texto: respuesta });
       return guardada.then(function () { return guardarConversacion(); }).catch(function () { mensaje("chat-mensaje", "La respuesta no se pudo guardar en tu historial, pero puedes seguir chateando.", true); }).then(pintarIA);
@@ -4847,8 +5228,11 @@
       if (id === consulta) terminar(r);
     });
     function terminar(r) {
-      if (!r.ok) { mensaje("rapido-mensaje", r.error, true); $("vista-previa").hidden = true; return; }
+      if (!r.ok) { mensaje("rapido-mensaje", r.error, true); $("vista-previa").hidden = true; bancoEnCurso = null; return; }
       mensaje("rapido-mensaje", "");
+      // Viene de un aviso del banco: se guarda con la fecha del aviso y en la cuenta de ese banco.
+      if (bancoEnCurso && bancoEnCurso.frase === texto) { r.fecha = bancoEnCurso.fecha; r.cuentaId = bancoEnCurso.cuentaId; r.origenBanco = bancoEnCurso.origen; }
+      bancoEnCurso = null;
       var mon = Mon.detectar(texto);
       // En un espacio en dólares, euros… los centavos cuentan: "taxi 12.5" es 12,50 y no 13.
       if (!mon && monedaBase() !== "COP" && local.ok && local.montoExacto > 0) r.monto = local.montoExacto;
@@ -4881,6 +5265,8 @@
       });
     }
     $("previa-desc").textContent = r.descripcion;
+    $("previa-origen").hidden = !r.origenBanco;
+    $("previa-origen").textContent = r.origenBanco || "";
     var tags = $("previa-etiquetas");
     tags.replaceChildren();
     r.etiquetas.forEach(function (t) { tags.append(el("span", "etiqueta-chip", "#" + t)); });
@@ -4909,7 +5295,8 @@
     return Promise.all([categoriaPorNombre(nombreCat || r.categoria, r.tipo, r.icono), ubicacionActual()]).then(function (res) {
       var c = res[0], lugar = res[1];
       if (r.moneda && !r.listo) throw new Error("Falta la tasa de cambio para convertir " + r.moneda + ". Anótalo con el botón + y escribe la tasa.");
-      var fila = { cuenta_id: datos.cuentas[0].id, categoria_id: c.id, tipo: r.tipo, descripcion: r.descripcion,
+      var cuenta = r.cuentaId != null && datos.cuentas.filter(function (x) { return x.id === r.cuentaId; })[0];
+      var fila = { cuenta_id: cuenta ? cuenta.id : datos.cuentas[0].id, categoria_id: c.id, tipo: r.tipo, descripcion: r.descripcion,
                    monto: r.monto, fecha: r.fecha, etiquetas: r.etiquetas, estado: "pagado", moneda: monedaBase() };
       if (r.moneda) { fila.moneda = r.moneda; fila.monto_original = r.montoOriginal; fila.tasa = r.tasa; }
       if (lugar) { fila.lat = lugar.lat; fila.lng = lugar.lng; precargarMapa(lugar.lat, lugar.lng); }
@@ -5454,6 +5841,7 @@
       pintarEstadoPapelera(); tutorialSiHaceFalta(); novedadesSiHaceFalta();
       while (accionesPendientes.length) anotarTeclaRapida(accionesPendientes.shift());
       programarAvisos();
+      if (!fuente.demo) revisarBanco().then(function () { if (abrirBancoAlEntrar) { abrirBancoAlEntrar = false; abrirBanco(); } }).catch(function () { /* sin lista del banco */ });
       // Si salieron categorías nuevas del modo conductor (como "Cuota del vehículo"), se agregan solas.
       if (conductor()) asegurarCategoriasConductor().then(pintar).catch(function () { /* se intentará la próxima vez */ });
       return procesarProgramados();
@@ -5599,6 +5987,13 @@
         return entrar(fuenteSupabase(cliente, r.data.user));
       }).catch(function (err) { mensaje("auth-mensaje", "No se pudo entrar con Google: " + err.message, true); });
     });
+  }
+
+  // Al tocar el aviso «¿Lo anoto en NOVA?» la app se abre con el enlace co.novafinanzas.app://banco.
+  if (plugApp) {
+    var esEnlaceBanco = function (u) { return /^co\.novafinanzas\.app:\/\/banco/.test(String(u || "")); };
+    plugApp.addListener("appUrlOpen", function (ev) { if (esEnlaceBanco(ev && ev.url)) abrirBanco(); });
+    if (plugApp.getLaunchUrl) plugApp.getLaunchUrl().then(function (r) { if (r && esEnlaceBanco(r.url)) abrirBanco(); }).catch(function () { /* se abrió normal */ });
   }
 
   // ---------- Bloqueo con PIN (el PIN se guarda solo en este dispositivo, cifrado) ----------

@@ -72,6 +72,14 @@ jobs:
           grep -q 'android:name=".SaldoWidget"' android/app/src/main/AndroidManifest.xml
           test -f android/app/src/main/res/xml/widget_saldo_info.xml
           test -f android/app/src/main/res/layout/widget_saldo.xml
+          # Anotar desde el banco: un servicio que lee los avisos de los bancos (solo si la persona le da el permiso
+          # de "Acceso a notificaciones") y el puente NovaBanco para pedir ese permiso desde la app.
+          test -f android/app/src/main/java/co/novafinanzas/app/MainActivity.java
+          cp recursos/java/MainActivity.java recursos/java/NovaBancoPlugin.java recursos/java/BancoListener.java android/app/src/main/java/co/novafinanzas/app/
+          sed -i 's#</application>#    <service android:name=".BancoListener" android:label="NOVA" android:exported="true" android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE">\n            <intent-filter>\n                <action android:name="android.service.notification.NotificationListenerService" />\n            </intent-filter>\n        </service>\n    </application>#' android/app/src/main/AndroidManifest.xml
+          grep -q 'android:name=".BancoListener"' android/app/src/main/AndroidManifest.xml
+          grep -q "registerPlugin(NovaBancoPlugin.class)" android/app/src/main/java/co/novafinanzas/app/MainActivity.java
+          test -f android/app/src/main/res/drawable/ic_stat_nova.xml
           # Número de versión: uno más en cada armado
           sed -i "s/versionCode 1$/versionCode ${{ env.NOVA_VERSION }}/; s/versionName \"1.0\"/versionName \"1.${{ env.NOVA_VERSION }}\"/" android/app/build.gradle
           grep -E "versionCode|versionName" android/app/build.gradle

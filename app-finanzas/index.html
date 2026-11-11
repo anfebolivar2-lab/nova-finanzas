@@ -158,7 +158,7 @@
           <div><small>↗ Ingresos</small><strong id="saldo-ingresos"></strong></div>
           <div><small>↘ Gastos</small><strong id="saldo-gastos"></strong></div>
         </div>
-        <span id="saldo-cuentas" class="pildora"></span>
+        <button type="button" id="saldo-cuentas" class="pildora pildora-boton" aria-label="Cuadrar el saldo de tus cuentas"></button>
       </article>
 
       <article id="tarjeta-deficit" class="tarjeta deficit" hidden>
@@ -222,6 +222,12 @@
         </div>
       </article>
 
+      <button type="button" id="aviso-banco" class="tarjeta aviso-banco" hidden>
+        <span class="aviso-banco-icono" aria-hidden="true">🏦</span>
+        <span class="aviso-banco-txt"><strong id="aviso-banco-texto">Movimientos del banco por anotar</strong><small>Te los avisó tu banco. Toca para revisarlos y guardarlos.</small></span>
+        <span class="aviso-banco-flecha" aria-hidden="true">›</span>
+      </button>
+
       <form id="form-rapido" class="tarjeta rapido" autocomplete="off">
         <label for="entrada-rapida" class="etiqueta">¿Qué gastaste o recibiste?</label>
         <div class="rapido-fila">
@@ -238,6 +244,7 @@
             <strong id="previa-monto"></strong>
             <span id="previa-desc"></span>
             <span id="previa-etiquetas" class="etiquetas"></span>
+            <span id="previa-origen" class="previa-origen" hidden></span>
           </div>
           <label class="casilla"><input type="checkbox" id="previa-frecuente"> Guardar también como registro común</label>
           <div class="previa-controles">
@@ -323,6 +330,8 @@
         <button type="button" class="enlace" id="btn-nuevo-grupo">+ Nuevo grupo</button>
       </div>
       <ul id="lista-grupos" class="lista-simple"></ul>
+      <div class="seccion-cabecera"><h2>Suscripciones y pagos fijos</h2></div>
+      <div id="suscripciones" class="tarjeta suscripciones"></div>
       <div class="seccion-cabecera"><h2>Metas de ahorro</h2></div>
       <ul id="lista-metas" class="lista-metas"></ul>
       <form id="form-meta" class="tarjeta formulario">
@@ -573,11 +582,18 @@
       </div>
       <h2 class="grupo-ajustes">Recordatorios (app Android)</h2>
       <div class="menu">
-        <label class="menu-fila"><span class="menu-icono">🌙</span><span><strong>Anotar mis gastos de hoy</strong><small>Un aviso cada noche a las 8 p. m.</small></span><input type="checkbox" id="rec-noche" class="interruptor"></label>
+        <label class="menu-fila"><span class="menu-icono">🌙</span><span><strong>¿Gastaste algo hoy?</strong><small>Un aviso cada noche, solo si ese día no anotaste nada, con botones para anotar rápido</small></span><input type="checkbox" id="rec-noche" class="interruptor"></label>
+        <label class="menu-fila sub"><span class="menu-icono">⏰</span><span><strong>Hora del aviso</strong></span><select id="rec-noche-hora" aria-label="Hora del aviso"><option value="19">7 p. m.</option><option value="20">8 p. m.</option><option value="21">9 p. m.</option><option value="22">10 p. m.</option><option value="23">11 p. m.</option></select></label>
         <label class="menu-fila"><span class="menu-icono">⚡</span><span><strong>Teclas rápidas en la notificación</strong><small>Una notificación con botones para anotar tus registros comunes de un toque</small></span><input type="checkbox" id="rec-rapido" class="interruptor"></label>
         <label class="menu-fila"><span class="menu-icono">💾</span><span><strong>Respaldo semanal</strong><small>Cada domingo a las 6 p. m. un aviso para guardar tu copia en Drive</small></span><input type="checkbox" id="rec-respaldo" class="interruptor"></label>
         <label class="menu-fila"><span class="menu-icono">🎁</span><span><strong>Prima y aguinaldo</strong><small>Un aviso en junio y diciembre para apartar plata</small></span><input type="checkbox" id="rec-prima" class="interruptor"></label>
         <label class="menu-fila"><span class="menu-icono">🔔</span><span><strong>Antes de un pago programado</strong><small>Un aviso el día anterior</small></span><input type="checkbox" id="rec-programados" class="interruptor"></label>
+      </div>
+      <h2 class="grupo-ajustes" id="banco-titulo" hidden>Anotar desde el banco (app Android)</h2>
+      <div class="menu" id="banco-menu" hidden>
+        <label class="menu-fila"><span class="menu-icono">🏦</span><span><strong>Leer los avisos del banco</strong><small>Cuando Nequi, Bancolombia, Nu, Davivienda… te avisen un pago o un ingreso, NOVA te pregunta si lo anota. Nada se guarda sin que tú lo confirmes.</small></span><input type="checkbox" id="banco-activo" class="interruptor"></label>
+        <label class="menu-fila sub"><span class="menu-icono">💬</span><span><strong>Preguntarme con un aviso</strong><small>«¿Lo anoto en NOVA?» apenas llegue el aviso del banco</small></span><input type="checkbox" id="banco-aviso" class="interruptor"></label>
+        <button type="button" id="banco-revisar"><span class="menu-icono">📋</span><span><strong>Revisar movimientos del banco</strong><small id="banco-estado">Falta dar el permiso de Android</small></span></button>
       </div>
       <a id="perfil-apk" class="boton-apk" href="descargas/NOVA.apk" hidden>
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M7 10l5 5 5-5M5 21h14"/></svg>
@@ -667,6 +683,7 @@
     <!-- Configuración: cuentas -->
     <section class="vista" data-vista="ajustes-cuentas" hidden>
       <div class="sub-cabecera"><button type="button" class="icono-btn" data-ir="ajustes" aria-label="Volver"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button><h1>Cuentas</h1></div>
+      <button type="button" class="primario" id="btn-cuadrar">⚖️ Cuadrar el saldo</button>
       <ul id="lista-cuentas" class="lista-simple"></ul>
       <form id="form-cuenta" class="tarjeta formulario">
         <h2 class="titulo-tarjeta">Agregar cuenta</h2>
@@ -1059,6 +1076,44 @@
     <button type="submit" class="primario">Pasar plata</button>
     <p class="mensaje" id="pasar-mensaje" role="status"></p>
   </form>
+</section>
+<section id="pantalla-cuadrar" class="capa" hidden>
+  <div class="sub-cabecera"><button type="button" class="icono-btn" data-cerrar aria-label="Volver"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button><h1>Cuadrar el saldo</h1></div>
+  <p class="nota">Mira en tu app del banco o en tu billetera cuánto tienes de verdad. NOVA lo compara con lo que tiene anotado.</p>
+  <form id="form-cuadrar" class="formulario">
+    <label for="cuadrar-cuenta">Cuenta</label>
+    <select id="cuadrar-cuenta"></select>
+    <p class="cuadrar-nova"><span>NOVA tiene anotado</span><strong id="cuadrar-nova"></strong></p>
+    <label for="cuadrar-real">¿Cuánto tienes de verdad?</label>
+    <input id="cuadrar-real" inputmode="decimal" placeholder="Por ejemplo 350.000" autocomplete="off">
+    <div id="cuadrar-resultado" class="tarjeta cuadrar-resultado" hidden>
+      <strong id="cuadrar-diferencia"></strong>
+      <p class="nota" id="cuadrar-explica"></p>
+      <button type="button" class="primario" id="cuadrar-anotar"></button>
+      <button type="button" id="cuadrar-ajustar">Solo ajustar el saldo (no cuenta como gasto ni ingreso)</button>
+    </div>
+    <p class="mensaje" id="cuadrar-mensaje" role="status"></p>
+  </form>
+</section>
+<section id="pantalla-banco" class="capa" hidden>
+  <div class="sub-cabecera"><button type="button" class="icono-btn" data-cerrar aria-label="Volver"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button><h1>Movimientos del banco</h1></div>
+  <p class="nota">Esto te avisaron tus bancos y billeteras. Toca <b>Anotar</b> para revisarlo y guardarlo, o <b>Descartar</b> si no es tuyo o ya lo anotaste. NOVA nunca guarda nada sin preguntarte.</p>
+  <article id="banco-permiso-tarjeta" class="tarjeta banco-permiso" hidden>
+    <strong>Falta un permiso de Android</strong>
+    <p class="nota">Para leer los avisos del banco, NOVA necesita el permiso <b>«Acceso a notificaciones»</b>. Toca el botón, busca <b>NOVA</b> en la lista y actívalo. Los avisos se leen solo en tu celular: no se envían a ningún lado.</p>
+    <button type="button" class="primario" id="banco-dar-permiso">Dar el permiso</button>
+    <details class="ayuda-instalar">
+      <summary>¿Android dice «Ajuste restringido»?</summary>
+      <ol>
+        <li>Toca <b>Abrir la información de NOVA</b> (aquí abajo).</li>
+        <li>Toca los <b>tres puntos ⋮</b> arriba a la derecha y luego <b>Permitir ajustes restringidos</b>.</li>
+        <li>Vuelve a NOVA y toca <b>Dar el permiso</b> otra vez.</li>
+      </ol>
+      <button type="button" class="mini" id="banco-info-app">Abrir la información de NOVA</button>
+    </details>
+  </article>
+  <ul id="lista-banco" class="lista-banco"></ul>
+  <p id="banco-vacio" class="nota centro" hidden>No hay movimientos del banco por anotar. Cuando tu banco te avise un pago o un ingreso, aparece aquí.</p>
 </section>
 <section id="pantalla-pruebas" class="capa" hidden>
   <div class="sub-cabecera"><button type="button" class="icono-btn" data-cerrar aria-label="Volver"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button><h1>Probar las funciones</h1></div>

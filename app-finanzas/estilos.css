@@ -820,3 +820,81 @@ button.mini { padding: 6px 12px; border-radius: 999px; font-size: .8rem; }
 .nov-puntos i { width: 8px; height: 8px; border-radius: 999px; background: var(--line); transition: width .2s; }
 .nov-puntos i.activo { width: 26px; background: var(--accent); }
 .nov-boton { width: 100%; padding: 16px; font-size: 1.05rem; }
+
+/* ---------- Suscripciones ---------- */
+.suscripciones { display: flex; flex-direction: column; gap: 10px; }
+.sus-resumen { display: flex; flex-direction: column; }
+.sus-resumen strong { font-size: 1.5rem; font-variant-numeric: tabular-nums; }
+.sus-resumen small { color: var(--muted); }
+.sus-lista { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.sus-fila { display: flex; align-items: center; gap: 12px; padding: 10px; border-radius: 14px; background: var(--surface-2); cursor: pointer; }
+.sus-fila.cancelada { opacity: .6; }
+.sus-texto { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.sus-texto strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sus-texto small, .sus-valor small { color: var(--muted); font-size: .8rem; }
+.sus-valor { display: flex; flex-direction: column; align-items: flex-end; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.sus-subio { align-self: flex-start; color: var(--danger); background: rgba(229, 72, 61, .12); }
+
+/* ---------- Cuadrar el saldo ---------- */
+.pildora-boton { border: 0; color: inherit; font: inherit; font-weight: 600; cursor: pointer; padding: 4px 12px; }
+.pildora-boton::after { content: " ›"; opacity: .7; }
+.cuadrar-nova { display: flex; justify-content: space-between; align-items: baseline; margin: 4px 0; color: var(--muted); }
+.cuadrar-nova strong { color: var(--ink); font-size: 1.2rem; font-variant-numeric: tabular-nums; }
+.cuadrar-resultado { display: flex; flex-direction: column; gap: 8px; }
+.cuadrar-resultado > strong { font-size: 1.4rem; font-variant-numeric: tabular-nums; }
+.cuadrar-resultado.falta > strong { color: var(--danger); }
+.cuadrar-resultado.sobra > strong, .cuadrar-resultado.bien > strong { color: var(--positivo); }
+.cuadrar-resultado .nota { margin: 0; }
+
+/* ---------- NOVA IA: cuadros, fuentes y «¿Me alcanza?» ---------- */
+.chat > li .ia-parrafo { display: block; white-space: pre-wrap; }
+.ia-tabla-caja { overflow-x: auto; margin: 6px 0; max-width: 100%; }
+.ia-tabla { border-collapse: collapse; width: 100%; font-size: .88rem; white-space: normal; }
+.ia-tabla th, .ia-tabla td { padding: 6px 8px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }
+.ia-tabla th { font-weight: 800; background: var(--surface); }
+.ia-tabla .num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.ia-fuentes { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-top: 8px; white-space: normal; }
+.ia-fuentes small { color: var(--muted); width: 100%; }
+.ia-fuentes a { font-size: .8rem; padding: 3px 10px; border-radius: 999px; background: var(--accent-soft); color: var(--accent); text-decoration: none; font-weight: 700; }
+.alc-veredicto { font-size: 1.25rem; }
+.alcanza-tarjeta.si .alc-veredicto { color: var(--positivo); }
+.alcanza-tarjeta.justo .alc-veredicto { color: #c27c0e; }
+.alcanza-tarjeta.no .alc-veredicto { color: var(--danger); }
+.alc-tabla td { border-bottom: 1px solid var(--line); }
+.alc-tabla tr.malo td.num { color: var(--danger); font-weight: 800; }
+.alc-tabla tr.bueno td.num { color: var(--positivo); font-weight: 800; }
+.alc-barra { height: 10px; }
+.alc-consejo { margin: 0; color: var(--ink); }
+.ia-tabla th, .ia-tabla td { overflow-wrap: normal; word-break: normal; hyphens: none; }
+.ia-tabla th:first-child, .ia-tabla td:first-child { min-width: 7.5em; }
+.ia-tabla-caja { -webkit-overflow-scrolling: touch; }
+
+/* ---------- Ajustes: filas secundarias y selector de hora ---------- */
+.menu-fila.sub { padding-left: 30px; }
+.menu-fila.sub .menu-icono { font-size: .95rem; opacity: .85; }
+.menu-fila select { flex: none; width: auto; max-width: 42%; padding: 6px 10px; border-radius: 10px; border: 1px solid var(--line); background: var(--surface-2); color: var(--ink); font: inherit; font-size: .9rem; }
+.menu-fila input.interruptor:disabled { opacity: .45; }
+
+/* ---------- Anotar desde los avisos del banco ---------- */
+.aviso-banco { display: flex; align-items: center; gap: 12px; width: 100%; text-align: left; cursor: pointer; color: var(--ink);
+  border: 1px solid var(--accent); background: linear-gradient(120deg, var(--accent-soft), var(--surface) 70%); padding: 14px 16px; }
+.aviso-banco-icono { width: 40px; height: 40px; flex: none; display: grid; place-items: center; border-radius: 12px; background: var(--accent-soft); font-size: 1.3rem; }
+.aviso-banco-txt { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0; }
+.aviso-banco-txt small { color: var(--muted); font-weight: 500; font-size: .8rem; }
+.aviso-banco-flecha { color: var(--accent); font-size: 1.5rem; font-weight: 700; }
+.lista-banco { list-style: none; margin: 14px 0 0; padding: 0; display: flex; flex-direction: column; gap: 12px; }
+.banco-item { background: var(--surface); border: 1px solid var(--line); border-radius: 18px; padding: 14px 16px; display: flex; flex-direction: column; gap: 8px; }
+.banco-cab { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.banco-app { font-weight: 700; }
+.banco-cab small { color: var(--muted); font-size: .8rem; white-space: nowrap; }
+.banco-texto { margin: 0; color: var(--muted); font-size: .88rem; line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; }
+.banco-resumen { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; padding: 10px 12px; border-radius: 12px; background: var(--surface-2); }
+.banco-resumen strong { font-size: 1.1rem; font-variant-numeric: tabular-nums; }
+.banco-resumen span:last-of-type { min-width: 0; overflow-wrap: anywhere; }
+.banco-resumen .chip.gasto { color: var(--danger); }
+.banco-cuenta { flex-basis: 100%; color: var(--accent); font-weight: 600; font-size: .8rem; }
+.banco-botones { display: flex; gap: 8px; justify-content: flex-end; }
+.banco-botones button.mini { flex-direction: row; padding: 8px 18px; font-size: .9rem; font-weight: 700; }
+.banco-permiso { display: flex; flex-direction: column; gap: 10px; margin-top: 12px; border-color: #f59e0b; background: color-mix(in srgb, #f59e0b 8%, var(--surface)); }
+.banco-permiso .ayuda-instalar { margin: 0; }
+.previa-origen { flex-basis: 100%; color: var(--accent); font-size: .8rem; font-weight: 600; }

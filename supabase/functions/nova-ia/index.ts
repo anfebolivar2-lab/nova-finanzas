@@ -56,8 +56,20 @@ async function llamarGemini(clave: string, cuerpo: Record<string, unknown>, sinP
   return { r: null, detalle, limite: todosLimite };
 }
 
+// ¿La pregunta necesita datos de hoy (precios, noticias, clima, resultados)? Entonces se le da a la IA la búsqueda de
+// Google. No se usa en todas las preguntas: es más lenta y tiene un cupo diario.
+const NECESITA_WEB = /precio|cu[aá]nto (cuesta|vale|valen|cuestan|sale|est[aá])|me alcanza|alcanza para|comprar|compro|cotiz|iphone|samsung|xiaomi|motorola|celular|port[aá]til|computador|televisor|tv |carro|moto |playstation|xbox|nintendo|noticia|hoy|actual|[uú]ltim|nuevo|nueva|lanzamiento|sali[oó]|clima|lluvia|d[oó]lar|euro|tasa|inflaci[oó]n|salario m[ií]nimo|uvt|resultado|partido|gan[oó]|elecci|202[5-9]/i;
+type Fuente = { titulo: string; url: string };
+function fuentesDe(d: { candidates?: { groundingMetadata?: { groundingChunks?: { web?: { uri?: string; title?: string } }[] } }[] }, lista: Fuente[]) {
+  for (const c of d.candidates?.[0]?.groundingMetadata?.groundingChunks || []) {
+    const url = c.web?.uri || "", titulo = String(c.web?.title || "").replace(/[|\]\[\n]/g, " ").slice(0, 60);
+    if (url.startsWith("https://") && lista.length < 5 && !lista.some((f) => f.url === url)) lista.push({ titulo: titulo || "fuente", url });
+  }
+}
+const marcasFuentes = (lista: Fuente[]) => lista.length ? "\n" + lista.map((f) => `[[FUENTE:${f.titulo}|${f.url}]]`).join("") : "";
+
 // "Pregúntale a NOVA": responde preguntas sobre las finanzas de la persona con el resumen que manda la app.
-async function conversar(clave: string, entrada: { pregunta?: string; historial?: { rol?: string; texto?: string }[]; contexto?: unknown; stream?: boolean }) {
+async function conversar(clave: string, entrada: { pregunta?: string; historial?: { rol?: string; texto?: string }[]; contexto?: unknown; stream?: boolean; web?: boolean }) {
   const pregunta = (entrada.pregunta || "").slice(0, 2000).trim();
   if (!pregunta) return responder(400, { error: "Falta la pregunta" });
   const contexto = JSON.stringify(entrada.contexto ?? {}).slice(0, 20_000);
@@ -69,28 +81,34 @@ async function conversar(clave: string, entrada: { pregunta?: string; historial?
 Puedes responder CUALQUIER pregunta sobre cualquier tema: dinero y finanzas, cocina, estudios, trabajo, tecnología, salud en general, trámites, redacción, traducciones, cuentas, ideas, consejos del día a día o simple conversación. Nunca digas que "solo hablas de finanzas".
 Responde en español de Colombia (o en el idioma en que te escriban), con calidez y claridad, sin tecnicismos innecesarios. Sé breve por defecto (unas 150 palabras) y extiéndete solo si la pregunta lo pide.
 No uses Markdown (nada de asteriscos ni #); para listas usa guiones simples.
+Si te piden un cuadro o una tabla, o si una comparación se entiende mejor así, usa una tabla sencilla: una fila por línea, con | entre columnas y la primera fila como encabezado (sin la línea de guiones).
 Si la pregunta es sobre el dinero de la persona, usa sus datos (vienen abajo en JSON) y haz las cuentas con cuidado, con valores en pesos colombianos con punto de miles y signo $ (ej: $1.250.000). Si la pregunta es de otro tema, no hace falta usar sus datos.
-Si no sabes algo, o necesitas información de hoy que no tienes (noticias, precios, clima, resultados), dilo con honestidad en vez de inventar. En salud, leyes o inversiones da orientación general y, cuando sea importante, sugiere consultar a un profesional.
+Cuando tengas la búsqueda de Google, úsala para lo que necesite información de hoy (precios, noticias, clima, resultados, tasas, lanzamientos). Para precios busca en tiendas de Colombia y da el precio en pesos colombianos; si el producto todavía no ha salido o no lo encuentras, dilo y da el precio del modelo más parecido que sí exista. Nunca inventes precios ni datos: si aun buscando no lo sabes, dilo con honestidad.
+Si la pregunta es si le alcanza para comprar algo, o cuánto se demora en ahorrar para algo: averigua el precio, compáralo con su saldo y con lo que le sobra al mes (ingresos menos gastos de sus meses pasados) y responde claro si le alcanza o no, cuánto le faltaría y en cuántos meses lo junta. Termina esa respuesta con una línea aparte exactamente así: [[PRECIO:valor|producto]] (valor en pesos, solo números sin puntos; producto con un nombre corto). Si no conoces el precio, no pongas esa línea. En salud, leyes o inversiones da orientación general y, cuando sea importante, sugiere consultar a un profesional.
 Los datos traen: saldo y cuentas, el periodo actual (ingresos, gastos y gastos por categoría), gastos por mes de los últimos 6 meses, gastos por categoría de los últimos 90 días, cuánto puede gastar por día sin pasarse (seguro_para_gastar_por_dia), límites, metas, pagos programados y los últimos movimientos. Si un movimiento vino en otra moneda trae moneda y monto_original (el monto ya está en pesos). Si hay "trabajo", la persona es conductora de apps de transporte (Didi, Uber, inDrive…): trae lo ganado, los gastos del vehículo, la ganancia neta, los viajes y la ganancia por viaje de hoy, esta semana y este mes (por app y por categoría), su meta diaria y los vencimientos de sus documentos (SOAT, tecnomecánica…, con los días que faltan; si dias es negativo ya venció).
 Datos de la persona: ${contexto}`;
 
   const flujo = entrada.stream === true;
-  const g = await llamarGemini(clave, {
+  const base = {
     systemInstruction: { parts: [{ text: instrucciones }] },
     contents: [...historial, { role: "user", parts: [{ text: pregunta }] }],
-    generationConfig: { temperature: 0.4, maxOutputTokens: 1024 },
-  }, true, flujo);
+    generationConfig: { temperature: 0.4, maxOutputTokens: 1536 },
+  };
+  const web = entrada.web === true || NECESITA_WEB.test(pregunta);
+  let g = await llamarGemini(clave, web ? { ...base, tools: [{ google_search: {} }] } : base, true, flujo);
+  if (!g.r && web) g = await llamarGemini(clave, base, true, flujo); // sin cupo de búsqueda o el modelo no la admite: responde sin internet
   if (!g.r) return g.limite ? responder(429, { error: "limite" }) : responder(502, { error: "La IA no respondió bien", detalle: g.detalle });
   const r = g.r;
   if (flujo && r.body) {
     // Respuesta en vivo: se reenvía el texto a medida que Gemini lo escribe, para que la app lo muestre de inmediato.
     const lector = r.body.getReader(), dec = new TextDecoder(), enc = new TextEncoder();
     let buf = "";
+    const fuentes: Fuente[] = [];
     const salida = new ReadableStream({
       async pull(ctrl) {
         try {
           const { done, value } = await lector.read();
-          if (done) { ctrl.close(); return; }
+          if (done) { const f = marcasFuentes(fuentes); if (f) ctrl.enqueue(enc.encode(f)); ctrl.close(); return; }
           buf += dec.decode(value, { stream: true });
           let texto = "", i: number;
           while ((i = buf.indexOf("\n")) >= 0) {
@@ -100,6 +118,7 @@ Datos de la persona: ${contexto}`;
             try {
               const d = JSON.parse(linea.slice(5));
               texto += (d.candidates?.[0]?.content?.parts || []).map((p: { text?: string }) => p.text || "").join("");
+              fuentesDe(d, fuentes);
             } catch (_e) { /* línea incompleta */ }
           }
           if (texto) ctrl.enqueue(enc.encode(texto));
@@ -113,7 +132,9 @@ Datos de la persona: ${contexto}`;
     const datos = await r.json();
     const texto = (datos.candidates?.[0]?.content?.parts || []).map((p: { text?: string }) => p.text || "").join("").trim();
     if (!texto) return responder(502, { error: "La IA no respondió" });
-    return responder(200, { respuesta: texto.slice(0, 4000) });
+    const fuentes: Fuente[] = [];
+    fuentesDe(datos, fuentes);
+    return responder(200, { respuesta: texto.slice(0, 4000) + marcasFuentes(fuentes) });
   } catch (_e) {
     return responder(502, { error: "La IA respondió algo que no se entendió" });
   }
@@ -140,7 +161,7 @@ Deno.serve(async (req) => {
 
   let entrada: {
     texto?: string; imagen?: string; mime?: string; categorias?: string[]; hoy?: string; tasas?: boolean;
-    pregunta?: string; historial?: { rol?: string; texto?: string }[]; contexto?: unknown; varios?: boolean; stream?: boolean; productos?: boolean;
+    pregunta?: string; historial?: { rol?: string; texto?: string }[]; contexto?: unknown; varios?: boolean; stream?: boolean; productos?: boolean; web?: boolean;
   };
   try { entrada = await req.json(); } catch { return responder(400, { error: "JSON inválido" }); }
 

@@ -211,6 +211,22 @@ test("mensajes de bancos", () => {
   assert.strictEqual(f("Hola, cuánto cuesta $5.000 el almuerzo?"), null);        // sin palabras de banco
 });
 
+test("mensajes leídos de los avisos del banco", () => {
+  const f = C.mensajeBancoATexto;
+  // Ya se sabe que viene de la app del banco: no hace falta que el texto nombre al banco.
+  assert.strictEqual(f("Pagaste $12.000 a Juan Pérez", { deBanco: true }), "gasté 12000 en Juan Pérez");
+  assert.strictEqual(f("Pagaste $12.000 a Juan Pérez"), null);
+  assert.strictEqual(f("Transferencia exitosa por $150.000 a la cuenta *9876", { deBanco: true }), "gasté 150000");
+  assert.strictEqual(f("Transferencia recibida por $200.000 de Pedro Gómez", { deBanco: true }), "me pagaron 200000 de Pedro Gómez");
+  // No son movimientos hechos: rechazadas, reversos, claves y publicidad.
+  assert.strictEqual(f("Bancolombia le informa: Compra rechazada por $45.000 en RAPPI. Fondos insuficientes"), null);
+  assert.strictEqual(f("Bancolombia: Reverso de compra por $45.000 en RAPPI"), null);
+  assert.strictEqual(f("Tu clave dinámica es 123456 para la compra de $45.000 con tu tarjeta. No la compartas"), null);
+  assert.strictEqual(f("Aprovecha 20% de descuento en tu próxima compra con tu tarjeta Nu. Hasta $50.000", { deBanco: true }), null);
+  // Lo de siempre sigue igual
+  assert.strictEqual(f("Davivienda: Compra aprobada por $23.500 en D1 SUPERMERCADO con tu tarjeta *4321"), "gasté 23500 en D1 SUPERMERCADO");
+});
+
 test("mensaje del banco con una compra en otra moneda", () => {
   assert.strictEqual(C.mensajeBancoATexto("Bancolombia le informa Compra por USD 25,99 en AMAZON 07/11/2026 T.Cred *1234"), "gasté 25.99 USD");
   assert.strictEqual(C.mensajeBancoATexto("Compraste US$ 9,99 en NETFLIX con tu tarjeta Nu"), "gasté 9.99 USD en NETFLIX");

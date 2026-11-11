@@ -2,6 +2,16 @@
   "appId": "co.novafinanzas.app",
   "appName": "NOVA",
   "webDir": "www",
-  "android": { "backgroundColor": "#070908" },
-  "server": { "androidScheme": "https" }
+  "android": {
+    "backgroundColor": "#070908"
+  },
+  "server": {
+    "androidScheme": "https"
+  },
+  "plugins": {
+    "LocalNotifications": {
+      "smallIcon": "ic_stat_nova",
+      "iconColor": "#2EE06F"
+    }
+  }
 }

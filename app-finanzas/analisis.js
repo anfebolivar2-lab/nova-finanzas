@@ -516,6 +516,88 @@
     return { lista: lista, debo: t.debo, meDeben: t.me_deben, pendientes: t.pendientes, balance: t.me_deben - t.debo };
   }
 
+  // ---------- ¿Me alcanza? ----------
+  // Si una compra cabe en la plata de la persona. Compara el precio con el saldo en cuentas y con lo que le sobra en un
+  // mes normal (ingresos menos gastos de los últimos 3 meses completos, sin contar el mes actual).
+  //   si:    le alcanza y aún le queda al menos lo que gasta en un mes (un colchón).
+  //   justo: le alcanza, pero se quedaría con menos de lo que gasta en un mes.
+  //   no:    no le alcanza; si ahorra, dice en cuántos meses lo junta.
+  function alcanza(precio, movs, saldo, hoy) {
+    hoy = hoy || new Date();
+    precio = num(precio); saldo = num(saldo);
+    var meses = [];
+    for (var k = 1; k <= 3; k++) {
+      var desde = new Date(hoy.getFullYear(), hoy.getMonth() - k, 1), hasta = new Date(hoy.getFullYear(), hoy.getMonth() - k + 1, 1);
+      var t = totales(movs.filter(function (m) { var f = new Date(m.fecha); return m.estado !== "pendiente" && !m.transferencia && f >= desde && f < hasta; }));
+      if (t.cantidad) meses.push(t);
+    }
+    var gastoMes = meses.length ? meses.reduce(function (s, t) { return s + t.gastos; }, 0) / meses.length : 0;
+    var ahorroMes = meses.length ? meses.reduce(function (s, t) { return s + t.neto; }, 0) / meses.length : 0;
+    var r = { precio: precio, saldo: saldo, quedaria: saldo - precio, gastoMes: Math.round(gastoMes), ahorroMes: Math.round(ahorroMes), mesesConDatos: meses.length };
+    if (!(precio > 0)) { r.veredicto = "sin_precio"; return r; }
+    if (saldo >= precio) {
+      r.veredicto = r.quedaria >= gastoMes ? "si" : "justo";
+      return r;
+    }
+    r.veredicto = "no";
+    r.faltan = precio - saldo;
+    if (ahorroMes > 0) {
+      r.meses = Math.ceil(r.faltan / ahorroMes);
+      var f = new Date(hoy.getFullYear(), hoy.getMonth() + r.meses, 1);
+      r.cuando = f.toISOString();
+    }
+    return r;
+  }
+
+  // ---------- Suscripciones ----------
+  // Cobros que se repiten cada mes con el mismo nombre (Netflix, Spotify, plan del celular, gimnasio…): se agrupan por
+  // la descripción y cuentan si hay 2 o más, separados entre 25 y 35 días y por valores parecidos.
+  // Dice cuánto suman al mes y al año, si alguno subió de precio y cuáles parecen cancelados (hace rato no se cobran).
+  function nombreClave(t) { return sinTildes(t).replace(/[^a-z ]/g, " ").replace(/\s+/g, " ").trim(); }
+  function mediana(xs) { var s = xs.slice().sort(function (a, b) { return a - b; }), m = Math.floor(s.length / 2); return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2; }
+  function suscripciones(movs, hoy) {
+    hoy = hoy || new Date();
+    var desde = new Date(hoy.getTime() - 400 * DIA), grupos = {};
+    movs.forEach(function (m) {
+      if (m.tipo !== "gasto" || m.estado === "pendiente" || m.transferencia) return;
+      var f = new Date(m.fecha);
+      if (f < desde || f > hoy) return;
+      var k = nombreClave(m.descripcion);
+      if (k.length < 3) return;
+      (grupos[k] = grupos[k] || []).push(m);
+    });
+    var lista = [];
+    Object.keys(grupos).forEach(function (k) {
+      var g = grupos[k].slice().sort(function (a, b) { return new Date(a.fecha) - new Date(b.fecha); });
+      if (g.length < 2) return;
+      var gaps = [];
+      for (var i = 1; i < g.length; i++) gaps.push((new Date(g[i].fecha) - new Date(g[i - 1].fecha)) / DIA);
+      var gap = mediana(gaps), montos = g.map(function (m) { return num(m.monto); });
+      if (gap < 25 || gap > 35) return;
+      if (Math.max.apply(null, montos) > Math.min.apply(null, montos) * 1.2) return;   // valores que cambian mucho (el mercado): no es una suscripción
+      // Una suscripción cobra casi lo mismo cada vez (a veces sube el precio): al menos la mitad de los cobros seguidos
+      // deben ser iguales (2 % de diferencia). Un gasto que cambia un poco cada mes (mercado, gasolina) no lo es.
+      var iguales = 0;
+      for (var j = 1; j < montos.length; j++) if (Math.abs(montos[j] - montos[j - 1]) <= Math.max(montos[j], montos[j - 1]) * 0.02) iguales++;
+      if (iguales < Math.ceil((montos.length - 1) / 2)) return;
+      var ultimo = g[g.length - 1], monto = num(ultimo.monto);
+      // El precio de antes: el último cobro distinto al de ahora (si el cambio fue en los últimos 3 cobros).
+      var k = g.length - 2;
+      while (k >= 0 && Math.abs(montos[k] - monto) <= monto * 0.02) k--;
+      var previo = k >= 0 && g.length - 1 - k <= 3 ? montos[k] : monto;
+      var dias = (hoy - new Date(ultimo.fecha)) / DIA;
+      lista.push({
+        nombre: ultimo.descripcion, categoriaId: ultimo.categoria_id, monto: monto, anual: monto * 12, veces: g.length,
+        ultimo: ultimo.fecha, proximo: (function () { var p = new Date(ultimo.fecha); p.setMonth(p.getMonth() + 1); return p.toISOString(); })(),   // el mismo día del mes siguiente
+        subio: monto > previo * 1.03 ? monto - previo : 0, cancelada: dias > gap * 1.6, movimientos: g
+      });
+    });
+    lista.sort(function (a, b) { return (a.cancelada - b.cancelada) || (b.monto - a.monto); });
+    var activas = lista.filter(function (s) { return !s.cancelada; });
+    var mensual = activas.reduce(function (s, x) { return s + x.monto; }, 0);
+    return { lista: lista, activas: activas.length, mensual: mensual, anual: mensual * 12 };
+  }
+
   // ---------- Calendario ----------
   // Un mes día por día: cuánto se gastó y se ganó cada día, el día de más gasto y los días sin gastar.
   // nivel (0 a 4) dice qué tan fuerte pintar cada día comparado con el día de más gasto del mes.
@@ -557,7 +639,7 @@
   }
 
   var api = {
-    calendarioMes: calendarioMes,
+    calendarioMes: calendarioMes, suscripciones: suscripciones, alcanza: alcanza,
     desplazar: desplazar, nombrePeriodo: nombrePeriodo, nombreCorto: nombreCorto, enRango: enRango, totales: totales,
     porCategoria: porCategoria, porEtiqueta: porEtiqueta, vistaRapida: vistaRapida, serie: serie, proyeccion: proyeccion,
     seguroParaGastar: seguroParaGastar, nombreDia: nombreDia, porDia: porDia, claveDia: claveDia, buscar: buscar,

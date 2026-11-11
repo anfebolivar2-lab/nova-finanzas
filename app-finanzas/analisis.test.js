@@ -292,3 +292,51 @@ test("calendario del mes: gasto por día, día de más gasto y días sin gastar"
   assert.strictEqual(c.diasSinGasto, 27); // el 30 es futuro: no cuenta como día sin gastar
   assert.ok(c.dias[28].hoy && c.dias[29].futuro);
 });
+
+test("suscripciones: cobros mensuales repetidos, cuánto suman y cuáles subieron o se cancelaron", () => {
+  // Hoy es 29 de octubre de 2026.
+  const movs = [
+    m(6, 7, "gasto", 26900, { descripcion: "Netflix" }), m(6, 8, "gasto", 26900, { descripcion: "Netflix" }), m(6, 9, "gasto", 29900, { descripcion: "NETFLIX" }),
+    m(15, 8, "gasto", 16900, { descripcion: "Spotify" }), m(15, 9, "gasto", 16900, { descripcion: "Spotify." }),
+    m(2, 5, "gasto", 90000, { descripcion: "Gimnasio" }), m(2, 6, "gasto", 90000, { descripcion: "Gimnasio" }),   // dejó de cobrarse: cancelada
+    m(3, 9, "gasto", 20000, { descripcion: "Almuerzo" }), m(5, 9, "gasto", 18000, { descripcion: "Almuerzo" }), m(20, 9, "gasto", 22000, { descripcion: "Almuerzo" }), // no es mensual
+    m(10, 8, "gasto", 50000, { descripcion: "Mercado" }), m(10, 9, "gasto", 180000, { descripcion: "Mercado" }), // valores muy distintos
+    m(1, 9, "gasto", 9000, { descripcion: "Uber", estado: "pendiente" }), m(1, 10, "gasto", 9000, { descripcion: "Uber" })
+  ];
+  const s = A.suscripciones(movs, HOY);
+  assert.deepStrictEqual(s.lista.map((x) => [x.nombre, x.monto, x.cancelada]), [["NETFLIX", 29900, false], ["Spotify.", 16900, false], ["Gimnasio", 90000, true]]);
+  assert.strictEqual(s.activas, 2);
+  assert.strictEqual(s.mensual, 46800);
+  assert.strictEqual(s.anual, 561600);
+  assert.strictEqual(s.lista[0].subio, 3000);
+  assert.strictEqual(s.lista[1].subio, 0);
+  assert.strictEqual(s.lista[0].veces, 3);
+  assert.strictEqual(new Date(s.lista[1].proximo).getDate(), 15); // el próximo cobro de Spotify: el 15 de noviembre
+});
+
+test("suscripciones: un gasto que cambia un poco cada mes (mercado) no es una suscripción", () => {
+  const HOY = new Date(2026, 10, 11, 12);
+  const mov = (dias, descripcion, monto) => ({ tipo: "gasto", estado: "pagado", descripcion, monto, fecha: new Date(HOY.getTime() - dias * 86400000).toISOString() });
+  const movs = [mov(95, "Mercado", 420000), mov(65, "Mercado", 435000), mov(35, "Mercado", 450000), mov(5, "Mercado", 465000),
+    mov(90, "Internet", 120000), mov(60, "Internet", 120500), mov(30, "Internet", 120000), mov(1, "Internet", 120000)];
+  const s = A.suscripciones(movs, HOY);
+  assert.deepStrictEqual(s.lista.map((x) => x.nombre), ["Internet"]);
+});
+
+test("¿me alcanza? para una compra, con lo que sobra cada mes", () => {
+  // Hoy es 29 de octubre de 2026: cuentan julio, agosto y septiembre (octubre va por la mitad).
+  const movs = [
+    m(5, 8, "ingreso", 3000000), m(10, 8, "gasto", 2000000),   // septiembre: sobran 1.000.000
+    m(5, 7, "ingreso", 3000000), m(10, 7, "gasto", 2500000),   // agosto: sobran 500.000
+    m(5, 6, "ingreso", 3000000), m(10, 6, "gasto", 1500000),   // julio: sobran 1.500.000
+    m(5, 9, "gasto", 9999999)                                   // octubre: no cuenta
+  ];
+  const no = A.alcanza(7000000, movs, 2500000, HOY);
+  assert.deepStrictEqual([no.veredicto, no.faltan, no.ahorroMes, no.gastoMes, no.meses], ["no", 4500000, 1000000, 2000000, 5]);
+  assert.strictEqual(new Date(no.cuando).getMonth(), 2); // en 5 meses: marzo de 2027
+  assert.strictEqual(A.alcanza(7000000, movs, 9500000, HOY).veredicto, "si");    // le quedan 2.500.000, más que un mes de gastos
+  assert.strictEqual(A.alcanza(7000000, movs, 8000000, HOY).veredicto, "justo"); // le quedaría 1.000.000, menos que un mes
+  assert.strictEqual(A.alcanza(0, movs, 1, HOY).veredicto, "sin_precio");
+  const sinAhorro = A.alcanza(5000000, [m(5, 8, "ingreso", 100), m(6, 8, "gasto", 900)], 0, HOY);
+  assert.deepStrictEqual([sinAhorro.veredicto, sinAhorro.meses], ["no", undefined]);
+});

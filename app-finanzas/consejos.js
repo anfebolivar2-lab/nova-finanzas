@@ -558,7 +558,9 @@
   // ---------- Mensajes de bancos ----------
   // Convierte un mensaje de texto de un banco o billetera (Bancolombia, Nequi, Davivienda…) en una frase simple
   // ("gasté 45000 en Rappi") que el intérprete de NOVA ya sabe leer. Devuelve null si no parece un mensaje de banco.
-  function mensajeBancoATexto(texto) {
+  // opciones.deBanco: ya se sabe que viene de la app de un banco (aviso leído por NOVA), así que no hace falta que lo nombre.
+  // Las compras rechazadas, los reversos, las claves y la publicidad no son movimientos: también dan null.
+  function mensajeBancoATexto(texto, opciones) {
     var t = String(texto || "").replace(/\s+/g, " ").trim();
     if (t.length < 15) return null;
     var sin = t.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
@@ -567,10 +569,11 @@
     var ext = t.match(new RegExp("(US\\$|U\\$S|USD|EUR|€|£|GBP|R\\$|BRL|MXN|CAD)\\s?" + NUM, "i")) || t.match(new RegExp(NUM + "\\s?(USD|EUR|BRL|MXN|CAD|GBP)\\b", "i"));
     var monto = ext ? null : t.match(/\$\s?([\d]{1,3}(?:[.,]\d{3})+|\d+)(?:[.,]\d{1,2})?/);
     if (!monto && !ext) return null;
-    var banco = /bancolombia|nequi|davivienda|daviplata|bbva|banco de bogota|av villas|scotiabank|colpatria|nu |lulo|movii|bre-b|pse|tarjeta|t\.deb|t\.cre|cta|cuenta/.test(sin);
-    var ingreso = /(recibiste|te llego|te llegaron|te enviaron|te consignaron|te transfirieron|abono|deposito|consignacion recibida|recargaste con exito|te pagaron)/.test(sin);
-    var gasto = /(compra|pagaste|pago |retiro|transferiste|enviaste|debito|cargo|avance|transaccion|compraste)/.test(sin);
+    var banco = (opciones && opciones.deBanco) || /bancolombia|nequi|davivienda|daviplata|bbva|banco de bogota|av villas|scotiabank|colpatria|nu |lulo|movii|bre-b|pse|tarjeta|t\.deb|t\.cre|cta|cuenta/.test(sin);
+    var ingreso = /(recibiste|te llego|te llegaron|te enviaron|te consignaron|te transfirieron|abono|deposito|consignacion recibida|transferencia recibida|recargaste con exito|te pagaron)/.test(sin);
+    var gasto = /(compra|pagaste|pago |retiro|transferiste|enviaste|debito|cargo|avance|transaccion|compraste)/.test(sin) || (!ingreso && /transferencia/.test(sin));
     if (!banco || !(ingreso || gasto)) return null;
+    if (/rechaz|declin|fallid|no fue exitos|no exitos|no se pudo|no se realizo|revers|anulad|codigo de seguridad|codigo de verificacion|clave dinamica|clave temporal|\botp\b|no compartas|descuento|aprovecha|promocion|oferta|sorteo|participa|cashback|te invitamos|pre-?aprobad|gana hasta|black friday/.test(sin)) return null;
     var valor, moneda = "";
     if (ext) {
       var cod = (/\d/.test(ext[1]) ? ext[2] : ext[1]).toUpperCase(), cifra = /\d/.test(ext[1]) ? ext[1] : ext[2];
