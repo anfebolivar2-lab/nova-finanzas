@@ -4074,11 +4074,11 @@
       puntos: [["🔁", "Suscripciones y pagos fijos", "En Planes: Netflix, Spotify, arriendo… cuánto pagas al mes y al año, cuándo es el próximo cobro y si te subieron el precio."],
         ["⚖️", "Cuadrar el saldo", "Toca «Saldo en cuentas» en Inicio, escribe cuánto tienes de verdad y NOVA anota la diferencia por ti."],
         ["🌙", "¿Gastaste algo hoy?", "El aviso de la noche sale solo si ese día no anotaste nada, a la hora que elijas, con botones para anotar rápido."]] },
-    { titulo: "Anotar desde el banco", texto: "En la app de Android, NOVA puede leer los avisos de tu banco y ofrecerte anotarlos.",
-      puntos: [["🏦", "Te pregunta «¿Lo anoto?»", "Cuando Nequi, Bancolombia, Nu, Davivienda… te avisan un pago o un ingreso, NOVA te lo muestra listo para guardar."],
+    { titulo: "Anotar mensajes del banco", texto: "Comparte un mensaje de tu banco con NOVA y queda listo para anotar. Funciona en la app de Android.",
+      puntos: [["📤", "Compartir → NOVA", "Mantén presionado el mensaje de Nequi, Bancolombia, Nu, Davivienda… toca Compartir y elige NOVA."],
         ["✅", "Tú decides", "Ves el valor, el comercio, la fecha y la cuenta. Tocas Anotar y Guardar; o Descartar. Nada se guarda solo."],
-        ["⚙️", "Actívalo una vez", "Toca tu foto arriba a la derecha → Configuración → «Leer los avisos del banco». Android te pide el permiso «Acceso a notificaciones»."]],
-      pie: "🔒 Los avisos se leen solo en tu celular: no se envían a ningún lado." }
+        ["🔒", "Sin permisos raros", "NOVA no lee tus mensajes ni notificaciones: solo lo que tú compartes. También puedes pegar el mensaje en la caja de Inicio."]],
+      pie: "📍 Más info en Configuración → Mensajes del banco." }
   ];
   var paginaNovedad = 0;
   function novedadesSiHaceFalta() {
@@ -4187,14 +4187,13 @@
   $("btn-cuadrar").addEventListener("click", function () { abrirCuadrar(datos.cuentas[0] && datos.cuentas[0].id); });
   $("saldo-cuentas").addEventListener("click", function () { abrirCuadrar(datos.cuentas[0] && datos.cuentas[0].id); });
 
-  // ---------- Anotar desde los avisos del banco (app Android) ----------
-  // Un servicio de Android (BancoListener) lee los avisos de bancos y billeteras, solo si la persona le dio a NOVA el
-  // permiso «Acceso a notificaciones», y los deja en una lista (Preferences «nova-banco», la llena Android). Aquí se
-  // revisan: nada se guarda hasta que la persona toca «Anotar» y luego «Guardar». Los ya revisados se recuerdan en
-  // este celular («nova-banco-listos»), así la lista de Android nunca se reescribe desde aquí.
-  var plugBanco = enApp && window.Capacitor.Plugins && window.Capacitor.Plugins.NovaBanco;
+  // ---------- Anotar mensajes del banco (app Android) ----------
+  // La persona comparte un mensaje del banco con NOVA (mantener presionado el mensaje → Compartir → NOVA). Android deja
+  // el texto en una lista (Preferences «nova-banco», la llena MainActivity) y aquí se revisa: nada se guarda hasta que
+  // toca «Anotar» y luego «Guardar». NOVA no lee notificaciones ni mensajes por su cuenta (Google Play Protect bloquea
+  // las apps instaladas a mano que piden ese permiso). Los ya revisados se recuerdan en este celular («nova-banco-listos»).
   var plugPref = enApp && window.Capacitor.Plugins && window.Capacitor.Plugins.Preferences;
-  var bancoCola = [], bancoPermiso = null, abrirBancoAlEntrar = false, bancoEnCurso = null;
+  var bancoCola = [], abrirBancoAlEntrar = false, bancoEnCurso = null;
   var horaBanco = new Intl.DateTimeFormat("es-CO", { hour: "numeric", minute: "2-digit" });
   function bancoListos() { var l = leerLocal("nova-banco-listos", []); return Array.isArray(l) ? l : []; }
   function marcarBancoListo(id) {
@@ -4205,13 +4204,15 @@
   }
   function itemBanco(o) {
     if (!o || !o.texto) return null;
-    var frase = NovaConsejos.mensajeBancoATexto(String(o.texto), { deBanco: !!o.deBanco });
-    var r = frase ? Parser.interpretar(frase) : null;
-    if (!r || !r.ok) return null;
-    var app = String(o.app || "Tu banco").slice(0, 40), texto = String(o.texto).slice(0, 400);
-    // Un SMS llega por la app de Mensajes: se muestra el banco que nombra el texto (y «por SMS»).
-    var nombrado = o.deBanco ? null : bancoEnTexto(texto);
-    return { id: String(o.id), app: app, banco: nombrado || app, via: nombrado ? "por SMS" : "", texto: texto, fecha: Number(o.fecha) || Date.now(), frase: frase, r: r, moneda: Mon.detectar(frase) };
+    var texto = String(o.texto).slice(0, 400), app = String(o.app || "Tu banco").slice(0, 40);
+    var frase = NovaConsejos.mensajeBancoATexto(texto, { deBanco: !!o.deBanco });
+    // Un mensaje compartido a propósito siempre se muestra: si no se entiende solo, sale para anotarlo con ayuda de la IA.
+    if (!frase && o.compartido) frase = texto.slice(0, 200);
+    if (!frase) return null;
+    var r = Parser.interpretar(frase);
+    if (!r || !r.ok) { if (!o.compartido) return null; r = null; }
+    var nombrado = bancoEnTexto(texto);
+    return { id: String(o.id), app: app, banco: nombrado || app, via: o.compartido ? "compartido" : "", texto: texto, fecha: Number(o.fecha) || Date.now(), frase: frase, r: r, moneda: Mon.detectar(frase) };
   }
   var BANCOS = ["Bancolombia", "Nequi", "Davivienda", "DaviPlata", "BBVA", "Banco de Bogotá", "AV Villas", "Scotiabank Colpatria", "Colpatria", "Lulo Bank", "Lulo", "Movii", "Falabella", "Itaú", "Banco Popular", "Banco de Occidente", "Banco Caja Social", "Bancamía", "Pichincha", "Serfinanza", "Ualá", "RappiPay", "Nu"];
   function bancoEnTexto(texto) {
@@ -4237,46 +4238,46 @@
     })[0];
     return c || null;
   }
-  function revisarBanco() {
-    if (!plugBanco || !plugPref) return Promise.resolve();
+  function revisarBanco(sinAbrir) {
+    if (!plugPref) return Promise.resolve();
     return Promise.all([
       plugPref.get({ key: "nova-banco" }).catch(function () { return null; }),
-      plugBanco.estado().catch(function () { return null; })
+      plugPref.get({ key: "nova-banco-abrir" }).catch(function () { return null; })
     ]).then(function (res) {
       var crudo = [];
       try { crudo = JSON.parse((res[0] && res[0].value) || "[]"); } catch (e) { crudo = []; }
       if (!Array.isArray(crudo)) crudo = [];
-      bancoPermiso = !!(res[1] && res[1].permiso);
       var ids = crudo.map(function (o) { return String(o && o.id); });
       var listos = bancoListos(), quedan = listos.filter(function (id) { return ids.indexOf(id) >= 0; });   // Android guarda solo los últimos 30
       if (quedan.length !== listos.length) guardarLocal("nova-banco-listos", quedan);
       bancoCola = crudo.filter(function (o) { return o && quedan.indexOf(String(o.id)) < 0; }).map(itemBanco).filter(Boolean).reverse();   // lo más nuevo arriba
+      var abrir = !!(res[1] && res[1].value === "si");
+      if (abrir) plugPref.remove({ key: "nova-banco-abrir" }).catch(function () { /* nada */ });
       pintarBanco();
+      // Se acaba de compartir un mensaje con NOVA: se abre la lista para revisarlo.
+      if (abrir && !sinAbrir && bancoCola.length && fuente && !fuente.demo && pilaCapas.indexOf("pantalla-banco") < 0) abrirBanco();
     });
   }
   function pintarBanco() {
-    var n = bancoCola.length, activo = leerLocal("nova-banco-activo", true) !== false;
-    $("aviso-banco").hidden = !plugBanco || !n;
-    $("aviso-banco-texto").textContent = n === 1 ? "1 movimiento del banco por anotar" : n + " movimientos del banco por anotar";
-    $("banco-titulo").hidden = $("banco-menu").hidden = !plugBanco;
-    $("banco-activo").checked = !!bancoPermiso && activo;
-    $("banco-aviso").checked = leerLocal("nova-banco-aviso", true) !== false;
-    $("banco-aviso").disabled = !bancoPermiso || !activo;
-    $("banco-estado").textContent = !bancoPermiso ? "Falta dar el permiso de Android" : !activo ? "Apagado" : n ? n + (n === 1 ? " por anotar" : " por anotar") : "Todo al día";
+    var n = bancoCola.length;
+    $("aviso-banco").hidden = !enApp || !n;
+    $("aviso-banco-texto").textContent = n === 1 ? "1 mensaje del banco por anotar" : n + " mensajes del banco por anotar";
+    $("banco-titulo").hidden = $("banco-menu").hidden = !enApp;
+    $("banco-estado").textContent = n ? n + " por anotar" : "Cómo compartir un mensaje con NOVA";
     if (pilaCapas.indexOf("pantalla-banco") >= 0) pintarListaBanco();
   }
   function pintarListaBanco() {
-    $("banco-permiso-tarjeta").hidden = !!bancoPermiso;
     var ul = $("lista-banco");
     ul.replaceChildren();
     $("banco-vacio").hidden = !!bancoCola.length;
     bancoCola.forEach(function (it) {
       var li = el("li", "banco-item"), cab = el("div", "banco-cab");
       cab.append(el("span", "banco-app", "🏦 " + it.banco), el("small", null, (it.via ? it.via + " · " : "") + cuandoBanco(it.fecha)));
-      var res = el("div", "banco-resumen"), chip = el("span", "chip " + it.r.tipo, it.r.tipo === "ingreso" ? "Ingreso" : "Gasto");
-      var valor = it.moneda && it.r.montoExacto > 0 ? Mon.formatoMonto(it.r.montoExacto, it.moneda) : pesos.format(it.r.monto);
-      res.append(chip, el("strong", null, valor), el("span", null, it.r.descripcion));
-      var cta = cuentaParaBanco(it.app + " " + it.texto);
+      var res = el("div", "banco-resumen"), cta = cuentaParaBanco(it.banco + " " + it.texto);
+      if (it.r) {
+        var valor = it.moneda && it.r.montoExacto > 0 ? Mon.formatoMonto(it.r.montoExacto, it.moneda) : pesos.format(it.r.monto);
+        res.append(el("span", "chip " + it.r.tipo, it.r.tipo === "ingreso" ? "Ingreso" : "Gasto"), el("strong", null, valor), el("span", null, it.r.descripcion));
+      } else res.append(el("span", null, "NOVA no lo entendió sola: toca Anotar y la IA lo lee por ti."));
       if (cta) res.append(el("small", "banco-cuenta", "→ " + cta.nombre));
       var botones = el("div", "banco-botones"), anotar = el("button", "primario mini", "Anotar"), descartar = el("button", "mini", "Descartar");
       anotar.type = descartar.type = "button";
@@ -4291,13 +4292,13 @@
     if (!fuente) { abrirBancoAlEntrar = true; return; }
     if (pilaCapas.indexOf("pantalla-banco") < 0) abrirCapa("pantalla-banco");
     pintarListaBanco();
-    revisarBanco();
+    revisarBanco(true);
   }
   // «Anotar»: el aviso pasa a la caja de Inicio y sale la vista previa de siempre, con la fecha del aviso y la cuenta del banco.
   function anotarBanco(it) {
-    var cta = cuentaParaBanco(it.app + " " + it.texto);
+    var cta = cuentaParaBanco(it.banco + " " + it.texto);
     bancoEnCurso = { frase: it.frase, fecha: new Date(it.fecha).toISOString(), cuentaId: cta ? cta.id : null,
-      origen: "🏦 Del aviso de " + it.banco + " · " + cuandoBanco(it.fecha) + (cta ? " · cuenta " + cta.nombre : "") };
+      origen: "🏦 Del mensaje de " + it.banco + " · " + cuandoBanco(it.fecha) + (cta ? " · cuenta " + cta.nombre : "") };
     marcarBancoListo(it.id);
     pintarBanco();
     cerrarYLuego(function () {
@@ -4307,26 +4308,8 @@
       setTimeout(function () { try { $("form-rapido").scrollIntoView({ block: "center", behavior: "smooth" }); } catch (e) { /* sin scroll */ } }, 60);
     });
   }
-  function guardarPreferencia(clave, valor) { if (plugPref) plugPref.set({ key: clave, value: valor }).catch(function () { /* se intenta la próxima vez */ }); }
   $("aviso-banco").addEventListener("click", abrirBanco);
   $("banco-revisar").addEventListener("click", abrirBanco);
-  $("banco-dar-permiso").addEventListener("click", function () {
-    toast("Busca NOVA y actívalo", "Luego vuelve con Atrás");
-    if (plugBanco) plugBanco.abrirAjustes().catch(function () { toast("No se pudo abrir", "Ve a Ajustes → Notificaciones → Acceso a notificaciones"); });
-  });
-  $("banco-info-app").addEventListener("click", function () { if (plugBanco) plugBanco.abrirInfoApp().catch(function () { /* nada */ }); });
-  $("banco-activo").addEventListener("change", function (e) {
-    var si = e.target.checked;
-    guardarLocal("nova-banco-activo", si);
-    guardarPreferencia("nova-banco-activo", si ? "si" : "no");
-    // Android no deja que una app se dé este permiso sola: se abre directo la pantalla donde la persona lo activa.
-    if (si && !bancoPermiso) { abrirBanco(); toast("Busca NOVA y actívalo", "Luego vuelve con Atrás"); if (plugBanco) plugBanco.abrirAjustes().catch(function () { /* queda el botón Dar el permiso */ }); }
-    pintarBanco();
-  });
-  $("banco-aviso").addEventListener("change", function (e) {
-    guardarLocal("nova-banco-aviso", e.target.checked);
-    guardarPreferencia("nova-banco-aviso", e.target.checked ? "si" : "no");
-  });
   document.addEventListener("visibilitychange", function () { if (!document.hidden && fuente && !fuente.demo) revisarBanco(); });
 
   // ---------- Panel del dueño ----------
@@ -6076,13 +6059,6 @@
         return entrar(fuenteSupabase(cliente, r.data.user));
       }).catch(function (err) { mensaje("auth-mensaje", "No se pudo entrar con Google: " + err.message, true); });
     });
-  }
-
-  // Al tocar el aviso «¿Lo anoto en NOVA?» la app se abre con el enlace co.novafinanzas.app://banco.
-  if (plugApp) {
-    var esEnlaceBanco = function (u) { return /^co\.novafinanzas\.app:\/\/banco/.test(String(u || "")); };
-    plugApp.addListener("appUrlOpen", function (ev) { if (esEnlaceBanco(ev && ev.url)) abrirBanco(); });
-    if (plugApp.getLaunchUrl) plugApp.getLaunchUrl().then(function (r) { if (r && esEnlaceBanco(r.url)) abrirBanco(); }).catch(function () { /* se abrió normal */ });
   }
 
   // ---------- Bloqueo con PIN (el PIN se guarda solo en este dispositivo, cifrado) ----------

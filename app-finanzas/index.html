@@ -224,7 +224,7 @@
 
       <button type="button" id="aviso-banco" class="tarjeta aviso-banco" hidden>
         <span class="aviso-banco-icono" aria-hidden="true">🏦</span>
-        <span class="aviso-banco-txt"><strong id="aviso-banco-texto">Movimientos del banco por anotar</strong><small>Te los avisó tu banco. Toca para revisarlos y guardarlos.</small></span>
+        <span class="aviso-banco-txt"><strong id="aviso-banco-texto">Mensajes del banco por anotar</strong><small>Los compartiste con NOVA. Toca para revisarlos y guardarlos.</small></span>
         <span class="aviso-banco-flecha" aria-hidden="true">›</span>
       </button>
 
@@ -596,9 +596,7 @@
       </div>
       <h2 class="grupo-ajustes" id="banco-titulo" hidden>Anotar desde el banco (app Android)</h2>
       <div class="menu" id="banco-menu" hidden>
-        <label class="menu-fila"><span class="menu-icono">🏦</span><span><strong>Leer los avisos del banco</strong><small>Cuando Nequi, Bancolombia, Nu, Davivienda… te avisen un pago o un ingreso, NOVA te pregunta si lo anota. Nada se guarda sin que tú lo confirmes.</small></span><input type="checkbox" id="banco-activo" class="interruptor"></label>
-        <label class="menu-fila sub"><span class="menu-icono">💬</span><span><strong>Preguntarme con un aviso</strong><small>«¿Lo anoto en NOVA?» apenas llegue el aviso del banco</small></span><input type="checkbox" id="banco-aviso" class="interruptor"></label>
-        <button type="button" id="banco-revisar"><span class="menu-icono">📋</span><span><strong>Revisar movimientos del banco</strong><small id="banco-estado">Falta dar el permiso de Android</small></span></button>
+        <button type="button" id="banco-revisar"><span class="menu-icono">🏦</span><span><strong>Mensajes del banco</strong><small id="banco-estado">Cómo compartir un mensaje con NOVA</small></span></button>
       </div>
       <a id="perfil-apk" class="boton-apk" href="descargas/NOVA.apk" hidden>
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M7 10l5 5 5-5M5 21h14"/></svg>
@@ -1115,24 +1113,19 @@
   <button type="button" class="mini centro-bloque" id="dueno-recargar">↻ Actualizar</button>
 </section>
 <section id="pantalla-banco" class="capa" hidden>
-  <div class="sub-cabecera"><button type="button" class="icono-btn" data-cerrar aria-label="Volver"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button><h1>Movimientos del banco</h1></div>
-  <p class="nota">Esto te avisaron tus bancos y billeteras. Toca <b>Anotar</b> para revisarlo y guardarlo, o <b>Descartar</b> si no es tuyo o ya lo anotaste. NOVA nunca guarda nada sin preguntarte.</p>
-  <article id="banco-permiso-tarjeta" class="tarjeta banco-permiso" hidden>
-    <strong>Falta un permiso de Android</strong>
-    <p class="nota">Para leer los avisos del banco, NOVA necesita el permiso <b>«Acceso a notificaciones»</b>. Toca el botón, busca <b>NOVA</b> en la lista y actívalo. Los avisos se leen solo en tu celular: no se envían a ningún lado.</p>
-    <button type="button" class="primario" id="banco-dar-permiso">Dar el permiso</button>
-    <details class="ayuda-instalar">
-      <summary>¿Android dice «Ajuste restringido»?</summary>
-      <ol>
-        <li>Toca <b>Abrir la información de NOVA</b> (aquí abajo).</li>
-        <li>Toca los <b>tres puntos ⋮</b> arriba a la derecha y luego <b>Permitir ajustes restringidos</b>.</li>
-        <li>Vuelve a NOVA y toca <b>Dar el permiso</b> otra vez.</li>
-      </ol>
-      <button type="button" class="mini" id="banco-info-app">Abrir la información de NOVA</button>
-    </details>
+  <div class="sub-cabecera"><button type="button" class="icono-btn" data-cerrar aria-label="Volver"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button><h1>Mensajes del banco</h1></div>
+  <article id="banco-ayuda" class="tarjeta banco-ayuda">
+    <strong>Cómo anotar un mensaje del banco</strong>
+    <ol>
+      <li>Abre el mensaje de tu banco o billetera (en Mensajes o en su app) y <b>mantenlo presionado</b>.</li>
+      <li>Toca <b>Compartir</b> (si no lo ves, toca los tres puntos ⋮ o «Seleccionar texto» y luego Compartir).</li>
+      <li>Elige <b>NOVA</b>. Se abre esta lista con el movimiento listo.</li>
+      <li>Toca <b>Anotar</b> y luego <b>Guardar</b>. Se guarda con la fecha y hora en que lo compartes: compártelo el mismo día.</li>
+    </ol>
+    <p class="nota">También puedes copiar el mensaje y pegarlo en la caja de Inicio («¿Qué gastaste o recibiste?»). NOVA no lee tus mensajes ni notificaciones por su cuenta: solo lo que tú compartes, y nada se guarda sin que lo confirmes.</p>
   </article>
   <ul id="lista-banco" class="lista-banco"></ul>
-  <p id="banco-vacio" class="nota centro" hidden>No hay movimientos del banco por anotar. Cuando tu banco te avise un pago o un ingreso, aparece aquí.</p>
+  <p id="banco-vacio" class="nota centro" hidden>No hay mensajes del banco por anotar. Comparte uno con NOVA y aparece aquí.</p>
 </section>
 <section id="pantalla-pruebas" class="capa" hidden>
   <div class="sub-cabecera"><button type="button" class="icono-btn" data-cerrar aria-label="Volver"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button><h1>Probar las funciones</h1></div>

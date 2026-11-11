@@ -11,7 +11,7 @@ Lista de funciones para ir sumando poco a poco, probadas una por una.
 - ✅ Suscripciones y pagos fijos: cuánto pagas al mes y al año, próximo cobro y aviso si te suben el precio.
 - ✅ Cuadrar el saldo con lo que tienes de verdad en el banco.
 - ✅ «¿Gastaste algo hoy?» solo si ese día no anotaste nada, a la hora que elijas.
-- ✅ Anotar desde los avisos del banco (Android), siempre preguntando antes de guardar.
+- ✅ Anotar mensajes del banco compartiéndolos con NOVA (Android), siempre preguntando antes de guardar. (Leer las notificaciones solas no se puede: Google Play Protect bloquea las apps instaladas a mano que piden ese permiso.)
 
 ## Para ahorrar más
 
