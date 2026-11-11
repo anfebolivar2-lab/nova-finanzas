@@ -482,6 +482,11 @@
         <span class="avatar grande" id="perfil-avatar"></span>
         <div class="mov-texto"><strong id="perfil-email"></strong><span class="chip ia">Todo gratis · sin anuncios</span></div>
       </article>
+      <button type="button" id="btn-dueno" class="tarjeta boton-dueno" hidden>
+        <span class="dueno-corona" aria-hidden="true">👑</span>
+        <span><strong>Panel del dueño</strong><small>Cuánta gente tiene NOVA, quién la usa y qué funciones usan</small></span>
+        <span class="aviso-banco-flecha" aria-hidden="true">›</span>
+      </button>
       <article class="tarjeta incluido">
         <h2 class="titulo-tarjeta">Todo incluido, gratis</h2>
         <ul class="lista-incluido">
@@ -1094,6 +1099,20 @@
     </div>
     <p class="mensaje" id="cuadrar-mensaje" role="status"></p>
   </form>
+</section>
+<section id="pantalla-dueno" class="capa" hidden>
+  <div class="sub-cabecera"><button type="button" class="icono-btn" data-cerrar aria-label="Volver"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button><h1>👑 Panel del dueño</h1></div>
+  <p class="nota">Solo tu cuenta puede ver esto. <span id="dueno-hora"></span></p>
+  <p class="mensaje" id="dueno-mensaje" role="status"></p>
+  <div id="dueno-kpis" class="dueno-kpis"></div>
+  <article class="tarjeta dueno-grafico"><h2 class="titulo-tarjeta">Personas que anotaron algo · últimos 30 días</h2><div id="dueno-activos"></div></article>
+  <article class="tarjeta dueno-grafico"><h2 class="titulo-tarjeta">Movimientos anotados por día</h2><div id="dueno-movs"></div></article>
+  <article class="tarjeta dueno-grafico"><h2 class="titulo-tarjeta">Registros nuevos por día</h2><div id="dueno-registros"></div></article>
+  <article class="tarjeta" id="dueno-versiones-tarjeta" hidden><h2 class="titulo-tarjeta">Versiones que tienen instaladas</h2><div id="dueno-versiones" class="dueno-chips"></div></article>
+  <h2 class="seccion-cabecera">Personas</h2>
+  <ul id="dueno-personas" class="lista-banco"></ul>
+  <p class="nota centro">🔒 Por privacidad aquí no se ven los gastos, el dinero ni los movimientos de nadie: solo cuántos anotó y cuándo usó NOVA.<br>«Abrieron la app Android» y la versión se cuentan desde la 1.66, cuando cada persona abra la app.</p>
+  <button type="button" class="mini centro-bloque" id="dueno-recargar">↻ Actualizar</button>
 </section>
 <section id="pantalla-banco" class="capa" hidden>
   <div class="sub-cabecera"><button type="button" class="icono-btn" data-cerrar aria-label="Volver"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button><h1>Movimientos del banco</h1></div>

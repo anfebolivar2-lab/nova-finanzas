@@ -4319,7 +4319,8 @@
     var si = e.target.checked;
     guardarLocal("nova-banco-activo", si);
     guardarPreferencia("nova-banco-activo", si ? "si" : "no");
-    if (si && !bancoPermiso) abrirBanco();     // ahí se explica el permiso y está el botón para darlo
+    // Android no deja que una app se dé este permiso sola: se abre directo la pantalla donde la persona lo activa.
+    if (si && !bancoPermiso) { abrirBanco(); toast("Busca NOVA y actívalo", "Luego vuelve con Atrás"); if (plugBanco) plugBanco.abrirAjustes().catch(function () { /* queda el botón Dar el permiso */ }); }
     pintarBanco();
   });
   $("banco-aviso").addEventListener("change", function (e) {
@@ -4327,6 +4328,93 @@
     guardarPreferencia("nova-banco-aviso", e.target.checked ? "si" : "no");
   });
   document.addEventListener("visibilitychange", function () { if (!document.hidden && fuente && !fuente.demo) revisarBanco(); });
+
+  // ---------- Panel del dueño ----------
+  // Solo la cuenta del dueño ve el botón; el servidor (función nova-dueno) también lo revisa antes de mostrar algo.
+  // Además, una vez al día la app anota en la cuenta de cada persona cuándo la abrió, si fue en Android o en el
+  // navegador y qué versión tiene (sin datos de su plata), para que el dueño sepa cuánta gente la usa.
+  var DUENOS = ["e84fedff-8279-4a12-9ff7-4992dae4cbbf"];
+  function idUsuario() { return (leerLocal("nova-identidad", {}) || {}).id || ""; }
+  function soyDueno() { return !!fuente && !fuente.demo && DUENOS.indexOf(idUsuario()) >= 0; }
+  function marcarUso() {
+    if (!cliente || !fuente || fuente.demo || !idUsuario()) return;
+    var claveUso = "nova-uso-" + idUsuario(), hoyK = A.claveDia(new Date());
+    if (leerLocal(claveUso, "") === hoyK) return;
+    var version = enApp ? fetch("version-app.json").then(function (r) { return r.json(); }).then(function (v) { return (v && v.versionName) || ""; }).catch(function () { return ""; }) : Promise.resolve("");
+    version.then(function (v) {
+      return cliente.auth.updateUser({ data: { nova_visto: new Date().toISOString(), nova_plataforma: enApp ? "android" : "web", nova_version: v } });
+    }).then(function (r) { if (r && !r.error) guardarLocal(claveUso, hoyK); }).catch(function () { /* se intenta mañana */ });
+  }
+  var numDueno = new Intl.NumberFormat("es-CO");
+  function pl(n, uno, varios) { return numDueno.format(n) + " " + (n === 1 ? uno : varios); }
+  function barrasDueno(cont, dias, campo) {
+    cont.replaceChildren();
+    var max = Math.max.apply(null, dias.map(function (d) { return d[campo]; }).concat([1]));
+    var fila = el("div", "dueno-barras");
+    dias.forEach(function (d) {
+      var b = el("i", d[campo] ? null : "cero");
+      b.style.height = Math.max(2, Math.round((d[campo] / max) * 100)) + "%";
+      b.title = fechaCorta.format(new Date(d.dia + "T12:00:00")) + ": " + d[campo];
+      fila.append(b);
+    });
+    var total = dias.reduce(function (s, d) { return s + d[campo]; }, 0);
+    var ejes = el("div", "dueno-ejes");
+    ejes.append(el("span", null, fechaCorta.format(new Date(dias[0].dia + "T12:00:00"))), el("span", null, "Total: " + numDueno.format(total) + " · máximo " + max + " en un día"), el("span", null, "Hoy"));
+    cont.append(fila, ejes);
+  }
+  function pintarDueno(d) {
+    var r = d.resumen;
+    $("dueno-hora").textContent = "Datos de " + cuandoBanco(Date.parse(d.generado)) + ".";
+    var kpis = [
+      ["👥", r.registrados, "Personas registradas", "+" + r.nuevos7 + " esta semana · " + r.confirmados + " confirmaron el correo"],
+      ["🔥", r.activos7, "Usaron NOVA (7 días)", r.hoy + " en las últimas 24 horas"],
+      ["📅", r.activos30, "Usaron NOVA (30 días)", r.conMovimientos + " han anotado algo"],
+      ["📲", d.apk.total, "Descargas de la APK", "desde GitHub (no cuenta las de la página)"],
+      ["🤖", r.android, "Abrieron la app Android", r.web + " en el navegador · desde la 1.66"],
+      ["🧾", r.movimientos, "Movimientos anotados", "entre todas las personas"],
+      ["✦", r.chats, "Chats con NOVA IA", ""],
+      ["🎯", r.metas, "Metas de ahorro", ""],
+      ["👛", r.espacios, "Espacios creados", ""],
+      ["🚖", r.conductores, "En modo conductor", ""]
+    ];
+    var g = $("dueno-kpis"); g.replaceChildren();
+    kpis.forEach(function (k) {
+      var c = el("div", "dueno-kpi");
+      c.append(el("span", "ico", k[0]), el("strong", null, numDueno.format(k[1] || 0)), el("span", null, k[2]));
+      if (k[3]) c.append(el("small", null, k[3]));
+      g.append(c);
+    });
+    barrasDueno($("dueno-activos"), d.dias, "activos");
+    barrasDueno($("dueno-movs"), d.dias, "movimientos");
+    barrasDueno($("dueno-registros"), d.dias, "registros");
+    var vers = Object.keys(d.versiones || {}).sort().reverse();
+    $("dueno-versiones-tarjeta").hidden = !vers.length;
+    $("dueno-versiones").replaceChildren.apply($("dueno-versiones"), vers.map(function (v) { var n = d.versiones[v]; return el("span", null, (v === "" ? "?" : v) + ": " + n + (n === 1 ? " persona" : " personas")); }));
+    var ul = $("dueno-personas"); ul.replaceChildren();
+    d.personas.forEach(function (p) {
+      var li = el("li", "banco-item dueno-persona"), cab = el("div", "banco-cab");
+      cab.append(el("span", "banco-app", (p.dueno ? "👑 " : p.prueba ? "🧪 " : "👤 ") + p.correo), el("small", null, p.ultimoUso ? "usó " + cuandoBanco(Date.parse(p.ultimoUso)) : "nunca entró"));
+      var det = "Se registró el " + fechaCorta.format(new Date(p.registro)) + (p.confirmado ? "" : " · no ha confirmado el correo") + (p.prueba ? " · cuenta de prueba" : "");
+      var chips = el("div", "dueno-chips");
+      [p.plataforma === "android" ? "📱 Android" + (p.version ? " " + p.version : "") : p.plataforma === "web" ? "🌐 Navegador" : "",
+        pl(p.movimientos, "movimiento", "movimientos"), p.chats ? pl(p.chats, "chat IA", "chats IA") : "", p.metas ? pl(p.metas, "meta", "metas") : "", p.espacios ? pl(p.espacios, "espacio", "espacios") : "", p.conductor ? "🚖 conductor" : ""]
+        .filter(Boolean).forEach(function (t) { chips.append(el("span", null, t)); });
+      li.append(cab, el("p", "banco-texto", det), chips);
+      ul.append(li);
+    });
+  }
+  function cargarDueno() {
+    mensaje("dueno-mensaje", "Cargando los datos…");
+    $("dueno-recargar").disabled = true;
+    cliente.functions.invoke("nova-dueno", { body: {} }).then(function (res) {
+      if (res.error || !res.data || !res.data.resumen) throw new Error("sin datos");
+      mensaje("dueno-mensaje", "");
+      pintarDueno(res.data);
+    }).catch(function () { mensaje("dueno-mensaje", "No se pudieron cargar los datos. Revisa tu conexión e intenta otra vez.", true); })
+      .finally(function () { $("dueno-recargar").disabled = false; });
+  }
+  $("btn-dueno").addEventListener("click", function () { abrirCapa("pantalla-dueno"); cargarDueno(); });
+  $("dueno-recargar").addEventListener("click", cargarDueno);
 
   // ---------- Calendario día por día ----------
   // Cada pantalla abre el calendario con sus propios movimientos: en Buscar, lo que encontraste; en Mi trabajo,
@@ -5839,6 +5927,7 @@
       mostrar("app"); ir("inicio"); pintar();
       if (!fuente.demo) bloquearSiHayPin();
       pintarEstadoPapelera(); tutorialSiHaceFalta(); novedadesSiHaceFalta();
+      $("btn-dueno").hidden = !soyDueno(); marcarUso();
       while (accionesPendientes.length) anotarTeclaRapida(accionesPendientes.shift());
       programarAvisos();
       if (!fuente.demo) revisarBanco().then(function () { if (abrirBancoAlEntrar) { abrirBancoAlEntrar = false; abrirBanco(); } }).catch(function () { /* sin lista del banco */ });

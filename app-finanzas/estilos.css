@@ -898,3 +898,25 @@ button.mini { padding: 6px 12px; border-radius: 999px; font-size: .8rem; }
 .banco-permiso { display: flex; flex-direction: column; gap: 10px; margin-top: 12px; border-color: #f59e0b; background: color-mix(in srgb, #f59e0b 8%, var(--surface)); }
 .banco-permiso .ayuda-instalar { margin: 0; }
 .previa-origen { flex-basis: 100%; color: var(--accent); font-size: .8rem; font-weight: 600; }
+
+/* ---------- Panel del dueño ---------- */
+.boton-dueno { display: flex; align-items: center; gap: 12px; width: 100%; text-align: left; cursor: pointer; color: var(--ink);
+  border: 1px solid #f5b301; background: linear-gradient(120deg, color-mix(in srgb, #f5b301 16%, transparent), var(--surface) 70%); padding: 14px 16px; }
+.boton-dueno > span:nth-child(2) { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0; }
+.boton-dueno small { color: var(--muted); font-weight: 500; font-size: .8rem; }
+.dueno-corona { width: 40px; height: 40px; flex: none; display: grid; place-items: center; border-radius: 12px; background: color-mix(in srgb, #f5b301 22%, transparent); font-size: 1.3rem; }
+.dueno-kpis { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin: 12px 0; }
+.dueno-kpi { background: var(--surface); border: 1px solid var(--line); border-radius: 16px; padding: 12px 14px; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.dueno-kpi .ico { font-size: 1.1rem; }
+.dueno-kpi strong { font-size: 1.6rem; font-variant-numeric: tabular-nums; line-height: 1.1; }
+.dueno-kpi span { font-weight: 600; font-size: .85rem; }
+.dueno-kpi small { color: var(--muted); font-size: .75rem; }
+.dueno-grafico { margin-bottom: 12px; }
+.dueno-barras { display: flex; align-items: flex-end; gap: 2px; height: 90px; margin-top: 8px; }
+.dueno-barras i { flex: 1; background: var(--accent); border-radius: 3px 3px 0 0; min-height: 2px; opacity: .9; }
+.dueno-barras i.cero { background: var(--barra-vacia); }
+.dueno-ejes { display: flex; justify-content: space-between; color: var(--muted); font-size: .72rem; margin-top: 4px; }
+.dueno-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.dueno-chips span { background: var(--surface-2); border: 1px solid var(--line); border-radius: 999px; padding: 4px 10px; font-size: .8rem; font-weight: 600; }
+.dueno-persona .banco-texto { -webkit-line-clamp: unset; }
+.centro-bloque { display: block; margin: 12px auto 24px; }
