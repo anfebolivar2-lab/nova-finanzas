@@ -4333,7 +4333,7 @@
   // Solo la cuenta del dueño ve el botón; el servidor (función nova-dueno) también lo revisa antes de mostrar algo.
   // Además, una vez al día la app anota en la cuenta de cada persona cuándo la abrió, si fue en Android o en el
   // navegador y qué versión tiene (sin datos de su plata), para que el dueño sepa cuánta gente la usa.
-  var DUENOS = ["e84fedff-8279-4a12-9ff7-4992dae4cbbf"];
+  var DUENOS = ["e84fedff-8279-4a12-9ff7-4992dae4cbbf", "92bfcc78-ebac-47ab-8171-2683d624c721"];
   function idUsuario() { return (leerLocal("nova-identidad", {}) || {}).id || ""; }
   function soyDueno() { return !!fuente && !fuente.demo && DUENOS.indexOf(idUsuario()) >= 0; }
   function marcarUso() {

@@ -3,7 +3,7 @@
 // Por privacidad NO devuelve montos ni movimientos de nadie: solo cuántos hay y cuándo se usó la app.
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 
-const DUENOS = ["e84fedff-8279-4a12-9ff7-4992dae4cbbf"];
+const DUENOS = ["e84fedff-8279-4a12-9ff7-4992dae4cbbf", "92bfcc78-ebac-47ab-8171-2683d624c721"];
 const REPOS = ["anfebolivar2-lab/nova-finanzas", "afbolivar-2026b-lang/principios-inteligencia-artificial-2026-b-"];
 const URL_SB = Deno.env.get("SUPABASE_URL") || "";
 const SERVICIO = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
