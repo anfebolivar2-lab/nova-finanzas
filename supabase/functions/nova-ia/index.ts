@@ -59,6 +59,12 @@ async function llamarGemini(clave: string, cuerpo: Record<string, unknown>, sinP
 // ¿La pregunta necesita datos de hoy (precios, noticias, clima, resultados)? Entonces se le da a la IA la búsqueda de
 // Google. No se usa en todas las preguntas: es más lenta y tiene un cupo diario.
 const NECESITA_WEB = /precio|cu[aá]nto (cuesta|vale|valen|cuestan|sale|est[aá])|me alcanza|alcanza para|comprar|compro|cotiz|iphone|samsung|xiaomi|motorola|celular|port[aá]til|computador|televisor|tv |carro|moto |playstation|xbox|nintendo|noticia|hoy|actual|[uú]ltim|nuevo|nueva|lanzamiento|sali[oó]|clima|lluvia|d[oó]lar|euro|tasa|inflaci[oó]n|salario m[ií]nimo|uvt|resultado|partido|gan[oó]|elecci|202[5-9]/i;
+// Casi cualquier pregunta puede necesitar internet. No se busca cuando es sobre el dinero de la propia persona (ya están sus datos)
+// ni cuando es una tarea de escritura o de cuentas, que no necesita buscar.
+const SOLO_MIS_DATOS = /\b(mi|mis)\s+(saldo|gastos?|ingresos?|cuentas?|metas?|presupuesto|movimientos?|deudas?|pagos?|ahorros?|finanzas)|cu[aá]nto (he |llevo )?gast[eé]|en qu[eé] (he )?gast[eé]|cu[aá]nto me (queda|sobra)/i;
+const TAREA = /^\s*(redacta|escribe|traduce|resume|corrige|mejora|reescribe|calcula|convierte|inventa|crea|genera|hazme|dame una (receta|idea|lista))/i;
+// Si Google respondió "sin cupo" en todos los modelos, no se vuelve a intentar por un rato (así no se pierde tiempo en cada pregunta).
+let googleSinCupoHasta = 0;
 type Fuente = { titulo: string; url: string };
 function fuentesDe(d: { candidates?: { groundingMetadata?: { groundingChunks?: { web?: { uri?: string; title?: string } }[] } }[] }, lista: Fuente[]) {
   for (const c of d.candidates?.[0]?.groundingMetadata?.groundingChunks || []) {
@@ -120,7 +126,8 @@ Datos de la persona: ${contexto}`;
     contents: [...historial, { role: "user", parts: [{ text: pregunta }] }],
     generationConfig: { temperature: 0.4, maxOutputTokens: 4096 }, // también cuenta lo que el modelo "piensa": con menos se cortaba la respuesta
   });
-  const web = entrada.web === true || NECESITA_WEB.test(pregunta);
+  const pideDatosDeHoy = NECESITA_WEB.test(pregunta);   // precios, noticias, clima…: aquí sí se avisa si no se pudo buscar
+  const web = entrada.web === true || pideDatosDeHoy || !(SOLO_MIS_DATOS.test(pregunta) || TAREA.test(pregunta));
   const fuentesWeb: Fuente[] = [];
   let g: ResultadoGemini | null = null, sinWeb = false;
   if (web) {
@@ -132,9 +139,9 @@ Datos de la persona: ${contexto}`;
       g = await llamarGemini(clave, armar(`\n\nRESULTADOS DE BÚSQUEDA EN INTERNET (de este momento; son tu fuente para precios y datos de hoy, nombra la tienda o el sitio; si no traen el dato, dilo con honestidad):\n${hallado.texto}`), true, flujo);
       if (!g.r) g = null;
     }
-    if (!g) {
+    if (!g && Date.now() >= googleSinCupoHasta) {
       g = await llamarGemini(clave, { ...armar(""), tools: [{ google_search: {} }] }, true, flujo);
-      if (!g.r) g = null;
+      if (!g.r) { if (g.limite) googleSinCupoHasta = Date.now() + 10 * 60_000; g = null; }
     }
     if (!g) sinWeb = true;
   }
@@ -157,7 +164,7 @@ Datos de la persona: ${contexto}`;
             let resto = "";
             const linea = buf.trim();
             if (linea.startsWith("data:")) { try { const d = JSON.parse(linea.slice(5)); resto = (d.candidates?.[0]?.content?.parts || []).map((p: { text?: string }) => p.text || "").join(""); fuentesDe(d, fuentes); } catch (_e) { /* incompleta */ } }
-            const f = marcasFuentes(fuentes) + (sinWeb ? "\n[[SINWEB]]" : "");
+            const f = marcasFuentes(fuentes) + (sinWeb && pideDatosDeHoy ? "\n[[SINWEB]]" : "");
             ctrl.enqueue(enc.encode(resto + f)); ctrl.close(); return;
           }
           buf += dec.decode(value, { stream: true });
@@ -185,7 +192,7 @@ Datos de la persona: ${contexto}`;
     if (!texto) return responder(502, { error: "La IA no respondió" });
     const fuentes: Fuente[] = [...fuentesWeb];
     fuentesDe(datos, fuentes);
-    return responder(200, { respuesta: texto.slice(0, 4000) + marcasFuentes(fuentes) + (sinWeb ? "\n[[SINWEB]]" : "") });
+    return responder(200, { respuesta: texto.slice(0, 4000) + marcasFuentes(fuentes) + (sinWeb && pideDatosDeHoy ? "\n[[SINWEB]]" : "") });
   } catch (_e) {
     return responder(502, { error: "La IA respondió algo que no se entendió" });
   }
