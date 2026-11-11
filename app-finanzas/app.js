@@ -5024,12 +5024,13 @@
   // ([[FUENTE:título|enlace]]) y, si la pregunta es de una compra, con el precio que encontró ([[PRECIO:valor|producto]]).
   // Esas marcas no se muestran: se quitan del texto y se usan para las fuentes y el cuadro «¿Me alcanza?».
   function marcasIA(texto) {
-    var t = String(texto || ""), precio = null, producto = "", fuentes = [];
+    var t = String(texto || ""), precio = null, producto = "", fuentes = [], sinWeb = /\[\[SINWEB\]\]/.test(t);
+    t = t.replace(/\[\[SINWEB\]\]/g, "");
     t = t.replace(/\[\[PRECIO:\s*([\d.,]+)\s*(?:\|([^\]]*))?\]\]/g, function (_m, v, n) { precio = Number(String(v).replace(/[.,]/g, "")); producto = (n || "").trim(); return ""; });
     t = t.replace(/\[\[FUENTE:([^|\]]*)\|([^\]\s]+)\]\]/g, function (_m, titulo, url) { if (/^https:\/\//.test(url) && fuentes.length < 5 && !fuentes.some(function (f) { return f.url === url; })) fuentes.push({ titulo: titulo.trim() || url, url: url }); return ""; });
     t = t.replace(/\[\[[^\]]*$/, "");                 // una marca a medio llegar (mientras la respuesta va en vivo)
     t = t.replace(/\*\*(.+?)\*\*/g, "$1").replace(/^#{1,6}\s*/gm, "").replace(/\n{3,}/g, "\n\n").trim();
-    return { texto: t, precio: precio > 0 ? precio : null, producto: producto, fuentes: fuentes };
+    return { texto: t, precio: precio > 0 ? precio : null, producto: producto, fuentes: fuentes, sinWeb: sinWeb };
   }
   function esFilaTabla(linea) { var l = linea.trim(); return l.indexOf("|") >= 0 && l.replace(/^\||\|$/g, "").split("|").length >= 2; }
   function pintarTextoIA(li, crudo) {
@@ -5057,6 +5058,11 @@
       parrafo.push(lineas[i]); i++;
     }
     soltarParrafo();
+    if (m.sinWeb) {
+      var aviso = el("div", "ia-fuentes");
+      aviso.append(el("small", null, "🌐 Ahora no pude buscar en internet, así que no tengo el precio de hoy. Escríbeme cuánto cuesta y hago la cuenta contigo."));
+      li.append(aviso);
+    }
     if (m.fuentes.length) {
       var f = el("div", "ia-fuentes");
       f.append(el("small", null, "🌐 Busqué en internet:"));

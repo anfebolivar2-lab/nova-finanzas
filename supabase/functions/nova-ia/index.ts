@@ -20,7 +20,7 @@ function responder(estado: number, cuerpo: unknown) {
 
 // Modelos de respaldo: si el principal está saturado o falla, se prueba el siguiente.
 // Se empieza por el más rápido (lite); el principal queda de respaldo para cuando haga falta más calidad.
-const MODELOS = ["gemini-flash-lite-latest", "gemini-2.5-flash", MODELO].filter((m, i, a) => a.indexOf(m) === i);
+const MODELOS = ["gemini-flash-lite-latest", MODELO].filter((m, i, a) => a.indexOf(m) === i); // gemini-2.5-flash ya no está para cuentas nuevas (404)
 type ResultadoGemini = { r: Response | null; detalle: string; limite: boolean };
 
 async function llamarModelo(modelo: string, clave: string, cuerpo: Record<string, unknown>, flujo = false) {
@@ -66,6 +66,32 @@ function fuentesDe(d: { candidates?: { groundingMetadata?: { groundingChunks?: {
     if (url.startsWith("https://") && lista.length < 5 && !lista.some((f) => f.url === url)) lista.push({ titulo: titulo || "fuente", url });
   }
 }
+
+// Buscador de internet propio (Tavily), por si Google no da cupo para su búsqueda. Solo se usa si existe el secreto TAVILY_API_KEY
+// en Supabase. Solo sale la pregunta escrita (nunca los datos de dinero de la persona).
+async function buscarWeb(clave: string, pregunta: string): Promise<{ texto: string; fuentes: Fuente[] } | null> {
+  try {
+    const consulta = (pregunta + (/precio|cu[aá]nto|cuesta|vale|alcanza|comprar|compro/i.test(pregunta) ? " precio Colombia COP" : "")).slice(0, 380);
+    const r = await fetch("https://api.tavily.com/search", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${clave}` },
+      body: JSON.stringify({ query: consulta, search_depth: "basic", max_results: 5, include_answer: false }),
+      signal: AbortSignal.timeout(9_000),
+    });
+    if (!r.ok) { console.error("Tavily", r.status, (await r.text()).slice(0, 200)); return null; }
+    const d = await r.json();
+    const lista = (Array.isArray(d.results) ? d.results : []).slice(0, 5) as { title?: string; url?: string; content?: string }[];
+    if (!lista.length) return null;
+    const fuentes: Fuente[] = [];
+    const texto = lista.map((x, i) => {
+      const url = String(x.url || ""); let sitio = "fuente";
+      try { sitio = new URL(url).hostname.replace(/^www\./, ""); } catch (_e) { /* sin enlace */ }
+      if (url.startsWith("https://") && !fuentes.some((f) => f.url === url)) fuentes.push({ titulo: sitio.slice(0, 60), url });
+      return `${i + 1}. ${String(x.title || sitio).slice(0, 120)} (${sitio})\n${String(x.content || "").replace(/\s+/g, " ").slice(0, 700)}`;
+    }).join("\n\n");
+    return { texto, fuentes };
+  } catch (e) { console.error("Tavily", String(e)); return null; }
+}
 const marcasFuentes = (lista: Fuente[]) => lista.length ? "\n" + lista.map((f) => `[[FUENTE:${f.titulo}|${f.url}]]`).join("") : "";
 
 // "Pregúntale a NOVA": responde preguntas sobre las finanzas de la persona con el resumen que manda la app.
@@ -89,26 +115,51 @@ Los datos traen: saldo y cuentas, el periodo actual (ingresos, gastos y gastos p
 Datos de la persona: ${contexto}`;
 
   const flujo = entrada.stream === true;
-  const base = {
-    systemInstruction: { parts: [{ text: instrucciones }] },
+  const armar = (extra: string) => ({
+    systemInstruction: { parts: [{ text: instrucciones + extra }] },
     contents: [...historial, { role: "user", parts: [{ text: pregunta }] }],
-    generationConfig: { temperature: 0.4, maxOutputTokens: 1536 },
-  };
+    generationConfig: { temperature: 0.4, maxOutputTokens: 4096 }, // también cuenta lo que el modelo "piensa": con menos se cortaba la respuesta
+  });
   const web = entrada.web === true || NECESITA_WEB.test(pregunta);
-  let g = await llamarGemini(clave, web ? { ...base, tools: [{ google_search: {} }] } : base, true, flujo);
-  if (!g.r && web) g = await llamarGemini(clave, base, true, flujo); // sin cupo de búsqueda o el modelo no la admite: responde sin internet
+  const fuentesWeb: Fuente[] = [];
+  let g: ResultadoGemini | null = null, sinWeb = false;
+  if (web) {
+    // 1) Buscador propio, si hay clave. 2) Búsqueda de Google. 3) Sin internet (y se le dice a la IA para que no invente).
+    const tavily = Deno.env.get("TAVILY_API_KEY");
+    const hallado = tavily ? await buscarWeb(tavily, pregunta) : null;
+    if (hallado) {
+      fuentesWeb.push(...hallado.fuentes);
+      g = await llamarGemini(clave, armar(`\n\nRESULTADOS DE BÚSQUEDA EN INTERNET (de este momento; son tu fuente para precios y datos de hoy, nombra la tienda o el sitio; si no traen el dato, dilo con honestidad):\n${hallado.texto}`), true, flujo);
+      if (!g.r) g = null;
+    }
+    if (!g) {
+      g = await llamarGemini(clave, { ...armar(""), tools: [{ google_search: {} }] }, true, flujo);
+      if (!g.r) g = null;
+    }
+    if (!g) sinWeb = true;
+  }
+  if (!g) {
+    g = await llamarGemini(clave, armar(sinWeb ? "\n\nIMPORTANTE: en este momento NO tienes acceso a internet. No digas que buscaste, que miraste ni que revisaste tiendas. Si la pregunta necesita un precio o un dato de hoy que no sepas con seguridad, dilo con honestidad y pídele a la persona que te diga el valor para hacer la cuenta con él. Si ella te da el precio, úsalo." : ""), true, flujo);
+  }
   if (!g.r) return g.limite ? responder(429, { error: "limite" }) : responder(502, { error: "La IA no respondió bien", detalle: g.detalle });
   const r = g.r;
   if (flujo && r.body) {
     // Respuesta en vivo: se reenvía el texto a medida que Gemini lo escribe, para que la app lo muestre de inmediato.
     const lector = r.body.getReader(), dec = new TextDecoder(), enc = new TextEncoder();
     let buf = "";
-    const fuentes: Fuente[] = [];
+    const fuentes: Fuente[] = [...fuentesWeb];
     const salida = new ReadableStream({
       async pull(ctrl) {
         try {
           const { done, value } = await lector.read();
-          if (done) { const f = marcasFuentes(fuentes); if (f) ctrl.enqueue(enc.encode(f)); ctrl.close(); return; }
+          if (done) {
+            // lo último que llegó sin salto de línea también cuenta
+            let resto = "";
+            const linea = buf.trim();
+            if (linea.startsWith("data:")) { try { const d = JSON.parse(linea.slice(5)); resto = (d.candidates?.[0]?.content?.parts || []).map((p: { text?: string }) => p.text || "").join(""); fuentesDe(d, fuentes); } catch (_e) { /* incompleta */ } }
+            const f = marcasFuentes(fuentes) + (sinWeb ? "\n[[SINWEB]]" : "");
+            ctrl.enqueue(enc.encode(resto + f)); ctrl.close(); return;
+          }
           buf += dec.decode(value, { stream: true });
           let texto = "", i: number;
           while ((i = buf.indexOf("\n")) >= 0) {
@@ -132,9 +183,9 @@ Datos de la persona: ${contexto}`;
     const datos = await r.json();
     const texto = (datos.candidates?.[0]?.content?.parts || []).map((p: { text?: string }) => p.text || "").join("").trim();
     if (!texto) return responder(502, { error: "La IA no respondió" });
-    const fuentes: Fuente[] = [];
+    const fuentes: Fuente[] = [...fuentesWeb];
     fuentesDe(datos, fuentes);
-    return responder(200, { respuesta: texto.slice(0, 4000) + marcasFuentes(fuentes) });
+    return responder(200, { respuesta: texto.slice(0, 4000) + marcasFuentes(fuentes) + (sinWeb ? "\n[[SINWEB]]" : "") });
   } catch (_e) {
     return responder(502, { error: "La IA respondió algo que no se entendió" });
   }
