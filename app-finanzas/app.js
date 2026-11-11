@@ -4193,7 +4193,9 @@
   // toca «Anotar» y luego «Guardar». NOVA no lee notificaciones ni mensajes por su cuenta (Google Play Protect bloquea
   // las apps instaladas a mano que piden ese permiso). Los ya revisados se recuerdan en este celular («nova-banco-listos»).
   var plugPref = enApp && window.Capacitor.Plugins && window.Capacitor.Plugins.Preferences;
-  var bancoCola = [], abrirBancoAlEntrar = false, bancoEnCurso = null;
+  // Solo la APK «avanzada» (aparte, para quien la instala a propósito) trae el puente NovaBanco: además lee los avisos del banco.
+  var plugBanco = enApp && window.Capacitor.Plugins && window.Capacitor.Plugins.NovaBanco;
+  var bancoCola = [], bancoPermiso = null, abrirBancoAlEntrar = false, bancoEnCurso = null;
   var horaBanco = new Intl.DateTimeFormat("es-CO", { hour: "numeric", minute: "2-digit" });
   function bancoListos() { var l = leerLocal("nova-banco-listos", []); return Array.isArray(l) ? l : []; }
   function marcarBancoListo(id) {
@@ -4242,8 +4244,10 @@
     if (!plugPref) return Promise.resolve();
     return Promise.all([
       plugPref.get({ key: "nova-banco" }).catch(function () { return null; }),
-      plugPref.get({ key: "nova-banco-abrir" }).catch(function () { return null; })
+      plugPref.get({ key: "nova-banco-abrir" }).catch(function () { return null; }),
+      plugBanco ? plugBanco.estado().catch(function () { return null; }) : Promise.resolve(null)
     ]).then(function (res) {
+      bancoPermiso = !!(res[2] && res[2].permiso);
       var crudo = [];
       try { crudo = JSON.parse((res[0] && res[0].value) || "[]"); } catch (e) { crudo = []; }
       if (!Array.isArray(crudo)) crudo = [];
@@ -4263,10 +4267,18 @@
     $("aviso-banco").hidden = !enApp || !n;
     $("aviso-banco-texto").textContent = n === 1 ? "1 mensaje del banco por anotar" : n + " mensajes del banco por anotar";
     $("banco-titulo").hidden = $("banco-menu").hidden = !enApp;
-    $("banco-estado").textContent = n ? n + " por anotar" : "Cómo compartir un mensaje con NOVA";
+    var activo = leerLocal("nova-banco-activo", true) !== false;
+    $("banco-avanzado").hidden = !plugBanco;
+    $("banco-no-lee").hidden = !!plugBanco;
+    $("banco-activo").checked = !!bancoPermiso && activo;
+    $("banco-aviso").checked = leerLocal("nova-banco-aviso", true) !== false;
+    $("banco-aviso").disabled = !bancoPermiso || !activo;
+    $("banco-estado").textContent = plugBanco && !bancoPermiso ? "Falta dar el permiso de Android" : n ? n + " por anotar" : "Cómo compartir un mensaje con NOVA";
     if (pilaCapas.indexOf("pantalla-banco") >= 0) pintarListaBanco();
   }
   function pintarListaBanco() {
+    $("banco-permiso-tarjeta").hidden = !plugBanco || !!bancoPermiso;
+    $("banco-ayuda").hidden = !!(plugBanco && bancoPermiso);
     var ul = $("lista-banco");
     ul.replaceChildren();
     $("banco-vacio").hidden = !!bancoCola.length;
@@ -4310,6 +4322,30 @@
   }
   $("aviso-banco").addEventListener("click", abrirBanco);
   $("banco-revisar").addEventListener("click", abrirBanco);
+  function guardarPreferencia(clave, valor) { if (plugPref) plugPref.set({ key: clave, value: valor }).catch(function () { /* se intenta la próxima vez */ }); }
+  $("banco-dar-permiso").addEventListener("click", function () {
+    toast("Busca NOVA y actívalo", "Luego vuelve con Atrás");
+    if (plugBanco) plugBanco.abrirAjustes().catch(function () { toast("No se pudo abrir", "Ve a Ajustes → Notificaciones → Acceso a notificaciones"); });
+  });
+  $("banco-info-app").addEventListener("click", function () { if (plugBanco) plugBanco.abrirInfoApp().catch(function () { /* nada */ }); });
+  $("banco-activo").addEventListener("change", function (e) {
+    var si = e.target.checked;
+    guardarLocal("nova-banco-activo", si);
+    guardarPreferencia("nova-banco-activo", si ? "si" : "no");
+    // Android no deja que una app se dé este permiso sola: se abre directo la pantalla donde la persona lo activa.
+    if (si && !bancoPermiso) { abrirBanco(); toast("Busca NOVA y actívalo", "Luego vuelve con Atrás"); if (plugBanco) plugBanco.abrirAjustes().catch(function () { /* queda el botón Dar el permiso */ }); }
+    pintarBanco();
+  });
+  $("banco-aviso").addEventListener("change", function (e) {
+    guardarLocal("nova-banco-aviso", e.target.checked);
+    guardarPreferencia("nova-banco-aviso", e.target.checked ? "si" : "no");
+  });
+  // Al tocar el aviso «¿Lo anoto en NOVA?» (versión avanzada) la app se abre con el enlace co.novafinanzas.app://banco.
+  if (plugBanco && window.Capacitor.Plugins.App) {
+    var esEnlaceBanco = function (u) { return /^co\.novafinanzas\.app:\/\/banco/.test(String(u || "")); };
+    window.Capacitor.Plugins.App.addListener("appUrlOpen", function (ev) { if (esEnlaceBanco(ev && ev.url)) abrirBanco(); });
+    if (window.Capacitor.Plugins.App.getLaunchUrl) window.Capacitor.Plugins.App.getLaunchUrl().then(function (r) { if (r && esEnlaceBanco(r.url)) abrirBanco(); }).catch(function () { /* se abrió normal */ });
+  }
   document.addEventListener("visibilitychange", function () { if (!document.hidden && fuente && !fuente.demo) revisarBanco(); });
 
   // ---------- Panel del dueño ----------
@@ -4396,6 +4432,7 @@
     }).catch(function () { mensaje("dueno-mensaje", "No se pudieron cargar los datos. Revisa tu conexión e intenta otra vez.", true); })
       .finally(function () { $("dueno-recargar").disabled = false; });
   }
+  $("dueno-apk-avanzada").href = (cfg.apkRespaldoUrl || "").replace(/NOVA\.apk$/, "NOVA-avanzada.apk");
   $("btn-dueno").addEventListener("click", function () { abrirCapa("pantalla-dueno"); cargarDueno(); });
   $("dueno-recargar").addEventListener("click", cargarDueno);
 
@@ -5844,6 +5881,8 @@
       versionLocal = local; window.__novaVersion = local && local.versionName;
       pintarVersionLocal();
       var fuentes = [{ url: cfg.apkVersionUrlGithub, apk: cfg.apkRespaldoUrl }, { url: cfg.apkVersionUrl, apk: cfg.apkUrl }].filter(function (f) { return f.url && f.apk; });
+      // La APK avanzada se actualiza con la avanzada (solo está en GitHub), para no perder la lectura de avisos del banco.
+      if (local && local.variante === "avanzada") fuentes = fuentes.slice(0, 1).map(function (f) { return { url: f.url, apk: f.apk.replace(/NOVA\.apk$/, "NOVA-avanzada.apk") }; });
       return Promise.all(fuentes.map(function (f) { return leerVersionPublicada(http, f.url).then(function (d) { return d ? { d: d, apk: f.apk } : null; }); })).then(function (lista) {
         var mejor = lista.filter(Boolean).sort(function (a, b) { return Number(b.d.versionCode) - Number(a.d.versionCode); })[0];
         if (!mejor) return { local: local, remota: null, hayNueva: false, error: true };

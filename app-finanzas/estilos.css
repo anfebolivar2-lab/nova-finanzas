@@ -923,3 +923,8 @@ button.mini { padding: 6px 12px; border-radius: 999px; font-size: .8rem; }
 .banco-ayuda { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; }
 .banco-ayuda ol { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 6px; color: var(--muted); font-size: .9rem; line-height: 1.4; }
 .banco-ayuda ol b { color: var(--ink); }
+.dueno-avanzada { display: flex; flex-direction: column; gap: 10px; margin: 12px 0; border-color: #f59e0b; }
+.dueno-avanzada ol { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 6px; color: var(--muted); font-size: .9rem; line-height: 1.4; }
+.dueno-avanzada ol b { color: var(--ink); }
+#banco-avanzado > .menu-fila + .menu-fila { border-top: 1px solid var(--line); }
+#banco-avanzado { border-bottom: 1px solid var(--line); }

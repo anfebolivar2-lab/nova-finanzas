@@ -108,10 +108,38 @@ jobs:
           AAPT=$(ls -d "$ANDROID_HOME"/build-tools/*/aapt | sort -V | tail -1)
           if "$AAPT" dump xmltree app-android-nova/android/app/build/outputs/apk/release/app-release.apk AndroidManifest.xml | grep -E "debuggable.*0xffffffff"; then echo "La APK quedó como depuración"; exit 1; fi
 
+      # Segunda APK, "NOVA avanzada": además lee las notificaciones del banco. Google Play Protect bloquea ese permiso en las
+      # APK instaladas a mano, así que va aparte (solo en la versión de GitHub, sin pasar por la página) y la instala a propósito
+      # quien quiera, desactivando Play Protect en su celular. La APK normal (NOVA.apk) nunca lleva ese permiso.
+      - name: Guardar la APK normal y armar la avanzada
+        working-directory: app-android-nova
+        run: |
+          mkdir -p ../app-finanzas/descargas
+          cp android/app/build/outputs/apk/release/app-release.apk ../app-finanzas/descargas/NOVA.apk
+          J=android/app/src/main/java/co/novafinanzas/app
+          cp recursos/avanzada/BancoListener.java recursos/avanzada/NovaBancoPlugin.java recursos/avanzada/MainActivity.java "$J/"
+          sed -i 's#</application>#    <service android:name=".BancoListener" android:label="NOVA" android:exported="true" android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE">\n            <intent-filter>\n                <action android:name="android.service.notification.NotificationListenerService" />\n            </intent-filter>\n        </service>\n    </application>#' android/app/src/main/AndroidManifest.xml
+          grep -q 'android:name=".BancoListener"' android/app/src/main/AndroidManifest.xml
+          grep -q "registerPlugin(NovaBancoPlugin.class)" "$J/MainActivity.java"
+          # La app avanzada sabe que lo es: al buscar actualizaciones baja la avanzada y muestra el permiso de notificaciones
+          echo '{"versionCode": ${{ env.NOVA_VERSION }}, "versionName": "1.${{ env.NOVA_VERSION }}", "variante": "avanzada"}' > android/app/src/main/assets/public/version-app.json
+          cd android
+          ./gradlew assembleRelease --no-daemon \
+            -Pandroid.injected.signing.store.file="$GITHUB_WORKSPACE/app-android-nova/firma/debug.keystore" \
+            -Pandroid.injected.signing.store.password=android \
+            -Pandroid.injected.signing.key.alias=androiddebugkey \
+            -Pandroid.injected.signing.key.password=android
+          cp app/build/outputs/apk/release/app-release.apk "$GITHUB_WORKSPACE/NOVA-avanzada.apk"
+          APKSIGNER=$(ls -d "$ANDROID_HOME"/build-tools/*/apksigner | sort -V | tail -1)
+          "$APKSIGNER" verify --print-certs "$GITHUB_WORKSPACE/NOVA-avanzada.apk" | grep -qi "SHA-256 digest: fe1d04b95f1cfc5efb06c5c40abce525f9813f9f9ef0c5f6f725a2a60c24c5aa"
+          AAPT=$(ls -d "$ANDROID_HOME"/build-tools/*/aapt | sort -V | tail -1)
+          # La normal NO debe llevar el lector de notificaciones y la avanzada SÍ
+          if "$AAPT" dump xmltree ../app-finanzas/descargas/NOVA.apk AndroidManifest.xml | grep -q "BIND_NOTIFICATION_LISTENER_SERVICE"; then echo "La APK normal lleva el lector de notificaciones"; exit 1; fi
+          "$AAPT" dump xmltree "$GITHUB_WORKSPACE/NOVA-avanzada.apk" AndroidManifest.xml | grep -q "BIND_NOTIFICATION_LISTENER_SERVICE"
+
       - name: Guardar la APK en la app
         run: |
           mkdir -p app-finanzas/descargas
-          cp app-android-nova/android/app/build/outputs/apk/release/app-release.apk app-finanzas/descargas/NOVA.apk
           # Número de esta APK, para que la app instalada sepa si hay una más nueva (se baja de la misma página)
           echo '{"versionCode": ${{ env.NOVA_VERSION }}, "versionName": "1.${{ env.NOVA_VERSION }}"}' > app-finanzas/descargas/version.json
           ls -la app-finanzas/descargas
@@ -126,12 +154,14 @@ jobs:
           echo '{"versionCode": ${{ env.NOVA_VERSION }}, "versionName": "1.${{ env.NOVA_VERSION }}"}' > version.json
           gh release view nova-android >/dev/null 2>&1 || gh release create nova-android --target "$GITHUB_SHA" --latest=false \
             --title "NOVA para Android" --notes "La última APK de NOVA. Se reemplaza sola en cada versión nueva."
-          gh release upload nova-android app-finanzas/descargas/NOVA.apk version.json --clobber
+          gh release upload nova-android app-finanzas/descargas/NOVA.apk NOVA-avanzada.apk version.json --clobber
 
       - uses: actions/upload-artifact@v4
         with:
           name: NOVA-apk
-          path: app-finanzas/descargas/NOVA.apk
+          path: |
+            app-finanzas/descargas/NOVA.apk
+            NOVA-avanzada.apk
 
       - name: Subir la APK al repositorio
         if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'

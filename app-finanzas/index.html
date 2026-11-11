@@ -596,6 +596,10 @@
       </div>
       <h2 class="grupo-ajustes" id="banco-titulo" hidden>Anotar desde el banco (app Android)</h2>
       <div class="menu" id="banco-menu" hidden>
+        <div id="banco-avanzado" hidden>
+          <label class="menu-fila"><span class="menu-icono">🔔</span><span><strong>Leer los avisos del banco</strong><small>NOVA avanzada: cuando tu banco te avise un pago o un ingreso, NOVA te pregunta si lo anota. Nada se guarda sin que lo confirmes.</small></span><input type="checkbox" id="banco-activo" class="interruptor"></label>
+          <label class="menu-fila sub"><span class="menu-icono">💬</span><span><strong>Preguntarme con un aviso</strong><small>«¿Lo anoto en NOVA?» apenas llegue el aviso</small></span><input type="checkbox" id="banco-aviso" class="interruptor"></label>
+        </div>
         <button type="button" id="banco-revisar"><span class="menu-icono">🏦</span><span><strong>Mensajes del banco</strong><small id="banco-estado">Cómo compartir un mensaje con NOVA</small></span></button>
       </div>
       <a id="perfil-apk" class="boton-apk" href="descargas/NOVA.apk" hidden>
@@ -1109,11 +1113,35 @@
   <article class="tarjeta" id="dueno-versiones-tarjeta" hidden><h2 class="titulo-tarjeta">Versiones que tienen instaladas</h2><div id="dueno-versiones" class="dueno-chips"></div></article>
   <h2 class="seccion-cabecera">Personas</h2>
   <ul id="dueno-personas" class="lista-banco"></ul>
+  <article class="tarjeta dueno-avanzada">
+    <strong>📲 NOVA avanzada (solo para tu celular)</strong>
+    <p class="nota">Es una APK aparte que además <b>lee los avisos del banco</b>. Google Play Protect la bloquea, así que no la compartas: solo instálala tú, en tu celular.</p>
+    <ol>
+      <li>Abre <b>Play Store</b> → toca tu foto → <b>Play Protect</b> → ⚙️ y apaga <b>«Analizar apps con Play Protect»</b>.</li>
+      <li>Toca <b>Descargar NOVA avanzada</b> y abre el archivo. Toca Actualizar.</li>
+      <li>Vuelve a prender Play Protect. En Configuración → Anotar desde el banco, activa <b>«Leer los avisos del banco»</b> y da el permiso.</li>
+    </ol>
+    <a id="dueno-apk-avanzada" class="boton-apk" href="#" target="_blank" rel="noopener"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M7 10l5 5 5-5M5 21h14"/></svg><span><strong>Descargar NOVA avanzada</strong><small>Misma app, con lectura de avisos del banco</small></span></a>
+  </article>
   <p class="nota centro">🔒 Por privacidad aquí no se ven los gastos, el dinero ni los movimientos de nadie: solo cuántos anotó y cuándo usó NOVA.<br>«Abrieron la app Android» y la versión se cuentan desde la 1.66, cuando cada persona abra la app.</p>
   <button type="button" class="mini centro-bloque" id="dueno-recargar">↻ Actualizar</button>
 </section>
 <section id="pantalla-banco" class="capa" hidden>
   <div class="sub-cabecera"><button type="button" class="icono-btn" data-cerrar aria-label="Volver"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button><h1>Mensajes del banco</h1></div>
+  <article id="banco-permiso-tarjeta" class="tarjeta banco-permiso" hidden>
+    <strong>Falta un permiso de Android</strong>
+    <p class="nota">Para leer los avisos del banco, NOVA necesita el permiso <b>«Acceso a notificaciones»</b>. Toca el botón, busca <b>NOVA</b> en la lista y actívalo. Los avisos se leen solo en tu celular: no se envían a ningún lado.</p>
+    <button type="button" class="primario" id="banco-dar-permiso">Dar el permiso</button>
+    <details class="ayuda-instalar">
+      <summary>¿Android dice «Ajuste restringido»?</summary>
+      <ol>
+        <li>Toca <b>Abrir la información de NOVA</b> (aquí abajo).</li>
+        <li>Toca los <b>tres puntos ⋮</b> arriba a la derecha y luego <b>Permitir ajustes restringidos</b>.</li>
+        <li>Vuelve a NOVA y toca <b>Dar el permiso</b> otra vez.</li>
+      </ol>
+      <button type="button" class="mini" id="banco-info-app">Abrir la información de NOVA</button>
+    </details>
+  </article>
   <article id="banco-ayuda" class="tarjeta banco-ayuda">
     <strong>Cómo anotar un mensaje del banco</strong>
     <ol>
@@ -1122,7 +1150,7 @@
       <li>Elige <b>NOVA</b>. Se abre esta lista con el movimiento listo.</li>
       <li>Toca <b>Anotar</b> y luego <b>Guardar</b>. Se guarda con la fecha y hora en que lo compartes: compártelo el mismo día.</li>
     </ol>
-    <p class="nota">También puedes copiar el mensaje y pegarlo en la caja de Inicio («¿Qué gastaste o recibiste?»). NOVA no lee tus mensajes ni notificaciones por su cuenta: solo lo que tú compartes, y nada se guarda sin que lo confirmes.</p>
+    <p class="nota">También puedes copiar el mensaje y pegarlo en la caja de Inicio («¿Qué gastaste o recibiste?»). <span id="banco-no-lee">NOVA no lee tus mensajes ni notificaciones por su cuenta: solo lo que tú compartes, y </span>nada se guarda sin que lo confirmes.</p>
   </article>
   <ul id="lista-banco" class="lista-banco"></ul>
   <p id="banco-vacio" class="nota centro" hidden>No hay mensajes del banco por anotar. Comparte uno con NOVA y aparece aquí.</p>
