@@ -101,7 +101,10 @@ async function buscarWeb(clave: string, pregunta: string): Promise<{ texto: stri
 const marcasFuentes = (lista: Fuente[]) => lista.length ? "\n" + lista.map((f) => `[[FUENTE:${f.titulo}|${f.url}]]`).join("") : "";
 
 // "Pregúntale a NOVA": responde preguntas sobre las finanzas de la persona con el resumen que manda la app.
-async function conversar(clave: string, entrada: { pregunta?: string; historial?: { rol?: string; texto?: string }[]; contexto?: unknown; stream?: boolean; web?: boolean }) {
+async function conversar(clave: string, entrada: { pregunta?: string; historial?: { rol?: string; texto?: string }[]; contexto?: unknown; stream?: boolean; web?: boolean; imagen?: string; mime?: string }) {
+  const imagen = typeof entrada.imagen === "string" ? entrada.imagen : "";
+  if (imagen.length > 6_000_000) return responder(413, { error: "La foto es muy grande" });
+  const mime = entrada.mime === "image/png" || entrada.mime === "image/webp" ? entrada.mime : "image/jpeg";
   const pregunta = (entrada.pregunta || "").slice(0, 2000).trim();
   if (!pregunta) return responder(400, { error: "Falta la pregunta" });
   const contexto = JSON.stringify(entrada.contexto ?? {}).slice(0, 20_000);
@@ -112,6 +115,7 @@ async function conversar(clave: string, entrada: { pregunta?: string; historial?
   const instrucciones = `Eres NOVA, un asistente de inteligencia artificial amigable que vive dentro de una app colombiana de finanzas personales.
 Puedes responder CUALQUIER pregunta sobre cualquier tema: dinero y finanzas, cocina, estudios, trabajo, tecnología, salud en general, trámites, redacción, traducciones, cuentas, ideas, consejos del día a día o simple conversación. Nunca digas que "solo hablas de finanzas".
 Responde en español de Colombia (o en el idioma en que te escriban), con calidez y claridad, sin tecnicismos innecesarios. Sé breve por defecto (unas 150 palabras) y extiéndete solo si la pregunta lo pide.
+Si la persona manda una foto (un recibo, un producto, una factura, una captura), descríbela y responde sobre ella; si es un recibo o factura, di el total y el comercio y ofrece anotarlo como gasto.
 No uses Markdown (nada de asteriscos ni #); para listas usa guiones simples.
 Si te piden un cuadro o una tabla, o si una comparación se entiende mejor así, usa una tabla sencilla: una fila por línea, con | entre columnas y la primera fila como encabezado (sin la línea de guiones).
 Si la pregunta es sobre el dinero de la persona, usa sus datos (vienen abajo en JSON) y haz las cuentas con cuidado, con valores en pesos colombianos con punto de miles y signo $ (ej: $1.250.000). Si la pregunta es de otro tema, no hace falta usar sus datos.
@@ -121,13 +125,14 @@ Los datos traen: saldo y cuentas, el periodo actual (ingresos, gastos y gastos p
 Datos de la persona: ${contexto}`;
 
   const flujo = entrada.stream === true;
+  const partes = imagen ? [{ text: pregunta }, { inline_data: { mime_type: mime, data: imagen } }] : [{ text: pregunta }];
   const armar = (extra: string) => ({
     systemInstruction: { parts: [{ text: instrucciones + extra }] },
-    contents: [...historial, { role: "user", parts: [{ text: pregunta }] }],
+    contents: [...historial, { role: "user", parts: partes }],
     generationConfig: { temperature: 0.4, maxOutputTokens: 4096 }, // también cuenta lo que el modelo "piensa": con menos se cortaba la respuesta
   });
   const pideDatosDeHoy = NECESITA_WEB.test(pregunta);   // precios, noticias, clima…: aquí sí se avisa si no se pudo buscar
-  const web = entrada.web === true || pideDatosDeHoy || !(SOLO_MIS_DATOS.test(pregunta) || TAREA.test(pregunta));
+  const web = pideDatosDeHoy || (!imagen && (entrada.web === true || !(SOLO_MIS_DATOS.test(pregunta) || TAREA.test(pregunta))));
   const fuentesWeb: Fuente[] = [];
   let g: ResultadoGemini | null = null, sinWeb = false;
   if (web) {

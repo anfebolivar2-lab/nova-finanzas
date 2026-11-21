@@ -5120,6 +5120,7 @@
   // ---------- NOVA IA: conversaciones guardadas ----------
   // Cada pregunta lleva un resumen de los datos de la persona; la conversación se guarda en su cuenta.
   var chatActual = { id: null, titulo: "", mensajes: [] };
+  var fotoChat = "", seleccionFotoChat = 0;
   function contextoFinanzas() {
     var ciclo = cicloEfectivo(), rango = Periodos.periodo(ciclo), t = A.totales(A.enRango(datos.movimientos, rango)), p = datos.perfil;
     var hace90 = new Date(Date.now() - 90 * 86400000);
@@ -5390,8 +5391,15 @@
     if (acc.childNodes.length) li.append(acc);
     return li;
   }
-  function burbuja(clase, texto) {
-    var li = el("li", clase, texto);
+  function burbuja(clase, texto, imagen) {
+    var li = el("li", clase);
+    if (imagen) {
+      var miniatura = el("img");
+      miniatura.src = "data:image/jpeg;base64," + imagen;
+      miniatura.alt = "Foto enviada";
+      li.append(miniatura);
+    }
+    li.append(texto);
     $("chat").append(li);
     li.scrollIntoView({ block: "nearest" });
     return li;
@@ -5419,6 +5427,7 @@
   }
   function abrirChat(conv) {
     chatActual = conv ? { id: conv.id, titulo: conv.titulo, mensajes: (conv.mensajes || []).slice() } : { id: null, titulo: "", mensajes: [] };
+    limpiarFotoChat();
     mensaje("chat-mensaje", "");
     $("chat-pregunta").value = "";
     pintarChat();
@@ -5427,6 +5436,7 @@
   }
   function reiniciarChat() {
     chatActual = { id: null, titulo: "", mensajes: [] };
+    limpiarFotoChat();
     $("chat-buscar").value = "";
   }
   // Guarda en orden: así una pregunta rápida tras otra no crea dos conversaciones.
@@ -5463,14 +5473,17 @@
   });
 
   var chatToken = 0, chatControl = null;
-  function preguntarNova(pregunta) {
+  function preguntarNova(pregunta, opciones) {
     pregunta = String(pregunta || "").trim();
     if (!pregunta) return;
+    opciones = opciones || {};
+    var imagen = opciones.imagen;
+    var textoVisible = (opciones.porVoz ? "🎤 " : "") + pregunta;
     if (!cliente || !fuente || fuente.demo) {
       // En la demostración la IA no responde, pero la tarjeta con los números sí sale.
-      var tDemo = tarjetaIA(pregunta);
+      var tDemo = imagen ? null : tarjetaIA(pregunta); // con foto, la pregunta es sobre la imagen, no sobre tus números
       $("chat-bienvenida").hidden = true;
-      burbuja("yo", pregunta); $("chat-pregunta").value = "";
+      burbuja("yo", textoVisible, imagen); $("chat-pregunta").value = "";
       if (tDemo) { burbuja("nova", "En la demostración la IA no escribe respuestas, pero mira tus números:"); $("chat").append(tDemo); tDemo.scrollIntoView({ block: "nearest" }); }
       mensaje("chat-mensaje", "Inicia sesión con tu cuenta para que la IA te responda.", !tDemo);
       return;
@@ -5482,15 +5495,15 @@
     $("chat-bienvenida").hidden = true;
     mensaje("chat-mensaje", "");
     $("chat").querySelectorAll("li.pensando").forEach(function (x) { x.remove(); });
-    burbuja("yo", pregunta);
+    burbuja("yo", textoVisible, imagen);
     $("chat-pregunta").value = "";
     var espera = burbuja("nova pensando", "✦ Pensando…");
     var historial = chat.mensajes.slice(-6);
     // La pregunta se guarda de una vez: aunque la IA falle o tarde, queda en tu historial.
-    chat.mensajes.push({ rol: "usuario", texto: pregunta });
+    chat.mensajes.push({ rol: "usuario", texto: (imagen ? "📷 " : "") + textoVisible });
     var guardada = guardarConversacion().catch(function () { mensaje("chat-mensaje", "La pregunta no se pudo guardar en tu historial, pero puedes seguir chateando.", true); });
     Promise.resolve().then(function () {
-      return preguntarEnFlujo({ pregunta: pregunta, historial: historial, contexto: contextoFinanzas() }, function (texto) {
+      return preguntarEnFlujo({ pregunta: pregunta, historial: historial, contexto: contextoFinanzas(), imagen: imagen, mime: opciones.mime }, function (texto) {
         if (mio !== chatToken) return;
         pintarTextoIA(espera, texto);
         espera.classList.remove("pensando");
@@ -5502,7 +5515,7 @@
       if (!respuesta) throw new Error("La IA no pudo responder. Intenta otra vez en un momento.");
       pintarTextoIA(espera, respuesta);
       espera.classList.remove("pensando");
-      var tar = tarjetaIA(pregunta, respuesta);
+      var tar = imagen ? null : tarjetaIA(pregunta, respuesta);
       if (tar) { espera.after(tar); tar.scrollIntoView({ block: "nearest" }); }
       chat.mensajes.push({ rol: "nova", texto: respuesta });
       return guardada.then(function () { return guardarConversacion(); }).catch(function () { mensaje("chat-mensaje", "La respuesta no se pudo guardar en tu historial, pero puedes seguir chateando.", true); }).then(pintarIA);
@@ -5514,7 +5527,48 @@
     }).finally(function () { if (mio === chatToken) chatControl = null; });
   }
   $("chat-pregunta").addEventListener("focus", function () { setTimeout(function () { try { $("chat-pregunta").scrollIntoView({ block: "center" }); } catch (e) { /* sin scroll */ } }, 350); });
-  $("form-chat").addEventListener("submit", function (e) { e.preventDefault(); preguntarNova($("chat-pregunta").value); });
+  function limpiarFotoChat() {
+    seleccionFotoChat++;
+    fotoChat = "";
+    $("chat-foto-archivo").value = "";
+    $("chat-adjunto").hidden = true;
+    $("chat-adjunto").querySelector("img").removeAttribute("src");
+    $("form-chat").querySelector("button[type=submit]").disabled = false;
+  }
+  $("chat-foto").addEventListener("click", function () { $("chat-foto-archivo").click(); });
+  $("chat-foto-quitar").addEventListener("click", limpiarFotoChat);
+  $("chat-foto-archivo").addEventListener("change", function () {
+    var archivo = this.files[0];
+    if (!archivo) return;
+    limpiarFotoChat();
+    var seleccion = seleccionFotoChat;
+    var enviar = $("form-chat").querySelector("button[type=submit]");
+    enviar.disabled = true;
+    mensaje("chat-mensaje", "");
+    prepararFoto(archivo, 1280).then(function (canvas) {
+      if (seleccion !== seleccionFotoChat) return;
+      var url = canvas.toDataURL("image/jpeg", 0.8);
+      var base64 = url.split(",")[1];
+      if (!base64) throw new Error("No se pudo preparar la foto.");
+      if (base64.length > 6000000) throw new Error("La foto es muy grande");
+      fotoChat = base64;
+      $("chat-adjunto").querySelector("img").src = url;
+      $("chat-adjunto").hidden = false;
+    }).catch(function (e) {
+      if (seleccion === seleccionFotoChat) mensaje("chat-mensaje", e.message, true);
+    }).finally(function () {
+      if (seleccion === seleccionFotoChat) enviar.disabled = false;
+    });
+  });
+  $("form-chat").addEventListener("submit", function (e) {
+    e.preventDefault();
+    if (this.querySelector("button[type=submit]").disabled) return;
+    var texto = $("chat-pregunta").value.trim();
+    if (fotoChat) {
+      preguntarNova(texto || "¿Qué ves en esta imagen?", { imagen: fotoChat, mime: "image/jpeg" });
+      limpiarFotoChat();
+    } else preguntarNova(texto);
+  });
 
   var consulta = 0;
   $("form-rapido").addEventListener("submit", function (e) {
@@ -5668,8 +5722,27 @@
       rec.start();
     });
   }
-  if (vozNativa) vozNativa.available().then(function (r) { $("btn-voz").hidden = !(r && r.available); $("asis-dictar").hidden = !(r && r.available); }).catch(function () {});
-  else { $("btn-voz").hidden = !hayVoz; $("asis-dictar").hidden = !hayVoz; }
+  function mostrarBotonesDeVoz(disponible) {
+    ["btn-voz", "asis-dictar", "chat-voz"].forEach(function (id) { $(id).hidden = !disponible; });
+  }
+  if (vozNativa) vozNativa.available().then(function (r) { mostrarBotonesDeVoz(r && r.available); }).catch(function () {});
+  else mostrarBotonesDeVoz(hayVoz);
+  $("chat-voz").addEventListener("click", function () {
+    var voz = this, chat = chatActual;
+    voz.disabled = true;
+    voz.classList.add("escuchando");
+    mensaje("chat-mensaje", "Te escucho…");
+    dictar("Dime tu pregunta").then(function (dicho) {
+      if (chat !== chatActual) return;
+      mensaje("chat-mensaje", "");
+      preguntarNova(dicho, { porVoz: true });
+    }).catch(function (err) {
+      if (chat === chatActual) mensaje("chat-mensaje", err.message, true);
+    }).finally(function () {
+      voz.disabled = false;
+      voz.classList.remove("escuchando");
+    });
+  });
   $("btn-voz").addEventListener("click", function () {
     var voz = $("btn-voz");
     voz.classList.add("escuchando");
@@ -5708,19 +5781,23 @@
   }
   var lectorAviso = null;
 
-  // Achica la foto y la pasa a gris con más contraste: se lee mejor y más rápido.
-  function prepararFoto(archivo) {
+  function prepararFoto(archivo, maximo, filtro) {
     return new Promise(function (ok, mal) {
       var url = URL.createObjectURL(archivo), img = new Image();
       img.onload = function () {
-        var k = Math.min(1, 1800 / Math.max(img.width, img.height));
-        var c = document.createElement("canvas");
-        c.width = Math.round(img.width * k); c.height = Math.round(img.height * k);
-        var g = c.getContext("2d");
-        g.filter = "grayscale(1) contrast(1.4)";
-        g.drawImage(img, 0, 0, c.width, c.height);
-        URL.revokeObjectURL(url);
-        ok(c);
+        try {
+          var k = Math.min(1, maximo / Math.max(img.width, img.height));
+          var c = document.createElement("canvas");
+          c.width = Math.max(1, Math.round(img.width * k)); c.height = Math.max(1, Math.round(img.height * k));
+          var g = c.getContext("2d");
+          if (filtro) g.filter = filtro;
+          g.drawImage(img, 0, 0, c.width, c.height);
+          ok(c);
+        } catch (e) {
+          mal(new Error("No se pudo preparar la foto."));
+        } finally {
+          URL.revokeObjectURL(url);
+        }
       };
       img.onerror = function () { URL.revokeObjectURL(url); mal(new Error("No se pudo abrir la foto.")); };
       img.src = url;
@@ -5729,7 +5806,7 @@
 
   // Devuelve { r (registro interpretado) | null, texto para la entrada, comercio, aviso }.
   function interpretarFoto(archivo, avisar) {
-    return prepararFoto(archivo).then(function (foto) {
+    return prepararFoto(archivo, 1800, "grayscale(1) contrast(1.4)").then(function (foto) {
       if (!iaDisponible()) return conTesseract(foto);
       avisar("✦ La IA está leyendo el recibo…");
       var jpeg = foto.toDataURL("image/jpeg", 0.85).split(",")[1];
