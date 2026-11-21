@@ -4,6 +4,42 @@ const M = require("./monedas.js");
 
 const TASAS = { USD: 1, COP: 3900, EUR: 0.92, CAD: 1.36, JPY: 150 };
 
+test("normalizar tasas de Fawaz a códigos de tres letras y valores positivos", () => {
+  assert.deepStrictEqual(M.normalizarFawaz({
+    date: "2026-11-21",
+    usd: { usd: 2, cop: 3509.14, Eur: 0.92, usdt: 1, "x-1": 1, zer: 0, neg: -1, inf: Infinity, nan: NaN, str: "1", nil: null }
+  }), { rates: { USD: 1, COP: 3509.14, EUR: 0.92 }, fecha: "2026-11-21" });
+  for (const json of [null, "{", {}, { date: "2026-02-30", usd: { cop: 3509.14 } }, { date: "2026-11-21", usd: {} }]) {
+    assert.strictEqual(M.normalizarFawaz(json), null);
+  }
+});
+
+test("leer la TRM solo durante su vigencia en el calendario local", () => {
+  const fila = { valor: "3461.92", vigenciadesde: "2026-11-21T00:00:00.000", vigenciahasta: "2026-11-23T00:00:00.000" };
+  const trm = { valor: 3461.92, desde: "2026-11-21", hasta: "2026-11-23" };
+  for (const dia of [21, 22, 23]) {
+    assert.deepStrictEqual(M.leerTRM([fila], new Date(2026, 10, dia, 23, 59)), trm);
+  }
+  for (const dia of [20, 24]) {
+    assert.strictEqual(M.leerTRM([fila], new Date(2026, 10, dia, 23, 59)), null);
+  }
+  assert.strictEqual(M.leerTRM([{ ...fila, valor: "-1" }, fila], new Date(2026, 10, 21)), null);
+  assert.strictEqual(M.leerTRM([], new Date(2026, 10, 21)), null);
+});
+
+test("aplicar la TRM cambia solo el COP de una copia de las tasas", () => {
+  const rates = Object.freeze({ USD: 1, COP: 3509.14, EUR: 0.92 });
+  assert.deepStrictEqual(M.aplicarTRM(rates, { valor: 3461.92 }), { USD: 1, COP: 3461.92, EUR: 0.92 });
+  assert.strictEqual(rates.COP, 3509.14);
+  assert.strictEqual(M.aplicarTRM(rates, null), rates);
+});
+
+test("mostrar fechas ISO en español y conservar el formato de las tasas antiguas", () => {
+  assert.strictEqual(M.fechaTasaTexto("2026-11-21"), "21 nov 2026");
+  assert.strictEqual(M.fechaTasaTexto("Fri, 20 Nov 2026 00:02:32 +0000"), "20 Nov 2026");
+  assert.strictEqual(M.fechaTasaTexto(""), "");
+});
+
 test("tasa a pesos según tasas con base en USD", () => {
   assert.strictEqual(M.tasaACOP("COP", TASAS), 1);
   assert.strictEqual(M.tasaACOP("USD", TASAS), 3900);
