@@ -5,6 +5,38 @@ const A = require("./analisis.js");
 const HOY = new Date(2026, 9, 29, 15, 0); // jueves 29 de octubre de 2026
 const m = (dia, mes, tipo, monto, extra) => Object.assign({ fecha: new Date(2026, mes, dia, 12).toISOString(), tipo, monto }, extra);
 
+test("calor por hora y día: sin gastos, ignora ingresos y transferencias", () => {
+  const desde = new Date(2026, 9, 26);
+  const hasta = new Date(2026, 10, 2);
+  assert.strictEqual(A.calorHoraDia([], desde, hasta), null);
+  assert.strictEqual(A.calorHoraDia([
+    m(26, 9, "ingreso", 90000),
+    m(26, 9, "gasto", 70000, { transferencia: true })
+  ], desde, hasta), null);
+});
+
+test("calor por hora y día: agrupa en hora local, calcula el pico y respeta el rango", () => {
+  const desde = new Date(2026, 9, 26, 9); // lunes
+  const hasta = new Date(2026, 10, 2);
+  const movs = [
+    m(26, 9, "gasto", 2000, { fecha: desde.toISOString() }),
+    m(26, 9, "gasto", "3000", { fecha: new Date(2026, 9, 26, 11, 59).toISOString() }),
+    m(1, 10, "gasto", 4000, { fecha: new Date(2026, 10, 1, 23).toISOString() }),
+    m(26, 9, "gasto", 50000, { fecha: new Date(desde.getTime() - 1).toISOString() }),
+    m(2, 10, "gasto", 60000, { fecha: hasta.toISOString() }),
+    m(26, 9, "ingreso", 90000),
+    m(26, 9, "gasto", 70000, { transferencia: true })
+  ];
+  const r = A.calorHoraDia(movs, desde, hasta);
+  assert.deepStrictEqual(r.celdas.map((fila) => fila.length), [6, 6, 6, 6, 6, 6, 6]);
+  assert.deepStrictEqual(r.celdas[0][1], { total: 0, cantidad: 0 });
+  assert.deepStrictEqual(r.celdas[0][2], { total: 5000, cantidad: 2 });
+  assert.deepStrictEqual(r.celdas[6][5], { total: 4000, cantidad: 1 });
+  assert.strictEqual(r.total, 9000);
+  assert.strictEqual(r.max, 5000);
+  assert.deepStrictEqual(r.pico, { dia: 0, franja: 2, total: 5000 });
+});
+
 test("desplazar y nombrar periodos", () => {
   assert.strictEqual(A.nombrePeriodo("mensual", A.desplazar("mensual", HOY, 0)), "Octubre 2026");
   assert.strictEqual(A.nombrePeriodo("mensual", A.desplazar("mensual", HOY, -10)), "Diciembre 2025");
@@ -339,4 +371,152 @@ test("¿me alcanza? para una compra, con lo que sobra cada mes", () => {
   assert.strictEqual(A.alcanza(0, movs, 1, HOY).veredicto, "sin_precio");
   const sinAhorro = A.alcanza(5000000, [m(5, 8, "ingreso", 100), m(6, 8, "gasto", 900)], 0, HOY);
   assert.deepStrictEqual([sinAhorro.veredicto, sinAhorro.meses], ["no", undefined]);
+});
+
+test("mes vs. promedio: sin historial de gastos devuelve null", () => {
+  assert.strictEqual(A.mesVsPromedio([], HOY), null);
+  assert.strictEqual(A.mesVsPromedio([m(1, 9, "gasto", 100)], HOY), null);
+});
+
+test("mes vs. promedio: ignora ingresos y transferencias en ambos periodos", () => {
+  const movs = [
+    m(1, 6, "ingreso", 900),
+    m(1, 7, "gasto", 800, { transferencia: true }),
+    m(1, 8, "gasto", 300),
+    m(1, 9, "ingreso", 700),
+    m(1, 9, "gasto", 600, { transferencia: true }),
+    m(1, 9, "gasto", 100)
+  ];
+  const r = A.mesVsPromedio(movs, HOY);
+  assert.strictEqual(r.mesesBase, 1);
+  assert.strictEqual(r.totalPromedio, 300);
+  assert.strictEqual(r.totalActual, 100);
+  assert.strictEqual(r.filas[0].categoria_id, null);
+});
+
+test("mes vs. promedio: usa solo los seis meses completos y corta el mes actual en ahora", () => {
+  const movs = [
+    m(31, 2, "gasto", 900),
+    m(1, 3, "gasto", 240),
+    m(1, 9, "gasto", 100),
+    m(29, 9, "gasto", 25),
+    m(29, 9, "gasto", 200, { fecha: new Date(2026, 9, 29, 16).toISOString() }),
+    m(30, 9, "gasto", 300)
+  ];
+  const r = A.mesVsPromedio(movs, HOY);
+  assert.deepStrictEqual([r.mesesBase, r.totalPromedio, r.totalActual], [1, 240, 125]);
+});
+
+test("mes vs. promedio: divide por los tres meses con gastos y redondea por categoría", () => {
+  const movs = [
+    m(1, 4, "gasto", 201, { categoria_id: 1 }),
+    m(2, 4, "gasto", 100, { categoria_id: 1 }),
+    m(1, 6, "gasto", 100, { categoria_id: 2 }),
+    m(1, 8, "gasto", 500, { categoria_id: 2 })
+  ];
+  const r = A.mesVsPromedio(movs, HOY);
+  assert.strictEqual(r.mesesBase, 3);
+  assert.strictEqual(r.totalPromedio, 300);
+  assert.deepStrictEqual(r.filas.map((f) => [f.categoria_id, f.promedio]), [[2, 200], [1, 100]]);
+});
+
+test("mes vs. promedio: el día 15 de 30 espera la mitad del promedio mensual, redondeada", () => {
+  const r = A.mesVsPromedio([m(1, 9, "gasto", 201)], new Date(2026, 10, 15, 15));
+  assert.deepStrictEqual([r.dia, r.diasMes, r.totalEsperado], [15, 30, 101]);
+  assert.deepStrictEqual(r.filas, [{ categoria_id: null, actual: 0, promedio: 201, esperado: 101, dif: -101, fijo: false }]);
+});
+
+test("mes vs. promedio: espera el promedio completo para los gastos fijos", () => {
+  const movs = [9, 10].flatMap((mes) => [
+    m(1, mes, "gasto", 850000, { categoria_id: 1 }),
+    m(1, mes, "gasto", 200000, { categoria_id: 2 })
+  ]);
+  const r = A.mesVsPromedio(movs, new Date(2026, 10, 15, 15), (id) => id === 1);
+  assert.deepStrictEqual(r.filas, [
+    { categoria_id: 2, actual: 200000, promedio: 200000, esperado: 100000, dif: 100000, fijo: false },
+    { categoria_id: 1, actual: 850000, promedio: 850000, esperado: 850000, dif: 0, fijo: true }
+  ]);
+  assert.strictEqual(r.totalEsperado, 950000);
+});
+
+test("mes vs. promedio: detecta el arriendo pagado una vez por mes", () => {
+  const movs = [7, 8, 9, 10].map((mes) => m(1, mes, "gasto", 850000, { categoria_id: 1 }));
+  const r = A.mesVsPromedio(movs, new Date(2026, 10, 15, 15), () => false);
+  assert.strictEqual(r.mesesBase, 3);
+  assert.deepStrictEqual(r.filas, [
+    { categoria_id: 1, actual: 850000, promedio: 850000, esperado: 850000, dif: 0, fijo: true }
+  ]);
+});
+
+test("mes vs. promedio: dos gastos en un mes de la base impiden detectar un gasto fijo", () => {
+  const movs = [
+    m(1, 8, "gasto", 100000, { categoria_id: 1 }),
+    m(2, 8, "gasto", 100000, { categoria_id: 1 }),
+    m(1, 9, "gasto", 100000, { categoria_id: 1 })
+  ];
+  const r = A.mesVsPromedio(movs, new Date(2026, 10, 15, 15));
+  assert.strictEqual(r.filas[0].fijo, false);
+  assert.strictEqual(r.filas[0].esperado, 75000);
+});
+
+test("mes vs. promedio: montos de 100.000 y 200.000 superan la variación permitida", () => {
+  const movs = [
+    m(1, 8, "gasto", 100000, { categoria_id: 1 }),
+    m(1, 9, "gasto", 200000, { categoria_id: 1 })
+  ];
+  const r = A.mesVsPromedio(movs, new Date(2026, 10, 15, 15));
+  assert.strictEqual(r.filas[0].fijo, false);
+  assert.strictEqual(r.filas[0].esperado, 75000);
+});
+
+test("mes vs. promedio: acepta el 20 % exacto y excluye de la detección los gastos sin categoría", () => {
+  const movs = [100000, 120000].flatMap((monto, i) => [
+    m(1, 8 + i, "gasto", monto, { categoria_id: 1 }),
+    m(1, 8 + i, "gasto", monto)
+  ]);
+  const r = A.mesVsPromedio(movs, new Date(2026, 10, 15, 15));
+  assert.strictEqual(r.filas.find((f) => f.categoria_id === 1).fijo, true);
+  assert.strictEqual(r.filas.find((f) => f.categoria_id === null).fijo, false);
+});
+
+test("mes vs. promedio: ordena categorías por la magnitud de la diferencia", () => {
+  const movs = [
+    m(1, 9, "gasto", 60, { categoria_id: 1 }),
+    m(1, 10, "gasto", 80, { categoria_id: 2 }),
+    m(1, 9, "gasto", 300, { categoria_id: 3 })
+  ];
+  const r = A.mesVsPromedio(movs, new Date(2026, 10, 15, 15));
+  assert.deepStrictEqual(r.filas.map((f) => [f.categoria_id, f.dif]), [[3, -150], [2, 80], [1, -30]]);
+});
+
+test("número de libertad: sin gastos o con promedio redondeado a cero devuelve null", () => {
+  assert.strictEqual(A.numeroLibertad([], 9000000, HOY), null);
+  assert.strictEqual(A.numeroLibertad([m(1, 8, "gasto", 0.4)], 9000000, HOY), null);
+});
+
+test("número de libertad: ignora ingresos y transferencias", () => {
+  const movs = [
+    m(1, 8, "gasto", "2000000"), m(1, 7, "ingreso", 3000000),
+    m(1, 6, "transferencia", 500000), m(1, 5, "gasto", 500000, { transferencia: "traslado" })
+  ];
+  assert.deepStrictEqual(A.numeroLibertad(movs, 9000000, HOY), { gastoMensual: 2000000, meses: 4.5, mesesConDatos: 1, ahorro: 9000000 });
+});
+
+test("número de libertad: solo cuenta los seis meses completos anteriores", () => {
+  const movs = [m(31, 2, "gasto", 9000000), m(1, 3, "gasto", 2000000), m(1, 9, "gasto", 9000000)];
+  assert.deepStrictEqual(A.numeroLibertad(movs, 9000000, HOY), { gastoMensual: 2000000, meses: 4.5, mesesConDatos: 1, ahorro: 9000000 });
+});
+
+test("número de libertad: promedia solo los tres meses con gastos", () => {
+  const movs = [m(4, 3, "gasto", 1000), m(2, 5, "gasto", 1000), m(3, 5, "gasto", 500), m(6, 8, "gasto", 1501)];
+  assert.deepStrictEqual(A.numeroLibertad(movs, 1800, HOY), { gastoMensual: 1334, meses: 1.3, mesesConDatos: 3, ahorro: 1800 });
+});
+
+test("número de libertad: con ahorro cero devuelve cero meses", () => {
+  assert.strictEqual(A.numeroLibertad([m(1, 8, "gasto", 2000000)], 0, HOY).meses, 0);
+});
+
+test("número de libertad: 9 millones de ahorro cubren 4.5 meses a 2 millones por mes", () => {
+  const movs = [3, 4, 5, 6, 7, 8].map((mes) => m(1, mes, "gasto", 2000000));
+  assert.deepStrictEqual(A.numeroLibertad(movs, 9000000, HOY), { gastoMensual: 2000000, meses: 4.5, mesesConDatos: 6, ahorro: 9000000 });
 });

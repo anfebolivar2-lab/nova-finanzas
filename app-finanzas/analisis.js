@@ -138,6 +138,53 @@
       .sort(function (a, b) { return b.total - a.total; });
   }
 
+  function mesVsPromedio(movs, ahora, esFijoCategoria) {
+    ahora = new Date(ahora === undefined ? new Date() : ahora);
+    var anio = ahora.getFullYear(), mes = ahora.getMonth(), dia = ahora.getDate();
+    var inicioMes = new Date(anio, mes, 1), inicioBase = new Date(anio, mes - 6, 1);
+    var diasMes = new Date(anio, mes + 1, 0).getDate();
+    var meses = new Set(), categorias = new Map();
+    movs.forEach(function (m) {
+      if (m.tipo !== "gasto" || m.transferencia) return;
+      var fecha = new Date(m.fecha);
+      if (!(fecha >= inicioBase && fecha <= ahora)) return;
+      var id = m.categoria_id == null ? null : m.categoria_id;
+      if (!categorias.has(id)) categorias.set(id, { actual: 0, base: 0, gastosPorMes: new Map() });
+      var categoria = categorias.get(id);
+      var monto = num(m.monto);
+      if (fecha < inicioMes) {
+        var mesBase = fecha.getFullYear() * 12 + fecha.getMonth();
+        meses.add(mesBase);
+        categoria.base += monto;
+        categoria.gastosPorMes.set(mesBase, (categoria.gastosPorMes.get(mesBase) || 0) + 1);
+        categoria.montoMenor = Math.min(categoria.montoMenor == null ? Infinity : categoria.montoMenor, monto);
+        categoria.montoMayor = Math.max(categoria.montoMayor == null ? -Infinity : categoria.montoMayor, monto);
+      } else {
+        categoria.actual += monto;
+      }
+    });
+    var mesesBase = meses.size;
+    if (!mesesBase) return null;
+
+    var filas = [], totalActual = 0, totalPromedio = 0, totalEsperado = 0;
+    categorias.forEach(function (categoria, id) {
+      var actual = categoria.actual, promedio = Math.round(categoria.base / mesesBase);
+      var fijo = (typeof esFijoCategoria === "function" && esFijoCategoria(id) === true) ||
+        (id !== null && categoria.gastosPorMes.size >= 2 &&
+          categoria.montoMayor <= categoria.montoMenor * 1.2 &&
+          Array.from(categoria.gastosPorMes.values()).every(function (cantidad) { return cantidad === 1; }));
+      var esperado = fijo ? promedio : Math.round(promedio * dia / diasMes);
+      totalActual += actual;
+      totalPromedio += promedio;
+      totalEsperado += esperado;
+      if (actual > 0 || promedio > 0) {
+        filas.push({ categoria_id: id, actual: actual, promedio: promedio, esperado: esperado, dif: actual - esperado, fijo: fijo });
+      }
+    });
+    filas.sort(function (a, b) { return Math.abs(b.dif) - Math.abs(a.dif); });
+    return { filas: filas, totalActual: totalActual, totalPromedio: totalPromedio, totalEsperado: totalEsperado, mesesBase: mesesBase, dia: dia, diasMes: diasMes };
+  }
+
   function porEtiqueta(movs) {
     var m = {};
     movs.forEach(function (x) {
@@ -638,8 +685,56 @@
     };
   }
 
+  function numeroLibertad(movs, ahorro, ahora) {
+    var mesActual = ahora.getFullYear() * 12 + ahora.getMonth();
+    var mesesConGastos = new Set(), total = 0;
+    movs.forEach(function (m) {
+      if (m.tipo !== "gasto" || m.transferencia) return;
+      var fecha = new Date(m.fecha);
+      var mes = fecha.getFullYear() * 12 + fecha.getMonth();
+      if (mes >= mesActual - 6 && mes < mesActual) {
+        mesesConGastos.add(mes);
+        total += num(m.monto);
+      }
+    });
+    var mesesConDatos = mesesConGastos.size;
+    if (!mesesConDatos) return null;
+    var gastoMensual = Math.round(total / mesesConDatos);
+    if (gastoMensual === 0) return null;
+    var meses = ahorro > 0 ? Math.round(ahorro / gastoMensual * 10) / 10 : 0;
+    return { gastoMensual: gastoMensual, meses: meses, mesesConDatos: mesesConDatos, ahorro: ahorro };
+  }
+
+  function calorHoraDia(movs, desde, hasta) {
+    var celdas = DIAS_SEMANA.map(function () {
+      var fila = [];
+      for (var i = 0; i < 6; i++) fila.push({ total: 0, cantidad: 0 });
+      return fila;
+    });
+    var total = 0, pico = null;
+    movs.forEach(function (m) {
+      if (m.tipo !== "gasto" || m.transferencia) return;
+      var fecha = new Date(m.fecha);
+      if (!(fecha >= desde && fecha < hasta)) return;
+      var celda = celdas[(fecha.getDay() + 6) % 7][Math.floor(fecha.getHours() / 4)];
+      var monto = num(m.monto);
+      celda.total += monto;
+      celda.cantidad++;
+      total += monto;
+    });
+    celdas.forEach(function (fila, dia) {
+      fila.forEach(function (celda, franja) {
+        if (celda.cantidad && (!pico || celda.total > pico.total)) {
+          pico = { dia: dia, franja: franja, total: celda.total };
+        }
+      });
+    });
+    return pico ? { celdas: celdas, max: pico.total, total: total, pico: pico } : null;
+  }
+
   var api = {
-    calendarioMes: calendarioMes, suscripciones: suscripciones, alcanza: alcanza,
+    calorHoraDia: calorHoraDia,
+    calendarioMes: calendarioMes, suscripciones: suscripciones, alcanza: alcanza, mesVsPromedio: mesVsPromedio, numeroLibertad: numeroLibertad,
     desplazar: desplazar, nombrePeriodo: nombrePeriodo, nombreCorto: nombreCorto, enRango: enRango, totales: totales,
     porCategoria: porCategoria, porEtiqueta: porEtiqueta, vistaRapida: vistaRapida, serie: serie, proyeccion: proyeccion,
     seguroParaGastar: seguroParaGastar, nombreDia: nombreDia, porDia: porDia, claveDia: claveDia, buscar: buscar,
