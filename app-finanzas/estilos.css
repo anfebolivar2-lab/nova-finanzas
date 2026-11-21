@@ -689,6 +689,13 @@ button.mini { padding: 6px 12px; border-radius: 999px; font-size: .8rem; }
 .cal-dia[data-n="2"] { background: color-mix(in srgb, var(--accent) 45%, var(--surface-2)); color: var(--ink); }
 .cal-dia[data-n="3"] { background: color-mix(in srgb, var(--accent) 70%, var(--surface-2)); color: var(--accent-ink); }
 .cal-dia[data-n="4"] { background: var(--accent); color: var(--accent-ink); font-weight: 800; }
+.calor-hora { display: grid; grid-template-columns: auto repeat(6, 1fr); gap: 3px; }
+.calor-hora-enc { align-self: center; padding: 0 2px; text-align: center; color: var(--muted); font-size: .75rem; }
+.calor-hora-celda {
+  min-height: 1rem; aspect-ratio: 1 / 0.8; border-radius: 4px;
+  background: var(--surface-2);
+  background: color-mix(in srgb, var(--accent) var(--calor-hora-intensidad), var(--surface-2));
+}
 .logros { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
 .logro { display: flex; flex-direction: column; align-items: center; gap: 2px; text-align: center; padding: 12px 8px; border-radius: 14px; background: var(--surface-2); opacity: .55; }
 .logro.hecho { opacity: 1; border: 1px solid var(--accent); }

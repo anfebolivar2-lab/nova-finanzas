@@ -638,7 +638,35 @@
     };
   }
 
+  function calorHoraDia(movs, desde, hasta) {
+    var celdas = DIAS_SEMANA.map(function () {
+      var fila = [];
+      for (var i = 0; i < 6; i++) fila.push({ total: 0, cantidad: 0 });
+      return fila;
+    });
+    var total = 0, pico = null;
+    movs.forEach(function (m) {
+      if (m.tipo !== "gasto" || m.transferencia) return;
+      var fecha = new Date(m.fecha);
+      if (!(fecha >= desde && fecha < hasta)) return;
+      var celda = celdas[(fecha.getDay() + 6) % 7][Math.floor(fecha.getHours() / 4)];
+      var monto = num(m.monto);
+      celda.total += monto;
+      celda.cantidad++;
+      total += monto;
+    });
+    celdas.forEach(function (fila, dia) {
+      fila.forEach(function (celda, franja) {
+        if (celda.cantidad && (!pico || celda.total > pico.total)) {
+          pico = { dia: dia, franja: franja, total: celda.total };
+        }
+      });
+    });
+    return pico ? { celdas: celdas, max: pico.total, total: total, pico: pico } : null;
+  }
+
   var api = {
+    calorHoraDia: calorHoraDia,
     calendarioMes: calendarioMes, suscripciones: suscripciones, alcanza: alcanza,
     desplazar: desplazar, nombrePeriodo: nombrePeriodo, nombreCorto: nombreCorto, enRango: enRango, totales: totales,
     porCategoria: porCategoria, porEtiqueta: porEtiqueta, vistaRapida: vistaRapida, serie: serie, proyeccion: proyeccion,

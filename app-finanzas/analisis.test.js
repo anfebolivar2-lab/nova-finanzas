@@ -5,6 +5,38 @@ const A = require("./analisis.js");
 const HOY = new Date(2026, 9, 29, 15, 0); // jueves 29 de octubre de 2026
 const m = (dia, mes, tipo, monto, extra) => Object.assign({ fecha: new Date(2026, mes, dia, 12).toISOString(), tipo, monto }, extra);
 
+test("calor por hora y día: sin gastos, ignora ingresos y transferencias", () => {
+  const desde = new Date(2026, 9, 26);
+  const hasta = new Date(2026, 10, 2);
+  assert.strictEqual(A.calorHoraDia([], desde, hasta), null);
+  assert.strictEqual(A.calorHoraDia([
+    m(26, 9, "ingreso", 90000),
+    m(26, 9, "gasto", 70000, { transferencia: true })
+  ], desde, hasta), null);
+});
+
+test("calor por hora y día: agrupa en hora local, calcula el pico y respeta el rango", () => {
+  const desde = new Date(2026, 9, 26, 9); // lunes
+  const hasta = new Date(2026, 10, 2);
+  const movs = [
+    m(26, 9, "gasto", 2000, { fecha: desde.toISOString() }),
+    m(26, 9, "gasto", "3000", { fecha: new Date(2026, 9, 26, 11, 59).toISOString() }),
+    m(1, 10, "gasto", 4000, { fecha: new Date(2026, 10, 1, 23).toISOString() }),
+    m(26, 9, "gasto", 50000, { fecha: new Date(desde.getTime() - 1).toISOString() }),
+    m(2, 10, "gasto", 60000, { fecha: hasta.toISOString() }),
+    m(26, 9, "ingreso", 90000),
+    m(26, 9, "gasto", 70000, { transferencia: true })
+  ];
+  const r = A.calorHoraDia(movs, desde, hasta);
+  assert.deepStrictEqual(r.celdas.map((fila) => fila.length), [6, 6, 6, 6, 6, 6, 6]);
+  assert.deepStrictEqual(r.celdas[0][1], { total: 0, cantidad: 0 });
+  assert.deepStrictEqual(r.celdas[0][2], { total: 5000, cantidad: 2 });
+  assert.deepStrictEqual(r.celdas[6][5], { total: 4000, cantidad: 1 });
+  assert.strictEqual(r.total, 9000);
+  assert.strictEqual(r.max, 5000);
+  assert.deepStrictEqual(r.pico, { dia: 0, franja: 2, total: 5000 });
+});
+
 test("desplazar y nombrar periodos", () => {
   assert.strictEqual(A.nombrePeriodo("mensual", A.desplazar("mensual", HOY, 0)), "Octubre 2026");
   assert.strictEqual(A.nombrePeriodo("mensual", A.desplazar("mensual", HOY, -10)), "Diciembre 2025");
