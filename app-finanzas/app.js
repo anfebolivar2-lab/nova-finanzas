@@ -1004,7 +1004,8 @@
     { id: "singasto", nombre: "Días sin gastar" },
     { id: "lugares", nombre: "Dónde más gastas" },
     { id: "semanasmes", nombre: "En qué parte del mes gastas" },
-    { id: "reduccion", nombre: "Metas de reducción" }
+    { id: "reduccion", nombre: "Metas de reducción" },
+    { id: "mesvsprom", nombre: "Tu mes vs. tu promedio" }
   ];
   function configWidgets() {
     var guardado = leerLocal("nova-widgets", null) || [];
@@ -1033,7 +1034,7 @@
       if (!w.visible) return;
       var art = el("article", "tarjeta widget");
       art.dataset.widget = w.id;
-      ({ rapida: wRapida, categorias: wCategorias, etiquetas: wEtiquetas, "ingresos-gastos": wIngresosGastos, tendencia: wTendencia, proyeccion: wProyeccion, consejos: wConsejos, calendario: wCalendario, logros: wLogros, herramientas: wHerramientas, salud: wSalud, calculadoras2: wMasCalculadoras, reto: wReto, suscripciones: wSuscripciones, inflacion: wInflacion, comparar: wComparar, evento: wEvento, fijos: wFijos, pronostico: wPronostico, anio: wAnio, bola: wBola, alcancia: wAlcancia, sobres: wSobres, plan: wPlan, singasto: wSinGasto, lugares: wLugares, semanasmes: wSemanasMes, reduccion: wReduccion })[w.id](art, movs, ciclo, ref, rango);
+      ({ rapida: wRapida, categorias: wCategorias, etiquetas: wEtiquetas, "ingresos-gastos": wIngresosGastos, tendencia: wTendencia, proyeccion: wProyeccion, consejos: wConsejos, calendario: wCalendario, logros: wLogros, herramientas: wHerramientas, salud: wSalud, calculadoras2: wMasCalculadoras, reto: wReto, suscripciones: wSuscripciones, inflacion: wInflacion, comparar: wComparar, evento: wEvento, fijos: wFijos, pronostico: wPronostico, anio: wAnio, bola: wBola, alcancia: wAlcancia, sobres: wSobres, plan: wPlan, singasto: wSinGasto, lugares: wLugares, semanasmes: wSemanasMes, reduccion: wReduccion, mesvsprom: wMesVsPromedio })[w.id](art, movs, ciclo, ref, rango);
       cont.append(art);
     });
   }
@@ -1147,6 +1148,30 @@
       res.append(ul);
     }
     selA.addEventListener("change", pintarComp); selB.addEventListener("change", pintarComp); pintarComp();
+  }
+  function wMesVsPromedio(art) {
+    titulo(art, "📊 Tu mes vs. tu promedio");
+    var r = A.mesVsPromedio(datos.movimientos, new Date(), function (id) { return A.esFijo(categoria(id)); });
+    if (!r) return art.append(el("p", "nota", "Cuando tengas gastos de al menos un mes completo, aquí comparo tu mes con tu promedio."));
+
+    var dif = r.totalActual - r.totalEsperado;
+    var resumen = "A día " + r.dia + " llevas " + dinero(r.totalActual) + "; normalmente a esta altura llevas " + dinero(r.totalEsperado) + ".";
+    var comparacion = dif === 0 ? "Vas justo en lo normal." :
+      "Vas " + dinero(Math.abs(dif)) + (dif > 0 ? " por encima" : " por debajo") + " de lo normal.";
+    art.append(el("p", "calc-res", ocultos ? "••••" : resumen + " " + comparacion));
+
+    var ul = el("ul", "lista-simple");
+    r.filas.slice(0, 6).forEach(function (f) {
+      var li = el("li", "consejo"), d = el("div");
+      var flecha = f.dif > 0 ? "▲ " : f.dif < 0 ? "▼ " : "";
+      var signo = f.dif > 0 ? "+" : f.dif < 0 ? "−" : "";
+      var detalle = flecha + dinero(f.actual) + " este mes · " + (f.fijo ? "normal en el mes " : "normal a esta altura ") +
+        dinero(f.esperado) + " (" + signo + dinero(Math.abs(f.dif)) + ")";
+      d.append(el("strong", null, nombreCategoria(f.categoria_id)), el("small", null, ocultos ? "••••" : detalle));
+      li.append(d);
+      ul.append(li);
+    });
+    art.append(ul, el("p", "nota", (r.mesesBase === 1 ? "Comparado con tu último mes completo." : "Comparado con el promedio de tus últimos " + r.mesesBase + " meses.")));
   }
   function wEvento(art) {
     titulo(art, "Costo de un evento");
