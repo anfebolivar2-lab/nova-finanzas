@@ -164,8 +164,8 @@ jobs:
             --title "NOVA para Android" --notes "La última APK de NOVA. Se reemplaza sola en cada versión nueva."
           gh release upload nova-android app-finanzas/descargas/NOVA.apk NOVA-avanzada.apk version.json --clobber
 
+      # En los PR la APK queda solo como archivo descargable de la corrida (privado), para probarla antes de unir.
       - uses: actions/upload-artifact@v4
-        if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/main'
         with:
           name: NOVA-apk
           path: |
