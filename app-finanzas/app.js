@@ -1004,7 +1004,8 @@
     { id: "singasto", nombre: "Días sin gastar" },
     { id: "lugares", nombre: "Dónde más gastas" },
     { id: "semanasmes", nombre: "En qué parte del mes gastas" },
-    { id: "reduccion", nombre: "Metas de reducción" }
+    { id: "reduccion", nombre: "Metas de reducción" },
+    { id: "libertad", nombre: "Tu número de libertad" }
   ];
   function configWidgets() {
     var guardado = leerLocal("nova-widgets", null) || [];
@@ -1033,7 +1034,7 @@
       if (!w.visible) return;
       var art = el("article", "tarjeta widget");
       art.dataset.widget = w.id;
-      ({ rapida: wRapida, categorias: wCategorias, etiquetas: wEtiquetas, "ingresos-gastos": wIngresosGastos, tendencia: wTendencia, proyeccion: wProyeccion, consejos: wConsejos, calendario: wCalendario, logros: wLogros, herramientas: wHerramientas, salud: wSalud, calculadoras2: wMasCalculadoras, reto: wReto, suscripciones: wSuscripciones, inflacion: wInflacion, comparar: wComparar, evento: wEvento, fijos: wFijos, pronostico: wPronostico, anio: wAnio, bola: wBola, alcancia: wAlcancia, sobres: wSobres, plan: wPlan, singasto: wSinGasto, lugares: wLugares, semanasmes: wSemanasMes, reduccion: wReduccion })[w.id](art, movs, ciclo, ref, rango);
+      ({ rapida: wRapida, categorias: wCategorias, etiquetas: wEtiquetas, "ingresos-gastos": wIngresosGastos, tendencia: wTendencia, proyeccion: wProyeccion, consejos: wConsejos, calendario: wCalendario, logros: wLogros, herramientas: wHerramientas, salud: wSalud, calculadoras2: wMasCalculadoras, reto: wReto, suscripciones: wSuscripciones, inflacion: wInflacion, comparar: wComparar, evento: wEvento, fijos: wFijos, pronostico: wPronostico, anio: wAnio, bola: wBola, alcancia: wAlcancia, sobres: wSobres, plan: wPlan, singasto: wSinGasto, lugares: wLugares, semanasmes: wSemanasMes, reduccion: wReduccion, libertad: wLibertad })[w.id](art, movs, ciclo, ref, rango);
       cont.append(art);
     });
   }
@@ -1178,6 +1179,27 @@
     if (!r) return art.append(el("p", "nota", "Necesito movimientos de algún mes anterior para calcular el pronóstico."));
     art.append(el("p", "calc-res", ocultos ? "••••" : "En " + r.mes + " gastarías cerca de " + dinero(r.gastos) + "."));
     art.append(el("p", "nota", ocultos ? "" : (r.ingresos > 0 ? "Con ingresos de " + dinero(r.ingresos) + " te " + (r.resultado >= 0 ? "sobrarían " : "faltarían ") + dinero(Math.abs(r.resultado)) + ". " : "") + "Se calcula con el promedio de tus últimos " + r.basadoEn + (r.basadoEn === 1 ? " mes." : " meses.")));
+  }
+  function wLibertad(art, movs, ciclo, ref, rango) {
+    titulo(art, "🕊️ Tu número de libertad");
+    var r = A.numeroLibertad(datos.movimientos, Math.max(0, saldoTotal()), new Date());
+    if (!r) return art.append(el("p", "nota", "Cuando anotes gastos de al menos un mes completo, aquí verás cuántos meses podrías vivir con tus ahorros."));
+
+    // Con coma decimal, como se escribe en Colombia: 4,5 meses.
+    var mesesTexto = String(r.meses).replace(".", ",") + (r.meses === 1 ? " mes" : " meses");
+    var grande = el("div", "salud-puntaje");
+    grande.append(el("strong", null, ocultos ? "••••" : r.meses < 1 ? "menos de 1 mes" : mesesTexto));
+    art.append(grande);
+    if (!ocultos) {
+      var nota = r.meses < 3 ? "Los expertos recomiendan tener al menos 3 a 6 meses de colchón."
+        : r.meses <= 6 ? "Vas bien: estás dentro del colchón recomendado de 3 a 6 meses."
+        : "¡Excelente! Tienes más de 6 meses de colchón.";
+      art.append(
+        el("p", "nota", "Con tu saldo de " + dinero(r.ahorro) + " y un gasto promedio de " + dinero(r.gastoMensual) + " al mes, podrías vivir " + mesesTexto + " sin ingresos."),
+        el("p", "nota", nota)
+      );
+    }
+    if (r.mesesConDatos < 6) art.append(el("p", "nota", "Calculado con " + r.mesesConDatos + (r.mesesConDatos === 1 ? " mes" : " meses") + " de gastos."));
   }
   function wAnio(art) {
     var anio = new Date().getFullYear();

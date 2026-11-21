@@ -340,3 +340,35 @@ test("¿me alcanza? para una compra, con lo que sobra cada mes", () => {
   const sinAhorro = A.alcanza(5000000, [m(5, 8, "ingreso", 100), m(6, 8, "gasto", 900)], 0, HOY);
   assert.deepStrictEqual([sinAhorro.veredicto, sinAhorro.meses], ["no", undefined]);
 });
+
+test("número de libertad: sin gastos o con promedio redondeado a cero devuelve null", () => {
+  assert.strictEqual(A.numeroLibertad([], 9000000, HOY), null);
+  assert.strictEqual(A.numeroLibertad([m(1, 8, "gasto", 0.4)], 9000000, HOY), null);
+});
+
+test("número de libertad: ignora ingresos y transferencias", () => {
+  const movs = [
+    m(1, 8, "gasto", "2000000"), m(1, 7, "ingreso", 3000000),
+    m(1, 6, "transferencia", 500000), m(1, 5, "gasto", 500000, { transferencia: "traslado" })
+  ];
+  assert.deepStrictEqual(A.numeroLibertad(movs, 9000000, HOY), { gastoMensual: 2000000, meses: 4.5, mesesConDatos: 1, ahorro: 9000000 });
+});
+
+test("número de libertad: solo cuenta los seis meses completos anteriores", () => {
+  const movs = [m(31, 2, "gasto", 9000000), m(1, 3, "gasto", 2000000), m(1, 9, "gasto", 9000000)];
+  assert.deepStrictEqual(A.numeroLibertad(movs, 9000000, HOY), { gastoMensual: 2000000, meses: 4.5, mesesConDatos: 1, ahorro: 9000000 });
+});
+
+test("número de libertad: promedia solo los tres meses con gastos", () => {
+  const movs = [m(4, 3, "gasto", 1000), m(2, 5, "gasto", 1000), m(3, 5, "gasto", 500), m(6, 8, "gasto", 1501)];
+  assert.deepStrictEqual(A.numeroLibertad(movs, 1800, HOY), { gastoMensual: 1334, meses: 1.3, mesesConDatos: 3, ahorro: 1800 });
+});
+
+test("número de libertad: con ahorro cero devuelve cero meses", () => {
+  assert.strictEqual(A.numeroLibertad([m(1, 8, "gasto", 2000000)], 0, HOY).meses, 0);
+});
+
+test("número de libertad: 9 millones de ahorro cubren 4.5 meses a 2 millones por mes", () => {
+  const movs = [3, 4, 5, 6, 7, 8].map((mes) => m(1, mes, "gasto", 2000000));
+  assert.deepStrictEqual(A.numeroLibertad(movs, 9000000, HOY), { gastoMensual: 2000000, meses: 4.5, mesesConDatos: 6, ahorro: 9000000 });
+});
