@@ -78,3 +78,140 @@ Lista de funciones para ir sumando poco a poco, probadas una por una.
 - Hablarle a NOVA sin tocar la pantalla: «Oye NOVA, gasté 5 mil en pan».
 - Temas de colores y el ícono de la app a elección.
 - Tutorial corto la primera vez que abres cada pantalla.
+
+# 100 ideas nuevas (noviembre 2026)
+
+Lista de ideas propuestas para revisar; ninguna está hecha todavía.
+
+## Para anotar más rápido
+
+- ⭐ Anotar con la voz el gasto completo: "gasté 15 mil en almuerzo con Nequi".
+- ⭐ Repetir el último gasto con un toque (el mismo café de siempre).
+- Plantillas de gastos frecuentes por hora: a las 7 a. m. sugiere "bus".
+- Teclado numérico grande con botones de 1.000, 5.000, 10.000 y 50.000.
+- Anotar varios gastos seguidos sin cerrar la pantalla.
+- Deshacer el último movimiento con un aviso de 5 segundos.
+- Foto del recibo como adjunto opcional en cualquier gasto.
+- Autocompletar la descripción con lo que ya escribiste antes.
+- Atajo en la pantalla de inicio de Android: "Nuevo gasto".
+- Leer el valor de un pantallazo de Nequi o Daviplata compartido con NOVA.
+- Duplicar un movimiento y cambiarle solo la fecha.
+- Gastos en efectivo con un "monedero" aparte que se descuenta solo.
+
+## Para entender tu plata
+
+- ⭐ Resumen semanal cada lunes: cuánto gastaste, la categoría top y una comparación con la semana pasada.
+- ⭐ "¿En qué se me fue la plata?": las 5 compras más grandes del mes.
+- Gasto promedio por día, con meta diaria y semáforo.
+- Ingresos vs. gastos en un gráfico de 12 meses.
+- Tendencia de cada categoría en los últimos 6 meses (mini gráficos).
+- Ranking de comercios donde más gastas.
+- Gasto por persona en gastos compartidos del hogar.
+- "Tu día más caro del mes" y qué lo causó.
+- Porcentaje del ingreso que se va en cada categoría (regla 50/30/20).
+- Alertas de gastos inusuales ("gastaste 3 veces más de lo normal en ropa").
+- Comparar este año con el anterior, mes por mes.
+- Flujo de caja: cuánto entra y sale por semana.
+- Gráfico de patrimonio neto (lo que tienes menos lo que debes).
+- Exportar un "estado financiero" mensual en PDF bonito.
+
+## Para ahorrar más
+
+- ⭐ Meta de ahorro automática: NOVA te sugiere cuánto guardar según lo que te sobró los últimos meses.
+- Retos de ahorro semanales con logros (sin domicilios, sin taxi…).
+- "Pagarte primero": recordatorio el día de pago para separar el ahorro.
+- Fondo de emergencia guiado (3 a 6 meses de gastos), con barra de progreso.
+- Metas con foto (la moto, el viaje) y cuenta regresiva.
+- Sugerencias para bajar gastos según tus categorías más altas.
+- "¿Valió la pena?": calificar compras grandes después de 30 días.
+- Comparar tu gasto en servicios (luz, agua, gas) mes a mes.
+- Lista de compras del mercado con presupuesto y total en vivo.
+- Recordatorio de cancelar pruebas gratis antes de que cobren.
+- Ahorro por metas compartidas con la pareja.
+- Calculadora de "horas de trabajo": cuántas horas te cuesta una compra.
+
+## Deudas y crédito
+
+- ⭐ Recordatorio del corte y del pago de cada tarjeta de crédito.
+- Conectar el simulador de tarjeta con tus deudas reales (prellenar los datos).
+- Comparar créditos: cuota, tasa y costo total de 2 o 3 ofertas.
+- Calculadora de compra de cartera.
+- Historial de pagos de cada deuda, con gráfico de cómo baja.
+- Aviso cuando una tasa supera la tasa de usura vigente.
+- Préstamos a amigos con fecha y recordatorio por WhatsApp (ampliar lo que ya hay).
+- Calculadora de crédito de vivienda y leasing (cuota, seguros).
+
+## Colombia: trabajo, impuestos y bancos
+
+- ⭐ La TRM del día en la pantalla de inicio.
+- Calculadora de liquidación laboral al terminar un contrato.
+- Calculadora de horas extra y recargos nocturnos y dominicales.
+- Salario neto: cuánto llega después de salud y pensión.
+- Calendario tributario de la DIAN con avisos de vencimiento.
+- Gastos deducibles de renta marcados (dependientes, intereses de vivienda, medicina prepagada).
+- Calculadora del 4×1000 (GMF) en tus movimientos.
+- Comparar CDT de varios bancos.
+- Calculadora de pensión voluntaria y AFC.
+- Calculadora del IVA para independientes y del régimen simple.
+
+## Inversiones y patrimonio
+
+- Registro de inversiones (CDT, acciones, cripto, fondos) con su valor actual.
+- Interés compuesto: "si ahorras X al mes, en 10 años tienes Y".
+- Distribución del patrimonio en un gráfico (efectivo, inversiones, bienes).
+- Valor de tus bienes (moto, carro) con depreciación estimada.
+- Alertas de vencimiento de CDT.
+- Calculadora de la regla del 4 % para la independencia financiera.
+
+## Notificaciones y hábitos
+
+- ⭐ Aviso cuando te acercas al límite de una categoría (80 % y 100 %).
+- Recordatorio de pagos programados un día antes.
+- Racha de días anotando, con recompensas visuales.
+- Aviso del día de pago: "¿anotamos tu sueldo?".
+- Resumen de fin de año compartible como imagen.
+- Notificación silenciosa de "gasto alto del día".
+- Horario de "no molestar" para las notificaciones.
+- Consejo financiero corto del día (uno distinto cada día).
+
+## NOVA IA
+
+- ⭐ Preguntas sugeridas según tus datos ("¿por qué gasté más este mes?").
+- Que la IA explique cualquier gráfico con un toque.
+- Plan de presupuesto generado por la IA con tus números reales.
+- La IA detecta suscripciones que olvidaste.
+- ✅ (en PR) Chat por voz con NOVA IA.
+- La IA categoriza los gastos sin categoría en lote (preguntando antes).
+- Simulador "¿qué pasa si…?" (si me suben el arriendo, si cambio de trabajo).
+- Resumen de la conversación con la IA guardado como nota.
+
+## Diseño y facilidad de uso
+
+- ⭐ Pantalla de inicio personalizable (elegir y ordenar las tarjetas).
+- Modo claro y oscuro automático según la hora.
+- Animaciones suaves al anotar (confirmación visual).
+- Buscar con filtros combinados (fecha, monto, categoría, cuenta).
+- Gestos: deslizar un movimiento para editarlo o borrarlo (borrar siempre con confirmación).
+- Íconos de categorías personalizables con emoji.
+- Tamaño de letra ajustable dentro de la app.
+- Lector de pantalla revisado en todas las pantallas (accesibilidad).
+- Vista de calendario con el total de cada día.
+- Tutorial interactivo la primera vez, más corto y saltable.
+
+## Seguridad y datos
+
+- ⭐ Respaldo manual a un archivo cifrado con contraseña.
+- Bloqueo automático tras X minutos sin usar la app.
+- Historial de cambios: quién editó qué, en espacios compartidos.
+- Papelera de 30 días para movimientos borrados (nada se pierde de una vez).
+- Exportar todo a CSV o Excel con un toque, cuando quieras.
+- Cerrar sesión en los demás dispositivos desde Ajustes.
+
+## La página web y el crecimiento de NOVA
+
+- ⭐ Página de inicio (landing) de NOVA con capturas, beneficios y botón de descarga de la APK.
+- Preguntas frecuentes y guía de uso en la web.
+- Mejorar el SEO para búsquedas como "app de finanzas gratis Colombia".
+- Página de novedades (qué trae cada versión), que la app enlaza al actualizar.
+- Formulario de sugerencias dentro de la app, que llegue a tu correo o a GitHub.
+- Programa de "invita a un amigo" con un logro especial.
