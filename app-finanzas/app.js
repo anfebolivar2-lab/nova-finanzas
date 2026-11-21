@@ -3274,23 +3274,55 @@
     });
   }
 
-  // Tasas de cambio (base USD): se piden una vez al día y se guardan en el celular.
+  // Tasas de cambio (base USD): se guardan en el celular.
   // La fuente gratis publica tasas nuevas una vez al día; la app las vuelve a pedir cada 30 minutos (y al abrir, al volver
   // a la app o al volver el internet) para tenerlas al día apenas salgan. "forzar" pide ya mismo (máximo una vez por minuto).
   var TTL_TASAS = 30 * 60000;
+  async function pedirJSONTasas(url) {
+    var controlador = new AbortController();
+    var tiempo = setTimeout(function () { controlador.abort(); }, 8000);
+    try {
+      var respuesta = await fetch(url, { signal: controlador.signal });
+      if (!respuesta.ok) throw new Error("tasas");
+      return await respuesta.json();
+    } finally {
+      clearTimeout(tiempo);
+    }
+  }
   function cargarTasas(forzar) {
     var g = leerLocal("nova-tasas", null), tiene = g && g.rates;
-    if (tiene && Date.now() - g.guardado < (forzar ? 60000 : TTL_TASAS)) return Promise.resolve(g);
+    if (!enLinea()) return Promise.resolve(tiene ? g : null);
+    // Tasas de un día anterior: se vuelven a pedir aunque no hayan pasado 30 minutos, pero máximo cada 10 minutos
+    // (si la fuente misma aún no publica las de hoy, no se le pide en cada pantalla).
+    var anterior = tiene && /^\d{4}-\d{2}-\d{2}$/.test(g.fecha) && g.fecha < hoyLocal() && Date.now() - g.guardado >= 10 * 60000;
+    if (tiene && !anterior && Date.now() - g.guardado < (forzar ? 60000 : TTL_TASAS)) return Promise.resolve(g);
+    var porFawaz = async function (url) {
+      var tasas = Mon.normalizarFawaz(await pedirJSONTasas(url));
+      if (!tasas) throw new Error("tasas");
+      return { rates: tasas.rates, fecha: tasas.fecha, fuente: "fawaz" };
+    };
     var directo = function () {
-      return fetch("https://open.er-api.com/v6/latest/USD").then(function (r) { return r.json(); })
-        .then(function (d) { if (d.result !== "success" || !d.rates) throw new Error("tasas"); return { rates: d.rates, fecha: d.time_last_update_utc }; });
+      return porFawaz("https://cdn.jsdelivr.net/npm/@fawazahmed0/currency-api@latest/v1/currencies/usd.min.json")
+        .catch(function () { return porFawaz("https://latest.currency-api.pages.dev/v1/currencies/usd.min.json"); })
+        .catch(async function () {
+          var d = await pedirJSONTasas("https://open.er-api.com/v6/latest/USD");
+          if (d.result !== "success" || !d.rates) throw new Error("tasas");
+          return { rates: d.rates, fecha: d.time_last_update_utc, fuente: "er-api" };
+        });
     };
     var porFuncion = function () {
       return cliente.functions.invoke("nova-ia", { body: { tasas: true } }).then(function (res) { if (res.error || !res.data || !res.data.rates) throw new Error("tasas"); return res.data; });
     };
-    var origen = enLinea() ? directo().catch(function () { return cliente && fuente && !fuente.demo ? porFuncion() : Promise.reject(new Error("tasas")); }) : Promise.reject(new Error("sin internet"));
-    return origen.then(function (d) {
-      var t = { rates: d.rates, fecha: d.fecha || "", guardado: Date.now() };
+    var origen = directo().catch(async function (error) {
+      if (!cliente || !fuente || fuente.demo) throw error;
+      var d = await porFuncion();
+      return { rates: d.rates, fecha: d.fecha, fuente: "funcion" };
+    });
+    var pedidoTRM = pedirJSONTasas("https://www.datos.gov.co/resource/32sa-8pi3.json?$order=vigenciadesde%20DESC&$limit=1")
+      .catch(function () { return null; });
+    return Promise.all([origen, pedidoTRM]).then(function (resultados) {
+      var d = resultados[0], trm = Mon.leerTRM(resultados[1], new Date());
+      var t = { rates: Mon.aplicarTRM(d.rates, trm), fecha: d.fecha || "", fuente: d.fuente, trm: trm, guardado: Date.now() };
       guardarLocal("nova-tasas", t);
       return t;
     }).catch(function () { return tiene ? g : null; });
@@ -3308,10 +3340,21 @@
     });
   }
   function pintarFechaTasas(t) {
-    var cuando = t && t.guardado ? new Date(t.guardado) : null;
-    $("tasas-fecha").textContent = t
-      ? "Tasas de ExchangeRate-API" + (t.fecha ? " del " + t.fecha.slice(5, 16) : "") + (cuando ? " · revisadas hoy a las " + hora.format(cuando) : "") + " — la app las vuelve a revisar sola cada 30 minutos y, sin internet, usa las últimas guardadas."
-      : "No pude descargar las tasas. Sin internet no hay tasas guardadas todavía.";
+    if (!t) {
+      $("tasas-fecha").textContent = "No pude descargar las tasas. Sin internet no hay tasas guardadas todavía.";
+      return;
+    }
+    var cuando = t.guardado ? new Date(t.guardado) : null;
+    var fecha = Mon.fechaTasaTexto(t.fecha);
+    var nombreFuente = { fawaz: "Fawaz Currency API", "er-api": "ExchangeRate-API", funcion: "función de Supabase" }[t.fuente];
+    var textoTRM = "";
+    if (t.trm) {
+      var valor = new Intl.NumberFormat("es-CO", { style: "currency", currency: "COP", minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(t.trm.valor);
+      textoTRM = " · Dólar con la TRM oficial de " + valor + " (vigente del " + Mon.fechaTasaTexto(t.trm.desde) + " al " + Mon.fechaTasaTexto(t.trm.hasta) + ")";
+    }
+    $("tasas-fecha").textContent = "Tasas" + (fecha ? " del " + fecha : "") + (nombreFuente ? " · " + nombreFuente : "") + textoTRM
+      + (cuando ? " · revisadas " + (A.claveDia(cuando) === hoyLocal() ? "hoy " : "el " + Mon.fechaTasaTexto(A.claveDia(cuando)) + " ") + "a las " + hora.format(cuando) : "")
+      + " — la app las vuelve a revisar sola cada 30 minutos y, sin internet, usa las últimas guardadas.";
   }
   setInterval(function () { if (!document.hidden && enLinea() && fuente && !fuente.demo) refrescarTasas(); }, 5 * 60000);
   document.addEventListener("visibilitychange", function () { if (!document.hidden && fuente && !fuente.demo) refrescarTasas(); });
@@ -3478,7 +3521,7 @@
       $("reg-tasa-etiqueta").textContent = "Tasa: 1 " + reg.moneda + " = ? " + mb.codigo;
       $("reg-cop-etiqueta").textContent = "Equivale en " + mb.nombre.toLowerCase() + " (" + mb.codigo + ")";
       if (document.activeElement !== $("reg-tasa")) $("reg-tasa").value = reg.tasa ? Mon.formatoTasa(reg.tasa) : "";
-      $("reg-tasa-nota").textContent = reg.tasa && reg.tasaAuto && Math.abs(reg.tasa - reg.tasaAuto) < 1e-9 ? "Tasa del día" + (reg.tasaFecha ? " · " + reg.tasaFecha.slice(5, 16) : "")
+      $("reg-tasa-nota").textContent = reg.tasa && reg.tasaAuto && Math.abs(reg.tasa - reg.tasaAuto) < 1e-9 ? "Tasa del día" + (reg.tasaFecha ? " · " + Mon.fechaTasaTexto(reg.tasaFecha) : "")
         : reg.tasaAuto ? "Tasa del día: " + Mon.formatoTasa(reg.tasaAuto) + " (la cambiaste)"
         : reg.tasa ? "Tasa escrita por ti" : "No pude consultar la tasa del día: escríbela a mano.";
     }
