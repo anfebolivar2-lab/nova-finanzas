@@ -9,16 +9,31 @@ Claude Code solo escribe cambios largos de código si el dueño se lo pide o si 
 
 ## Al empezar cada chat
 
-1. Ejecuta `codex login status`.
-2. Si dice «Logged in using an API key», Codex está listo. El proxy del entorno pone la clave real.
-3. Si no hay sesión, inicia sesión y comprueba que Codex responde.
+En el primer mensaje del chat, haz estos pasos por tu cuenta, sin esperar a que el dueño te los pida.
+
+1. Comprueba la sesión de Codex.
 
    ```bash
-   echo sk-proxy-injected | codex login --with-api-key
-   codex exec --skip-git-repo-check "Responde solo: OK" < /dev/null
+   codex login status
    ```
 
-   Si devuelve un error 401, la clave guardada en el entorno no sirve. Avisa al dueño y ofrécele `codex login --device-auth` como alternativa para entrar con un código de ChatGPT.
+   Si dice «Logged in using ChatGPT», Codex está listo y no hace falta hacer nada más.
+2. Si no hay sesión o dice que usa una API key, inicia sesión con un código en segundo plano. Espera unos segundos y lee el registro.
+
+   ```bash
+   script -qfc "codex login --device-auth" /tmp/codex-login.log >/dev/null 2>&1 &
+   sleep 3
+   cat /tmp/codex-login.log
+   ```
+
+3. En el mismo mensaje, dale al dueño el enlace https://auth.openai.com/codex/device y el código que aparece en el registro. Dile «Toca el enlace, entra con tu cuenta de ChatGPT y pega este código». El código vence en 15 minutos.
+4. Cuando el dueño diga que ya pegó el código, confirma que la sesión diga «Logged in using ChatGPT».
+
+   ```bash
+   codex login status
+   ```
+
+5. No uses una API key ni pidas saldo. El dueño decidió usar su cuenta gratuita de ChatGPT. Mientras no haya sesión, puedes seguir planeando y revisando, pero avisa que Codex aún no está conectado.
 
 ## Cómo delegar a Codex
 
