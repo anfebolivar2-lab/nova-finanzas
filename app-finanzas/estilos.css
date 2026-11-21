@@ -100,6 +100,10 @@ main .vista { display: flex; flex-direction: column; gap: 14px; }
 .positivo { color: var(--positivo); }
 .formulario { display: flex; flex-direction: column; gap: 8px; }
 .formulario .titulo-tarjeta { text-align: left; margin-bottom: 4px; }
+.simulador-resultado { display: grid; gap: 12px; }
+.simulador-resultado section + section { border-top: 1px solid var(--line); padding-top: 12px; }
+.simulador-resultado h2 { font-size: 1rem; margin-bottom: 4px; }
+.simulador-resultado > p { font-weight: 700; }
 
 /* Saldo */
 .saldo { background: var(--hero); color: var(--hero-ink); border-color: color-mix(in srgb, var(--accent) 45%, transparent); box-shadow: 0 0 28px var(--glow); display: flex; flex-direction: column; gap: 6px; padding: 22px; }

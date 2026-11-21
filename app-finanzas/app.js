@@ -2533,6 +2533,76 @@
   }
   $("btn-nueva-deuda").addEventListener("click", function () { abrirDeuda(null); });
 
+  $("btn-simulador-tarjeta").addEventListener("click", function () {
+    mensaje("tarjeta-mensaje", "");
+    $("tarjeta-resultado").replaceChildren();
+    $("tarjeta-resultado").hidden = true;
+    abrirCapa("pantalla-tarjeta");
+  });
+
+  function leerPorcentajeTarjeta(id) {
+    var texto = $(id).value.trim().replace(",", ".");
+    return /^[+-]?(?:\d+(?:\.\d*)?|\.\d+)$/.test(texto) ? Number(texto) : NaN;
+  }
+
+  function leerMontoTarjeta(texto) {
+    // El intérprete de montos toma las cifras sin el signo.
+    return /[-−]\s*\$?\s*\d/.test(texto) ? NaN : leerValor(texto);
+  }
+
+  function resultadoPagoTarjeta(titulo, pago, aviso) {
+    var bloque = el("section");
+    bloque.append(el("h2", null, titulo));
+    if (!pago.seAcaba) {
+      bloque.append(el("p", null, aviso));
+      return bloque;
+    }
+    var plazo = pago.meses + (pago.meses === 1 ? " mes" : " meses");
+    if (pago.meses > 24) plazo += " (unos " + Math.round(pago.meses / 12) + " años)";
+    bloque.append(el("p", null, plazo),
+      el("p", null, "Total pagado: " + dinero(pago.totalPagado)),
+      el("p", null, "Intereses: " + dinero(pago.totalIntereses)));
+    return bloque;
+  }
+
+  $("form-tarjeta").addEventListener("submit", function (e) {
+    e.preventDefault();
+    var resultado = $("tarjeta-resultado");
+    resultado.replaceChildren();
+    resultado.hidden = true;
+    var deuda = leerMontoTarjeta($("tarjeta-deuda").value);
+    var tasaEA = leerPorcentajeTarjeta("tarjeta-tasa");
+    var pagoMinimoPct = leerPorcentajeTarjeta("tarjeta-minimo-pct");
+    var fijo = $("tarjeta-minimo-fijo").value.trim();
+    var minimoFijo = fijo === "" ? 20000 : leerMontoTarjeta(fijo);
+    var cuota = leerMontoTarjeta($("tarjeta-cuota").value);
+
+    if (!Number.isFinite(deuda) || deuda <= 0) return mensaje("tarjeta-mensaje", "Escribe una deuda mayor que cero.", true);
+    if (!(tasaEA >= 0 && tasaEA <= 200)) return mensaje("tarjeta-mensaje", "Escribe una tasa anual entre 0 y 200 %.", true);
+    if (!(pagoMinimoPct >= 0 && pagoMinimoPct <= 100)) return mensaje("tarjeta-mensaje", "Escribe un porcentaje de pago mínimo entre 0 y 100 %.", true);
+    if (!Number.isFinite(minimoFijo) || minimoFijo < 0) return mensaje("tarjeta-mensaje", "Escribe un mínimo fijo válido de cero o más, o deja el campo vacío.", true);
+    if (!Number.isFinite(cuota) || cuota <= 0) return mensaje("tarjeta-mensaje", "Escribe una cuota mensual mayor que cero.", true);
+
+    mensaje("tarjeta-mensaje", "");
+    var comparacion = window.NovaTarjeta.compararMinimoVsCuota({ deuda, tasaEA, pagoMinimoPct, minimoFijo, cuota });
+    resultado.append(
+      resultadoPagoTarjeta("Si pagas solo el mínimo", comparacion.minimo, "Con ese mínimo no terminas de pagar en 50 años"),
+      resultadoPagoTarjeta("Si pagas " + dinero(cuota) + " al mes", comparacion.cuota, comparacion.cuota.meses === null
+        ? "Esa cuota no alcanza a cubrir los intereses del mes: la deuda nunca baja."
+        : "Con esa cuota no terminas de pagar en 50 años.")
+    );
+    var ahorro = comparacion.ahorroIntereses, mesesMenos = comparacion.mesesMenos;
+    if (ahorro !== null) {
+      var intereses = ahorro >= 0 ? "Te ahorras " + dinero(ahorro) : "Pagas " + dinero(-ahorro) + " más";
+      var plazo = mesesMenos === 0 ? "en el mismo plazo"
+        : Math.abs(mesesMenos) + (Math.abs(mesesMenos) === 1 ? " mes " : " meses ") + (mesesMenos > 0 ? "antes" : "después");
+      var favorable = ahorro >= 0 && mesesMenos >= 0;
+      resultado.append(el("p", favorable ? "positivo" : null, intereses + " en intereses y terminas " + plazo + "."));
+    }
+    resultado.append(el("small", "nota", "Es un cálculo aproximado: el banco puede cobrar cuota de manejo, seguros y otros cargos."));
+    resultado.hidden = false;
+  });
+
   // Anota la plata en los movimientos (categoría «Deudas») para que el saldo cuadre.
   function llenarCuentas(selectId, bloqueId, elegida) {
     var sel = $(selectId);
