@@ -325,6 +325,7 @@
       </div>
       <div id="deudas-resumen" class="deudas-resumen" hidden></div>
       <ul id="lista-deudas" class="lista-simple"></ul>
+      <button type="button" class="enlace" id="btn-simulador-tarjeta">💳 Simulador de tarjeta de crédito</button>
       <div class="seccion-cabecera">
         <h2>Gastos compartidos</h2>
         <button type="button" class="enlace" id="btn-nuevo-grupo">+ Nuevo grupo</button>
@@ -948,6 +949,26 @@
   </form>
 </section>
 
+<section id="pantalla-tarjeta" class="capa" hidden>
+  <div class="sub-cabecera"><button type="button" class="icono-btn" data-cerrar aria-label="Volver"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button><h1>Simulador de tarjeta</h1></div>
+  <form id="form-tarjeta" class="formulario" autocomplete="off">
+    <label for="tarjeta-deuda" class="centro">¿Cuánto debes en la tarjeta?</label>
+    <input id="tarjeta-deuda" class="monto-entrada" inputmode="numeric" placeholder="$ 0" required>
+    <label for="tarjeta-tasa">Tasa de interés efectiva anual (%)</label>
+    <input id="tarjeta-tasa" inputmode="decimal" placeholder="28,5" required>
+    <label for="tarjeta-minimo-pct">Pago mínimo (% del saldo)</label>
+    <input id="tarjeta-minimo-pct" inputmode="decimal" value="5">
+    <label for="tarjeta-minimo-fijo">Pago mínimo fijo del banco (opcional)</label>
+    <input id="tarjeta-minimo-fijo" class="campo-plata" inputmode="numeric" placeholder="$ 0" aria-describedby="tarjeta-minimo-nota">
+    <small class="nota" id="tarjeta-minimo-nota">Si lo dejas vacío, se usa un mínimo fijo de $ 20.000.</small>
+    <label for="tarjeta-cuota">¿Cuánto podrías pagar al mes?</label>
+    <input id="tarjeta-cuota" class="campo-plata" inputmode="numeric" placeholder="$ 0" required>
+    <p class="mensaje" id="tarjeta-mensaje" role="status"></p>
+    <button type="submit" class="primario">Calcular</button>
+  </form>
+  <article id="tarjeta-resultado" class="tarjeta simulador-resultado" hidden></article>
+</section>
+
 <!-- Detalle de una deuda y sus abonos -->
 <section id="pantalla-abonos" class="capa" hidden>
   <div class="sub-cabecera"><button type="button" class="icono-btn" data-cerrar aria-label="Volver"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button><h1 id="abono-titulo">Deuda</h1>
@@ -1325,6 +1346,7 @@
 <script src="respuestas.js"></script>
 <script src="sincronizacion.js"></script>
 <script src="vendor/supabase.js"></script>
+<script src="tarjeta.js"></script>
 <script src="app.js"></script>
 </body>
 </html>
