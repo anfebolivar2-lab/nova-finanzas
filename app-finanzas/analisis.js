@@ -638,7 +638,28 @@
     };
   }
 
+  function numeroLibertad(movs, ahorro, ahora) {
+    var mesActual = ahora.getFullYear() * 12 + ahora.getMonth();
+    var mesesConGastos = new Set(), total = 0;
+    movs.forEach(function (m) {
+      if (m.tipo !== "gasto" || m.transferencia) return;
+      var fecha = new Date(m.fecha);
+      var mes = fecha.getFullYear() * 12 + fecha.getMonth();
+      if (mes >= mesActual - 6 && mes < mesActual) {
+        mesesConGastos.add(mes);
+        total += num(m.monto);
+      }
+    });
+    var mesesConDatos = mesesConGastos.size;
+    if (!mesesConDatos) return null;
+    var gastoMensual = Math.round(total / mesesConDatos);
+    if (gastoMensual === 0) return null;
+    var meses = ahorro > 0 ? Math.round(ahorro / gastoMensual * 10) / 10 : 0;
+    return { gastoMensual: gastoMensual, meses: meses, mesesConDatos: mesesConDatos, ahorro: ahorro };
+  }
+
   var api = {
+    numeroLibertad: numeroLibertad,
     calendarioMes: calendarioMes, suscripciones: suscripciones, alcanza: alcanza,
     desplazar: desplazar, nombrePeriodo: nombrePeriodo, nombreCorto: nombreCorto, enRango: enRango, totales: totales,
     porCategoria: porCategoria, porEtiqueta: porEtiqueta, vistaRapida: vistaRapida, serie: serie, proyeccion: proyeccion,
