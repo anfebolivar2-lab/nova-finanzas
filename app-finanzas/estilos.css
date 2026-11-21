@@ -131,6 +131,7 @@ main .vista { display: flex; flex-direction: column; gap: 14px; }
 .chat .yo { align-self: flex-end; background: var(--accent); color: var(--accent-ink); border-bottom-right-radius: 4px; }
 .chat .nova { align-self: flex-start; background: var(--surface-2); border: 1px solid var(--line); border-bottom-left-radius: 4px; }
 .chat .nova.pensando { color: var(--muted); }
+.chat img { display: block; max-width: min(180px, 100%); height: auto; border-radius: 12px; margin-bottom: 6px; }
 .chat:empty { display: none; }
 
 
@@ -488,7 +489,11 @@ body.con-capa { overflow: hidden; }
 .sugerencia { padding: 10px 16px; border-radius: 999px; font-size: .9rem; text-align: left; font-weight: 600; background: var(--surface);
   border-color: color-mix(in srgb, var(--accent) 45%, var(--line)); max-width: 100%; }
 .sugerencia:hover { background: var(--accent-soft); }
-.chat-entrada { position: sticky; bottom: 0; background: var(--bg); padding: 8px 0 4px; margin-top: auto; }
+.chat-entrada { position: sticky; bottom: 0; background: var(--bg); padding: 8px 0 4px; margin-top: auto; flex-wrap: wrap; }
+#chat-pregunta { flex: 1 1 0; min-width: 0; }
+#chat-adjunto { flex: 0 0 100%; display: flex; align-items: center; gap: 8px; }
+#chat-adjunto img { width: 64px; height: 64px; object-fit: cover; border-radius: 12px; }
+#chat-foto-quitar { padding: 6px 10px; }
 .chat-capa .chat { flex: 0 1 auto; overflow: visible; }
 
 .monto-fila { display: flex; align-items: center; justify-content: center; gap: 4px; }
