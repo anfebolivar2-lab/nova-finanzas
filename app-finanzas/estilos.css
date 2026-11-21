@@ -922,6 +922,13 @@ button.mini { padding: 6px 12px; border-radius: 999px; font-size: .8rem; }
 .dueno-ejes { display: flex; justify-content: space-between; color: var(--muted); font-size: .72rem; margin-top: 4px; }
 .dueno-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
 .dueno-chips span { background: var(--surface-2); border: 1px solid var(--line); border-radius: 999px; padding: 4px 10px; font-size: .8rem; font-weight: 600; }
+.dueno-persona { box-sizing: border-box; min-width: 0; max-width: 100%; overflow: hidden; }
+.dueno-persona .banco-cab { flex-direction: column; align-items: flex-start; gap: 2px; }
+.dueno-persona .banco-app { display: flex; align-items: flex-start; gap: 6px; min-width: 0; max-width: 100%; overflow-wrap: anywhere; word-break: break-word; }
+.dueno-persona .dueno-emoji { flex: none; }
+.dueno-persona .dueno-correo { min-width: 0; }
+.dueno-persona .banco-cab small { white-space: normal; color: var(--muted); font-size: .8rem; }
+.dueno-persona .dueno-chips span { max-width: 100%; overflow-wrap: anywhere; }
 .dueno-persona .banco-texto { -webkit-line-clamp: unset; }
 .centro-bloque { display: block; margin: 12px auto 24px; }
 .banco-ayuda { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; }

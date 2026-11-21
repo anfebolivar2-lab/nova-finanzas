@@ -4482,7 +4482,9 @@
     var ul = $("dueno-personas"); ul.replaceChildren();
     d.personas.forEach(function (p) {
       var li = el("li", "banco-item dueno-persona"), cab = el("div", "banco-cab");
-      cab.append(el("span", "banco-app", (p.dueno ? "👑 " : p.prueba ? "🧪 " : "👤 ") + p.correo), el("small", null, p.ultimoUso ? "usó " + cuandoBanco(Date.parse(p.ultimoUso)) : "nunca entró"));
+      var app = el("span", "banco-app");
+      app.append(el("span", "dueno-emoji", p.dueno ? "👑" : p.prueba ? "🧪" : "👤"), el("span", "dueno-correo", p.correo));
+      cab.append(app, el("small", null, p.ultimoUso ? "usó " + cuandoBanco(Date.parse(p.ultimoUso)) : "nunca entró"));
       var det = "Se registró el " + fechaCorta.format(new Date(p.registro)) + (p.confirmado ? "" : " · no ha confirmado el correo") + (p.prueba ? " · cuenta de prueba" : "");
       var chips = el("div", "dueno-chips");
       [p.plataforma === "android" ? "📱 Android" + (p.version ? " " + p.version : "") : p.plataforma === "web" ? "🌐 Navegador" : "",
