@@ -1006,7 +1006,8 @@
     { id: "semanasmes", nombre: "En qué parte del mes gastas" },
     { id: "reduccion", nombre: "Metas de reducción" },
     { id: "mesvsprom", nombre: "Tu mes vs. tu promedio" },
-    { id: "libertad", nombre: "Tu número de libertad" }
+    { id: "libertad", nombre: "Tu número de libertad" },
+    { id: "calorhora", nombre: "A qué hora y qué día gastas" }
   ];
   function configWidgets() {
     var guardado = leerLocal("nova-widgets", null) || [];
@@ -1035,13 +1036,48 @@
       if (!w.visible) return;
       var art = el("article", "tarjeta widget");
       art.dataset.widget = w.id;
-      ({ rapida: wRapida, categorias: wCategorias, etiquetas: wEtiquetas, "ingresos-gastos": wIngresosGastos, tendencia: wTendencia, proyeccion: wProyeccion, consejos: wConsejos, calendario: wCalendario, logros: wLogros, herramientas: wHerramientas, salud: wSalud, calculadoras2: wMasCalculadoras, reto: wReto, suscripciones: wSuscripciones, inflacion: wInflacion, comparar: wComparar, evento: wEvento, fijos: wFijos, pronostico: wPronostico, anio: wAnio, bola: wBola, alcancia: wAlcancia, sobres: wSobres, plan: wPlan, singasto: wSinGasto, lugares: wLugares, semanasmes: wSemanasMes, reduccion: wReduccion, mesvsprom: wMesVsPromedio, libertad: wLibertad })[w.id](art, movs, ciclo, ref, rango);
+      ({ rapida: wRapida, categorias: wCategorias, etiquetas: wEtiquetas, "ingresos-gastos": wIngresosGastos, tendencia: wTendencia, proyeccion: wProyeccion, consejos: wConsejos, calendario: wCalendario, logros: wLogros, herramientas: wHerramientas, salud: wSalud, calculadoras2: wMasCalculadoras, reto: wReto, suscripciones: wSuscripciones, inflacion: wInflacion, comparar: wComparar, evento: wEvento, fijos: wFijos, pronostico: wPronostico, anio: wAnio, bola: wBola, alcancia: wAlcancia, sobres: wSobres, plan: wPlan, singasto: wSinGasto, lugares: wLugares, semanasmes: wSemanasMes, reduccion: wReduccion, mesvsprom: wMesVsPromedio, libertad: wLibertad, calorhora: wCalorHora })[w.id](art, movs, ciclo, ref, rango);
       cont.append(art);
     });
   }
   document.querySelectorAll("[data-periodo-analisis]").forEach(function (b) {
     b.addEventListener("click", function () { desfaseAnalisis += Number(b.dataset.periodoAnalisis); pintarAnalisis(); });
   });
+
+  function wCalorHora(art, movs, ciclo, ref, rango) {
+    titulo(art, "🕒 A qué hora y qué día gastas");
+    var r = A.calorHoraDia(movs, rango.desde, rango.hasta);
+    if (!r) return art.append(el("p", "nota", "Cuando anotes gastos en este periodo, aquí ves a qué hora y qué día gastas más."));
+
+    var dias = ["lunes", "martes", "miércoles", "jueves", "viernes", "sábado", "domingo"];
+    var diasCortos = ["L", "M", "X", "J", "V", "S", "D"];
+    var franjas = ["12 a 4 a. m.", "4 a 8 a. m.", "8 a. m. a 12 p. m.", "12 a 4 p. m.", "4 a 8 p. m.", "8 p. m. a 12 a. m."];
+    var pico = r.pico;
+    art.append(el("p", "calc-res", "Gastas más los " + dias[pico.dia] + " de " + franjas[pico.franja] +
+      (ocultos ? "" : " (" + dinero(pico.total) + ")") + "."));
+
+    var cuad = el("div", "calor-hora");
+    cuad.append(el("div"));
+    franjas.forEach(function (_, franja) {
+      cuad.append(el("div", "calor-hora-enc", (franja * 4) + "h"));
+    });
+    r.celdas.forEach(function (fila, dia) {
+      cuad.append(el("div", "calor-hora-enc", diasCortos[dia]));
+      fila.forEach(function (dato, franja) {
+        var celda = el("div", "calor-hora-celda");
+        var pct = dato.total && r.max ? Math.round(15 + 85 * Math.sqrt(dato.total / r.max)) : 0;
+        var cantidad = dato.cantidad + (dato.cantidad === 1 ? " gasto" : " gastos");
+        var etiqueta = dias[dia] + " " + franjas[franja] + ": " +
+          (ocultos ? cantidad : dinero(dato.total) + " (" + cantidad + ")");
+        celda.style.setProperty("--calor-hora-intensidad", pct + "%");
+        celda.title = etiqueta;
+        celda.setAttribute("role", "img");
+        celda.setAttribute("aria-label", etiqueta);
+        cuad.append(celda);
+      });
+    });
+    art.append(cuad, el("p", "nota", "Más intenso el color = más plata en esa franja. Toma los gastos del periodo que estás viendo."));
+  }
 
   // ---------- Consejos, calendario, logros y calculadoras ----------
   function wConsejos(art, movs, ciclo, ref, rango) {
