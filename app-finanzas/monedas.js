@@ -62,6 +62,46 @@
     ["MNT", "Tugrik Mongol", "🇲🇳"], ["MRU", "Uguiya Mauritano", "🇲🇷"], ["VUV", "Vatu Vanuatense", "🇻🇺"]
   ];
   var BASE = "COP";
+  var FECHA_ISO = /^\d{4}-\d{2}-\d{2}$/;
+  var MESES_CORTOS = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
+
+  function esFechaISO(fecha) {
+    if (typeof fecha !== "string" || !FECHA_ISO.test(fecha)) return false;
+    var dia = new Date(fecha);
+    return !isNaN(dia.getTime()) && dia.toISOString().slice(0, 10) === fecha;
+  }
+  function normalizarFawaz(json) {
+    if (!json || !esFechaISO(json.date) || !json.usd || typeof json.usd !== "object" || Array.isArray(json.usd)) return null;
+    var rates = {};
+    Object.keys(json.usd).forEach(function (codigo) {
+      var valor = json.usd[codigo];
+      if (/^[A-Za-z]{3}$/.test(codigo) && Number.isFinite(valor) && valor > 0) rates[codigo.toUpperCase()] = valor;
+    });
+    if (!Object.keys(rates).some(function (codigo) { return codigo !== "USD"; })) return null;
+    rates.USD = 1;
+    return { rates: rates, fecha: json.date };
+  }
+  function leerTRM(json, hoy) {
+    var fila = Array.isArray(json) && json[0];
+    if (!fila || !Number.isFinite(hoy.getTime())) return null;
+    var valor = typeof fila.valor === "string" || typeof fila.valor === "number" ? Number(fila.valor) : NaN;
+    var desde = typeof fila.vigenciadesde === "string" ? fila.vigenciadesde.slice(0, 10) : "";
+    var hasta = typeof fila.vigenciahasta === "string" ? fila.vigenciahasta.slice(0, 10) : "";
+    if (!Number.isFinite(valor) || valor <= 0 || !esFechaISO(desde) || !esFechaISO(hasta)) return null;
+    var fecha = [hoy.getFullYear(), hoy.getMonth() + 1, hoy.getDate()].map(function (n, i) {
+      return String(n).padStart(i === 0 ? 4 : 2, "0");
+    }).join("-");
+    return fecha >= desde && fecha <= hasta ? { valor: valor, desde: desde, hasta: hasta } : null;
+  }
+  function aplicarTRM(rates, trm) {
+    return trm ? Object.assign({}, rates, { COP: trm.valor }) : rates;
+  }
+  function fechaTasaTexto(fecha) {
+    if (typeof fecha !== "string" || !fecha) return "";
+    if (!esFechaISO(fecha)) return fecha.slice(5, 16);
+    var partes = fecha.split("-");
+    return Number(partes[2]) + " " + MESES_CORTOS[Number(partes[1]) - 1] + " " + partes[0];
+  }
 
   function sinTildes(t) { return String(t || "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, ""); }
   function info(codigo) {
@@ -150,7 +190,8 @@
     return null;
   }
 
-  var api = { detectar: detectar, MONEDAS: MONEDAS, BASE: BASE, info: info, buscar: buscar, tasaACOP: tasaACOP, aCOP: aCOP, formatoTasa: formatoTasa, leerTasa: leerTasa, formatoMonto: formatoMonto, convertir: convertir, formatoNumero: formatoNumero };
+  var api = { detectar: detectar, MONEDAS: MONEDAS, BASE: BASE, info: info, buscar: buscar, tasaACOP: tasaACOP, aCOP: aCOP, formatoTasa: formatoTasa, leerTasa: leerTasa, formatoMonto: formatoMonto, convertir: convertir, formatoNumero: formatoNumero,
+    normalizarFawaz: normalizarFawaz, leerTRM: leerTRM, aplicarTRM: aplicarTRM, fechaTasaTexto: fechaTasaTexto };
   if (typeof module === "object" && module.exports) module.exports = api;
   else raiz.NovaMonedas = api;
 })(typeof window !== "undefined" ? window : this);
