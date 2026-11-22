@@ -140,3 +140,105 @@ test("respuestas antiguas o vacías y campos ausentes son compatibles", () => {
   assert.equal(A.fichaUsuario({}, ahora).racha, null);
   assert.equal(A.fichaUsuario().diasActivos30, null);
 });
+
+test("compara un mes en curso con el anterior completo y cuenta personas únicas", () => {
+  const fechaDatos = "2026-03-01T12:00:00Z";
+  const serie = Array.from({ length: 30 }, (_, i) => ({
+    dia: new Date(Date.parse("2026-01-31") + i * 86400000).toISOString().slice(0, 10),
+    movimientos: 1
+  }));
+  const datos = {
+    personas: [
+      { registro: "2026-02-01T02:00:00Z", dias: ["2026-02-01", "2026-02-28", "2026-03-01"], ultimoUso: fechaDatos },
+      { registro: "2026-03-01", dias: ["2026-03-01"] },
+      { registro: "2026-02-10", dias: [], ultimoUso: "2026-02-11T08:00:00Z" },
+      { registro: "2026-03-01", dias: ["2026-03-01"], prueba: true }
+    ],
+    dias: serie,
+    chatsPorDia: { "2026-03-01": 3, "2026-01-01": 100 },
+    errores: { total30: 2, porDia: { "2026-02-02": 2 } }
+  };
+  const comparativo = A.comparativoMensual(datos, fechaDatos);
+  assert.equal(comparativo.mes, "2026-03");
+  assert.equal(comparativo.mesAnterior, "2026-02");
+  assert.deepEqual(comparativo.filas.map(f => [f.actual, f.anterior, f.cambio]), [
+    [1, 2, -50], [2, 2, 0], [1, 28, -100 * 27 / 28], [3, 0, null], [0, 2, -100]
+  ]);
+});
+
+test("marca períodos sin cobertura, conserva ceros válidos y cruza el cambio de año", () => {
+  const fechaDatos = "2027-01-01T18:00:00Z";
+  const vacio = A.comparativoMensual({}, fechaDatos);
+  assert.equal(vacio.mesAnterior, "2026-12");
+  assert.ok(vacio.filas.every(f => f.actual === null && f.anterior === null && f.cambio === null));
+
+  const datos = {
+    personas: [{ registro: "2027-01-01" }],
+    dias: [{ dia: "2027-01-01", movimientos: 0 }],
+    resumen: { chats: 0 },
+    chatsPorDia: {},
+    errores: { total30: 1, porDia: { "2027-01-01": 1 } }
+  };
+  assert.deepEqual(A.comparativoMensual(datos, fechaDatos).filas.map(f => [f.actual, f.anterior, f.cambio]), [
+    [1, 0, null], [null, null, null], [0, null, null], [0, 0, null], [1, null, null]
+  ]);
+  assert.equal(A.comparativoMensual(datos, "2027-01-02T18:00:00Z").filas[2].actual, null);
+  datos.errores.total30 = 500;
+  assert.equal(A.comparativoMensual(datos, fechaDatos).filas[4].actual, null);
+});
+
+test("proyecta linealmente con un ritmo conocido y evita estimar con datos insuficientes", () => {
+  assert.equal(A.proyeccionUsuarios(), null);
+  assert.equal(A.proyeccionUsuarios(15), null);
+  assert.equal(A.proyeccionUsuarios(15, 16), null);
+  assert.deepEqual(A.proyeccionUsuarios(15, 0), [{ meses: 3, usuarios: 15 }, { meses: 6, usuarios: 15 }]);
+  assert.deepEqual(A.proyeccionUsuarios(15, 4), [{ meses: 3, usuarios: 27 }, { meses: 6, usuarios: 39 }]);
+});
+
+test("calcula hitos en cero, en el umbral y después del último", () => {
+  assert.equal(A.hitosUsuarios(), null);
+  assert.deepEqual(A.hitosUsuarios(0).hitos.map(h => h.meta), [10, 25, 50, 100, 250, 500, 1000]);
+  assert.equal(A.hitosUsuarios(0).avance, 0);
+  const hitos = A.hitosUsuarios(10);
+  assert.deepEqual(hitos.hitos.filter(h => h.logrado).map(h => h.meta), [10]);
+  assert.deepEqual([hitos.siguiente, hitos.faltan, hitos.avance], [25, 15, 40]);
+  const completos = A.hitosUsuarios(1001);
+  assert.ok(completos.hitos.every(h => h.logrado));
+  assert.deepEqual([completos.siguiente, completos.faltan, completos.avance], [null, 0, 100]);
+});
+
+test("valida costos locales y solo divide por una cantidad positiva de activos", () => {
+  assert.deepEqual(A.costosNegocio(["", null, ""], 2), {
+    valido: true, valores: [null, null, null], total: null, porActivo: null
+  });
+  assert.deepEqual(A.costosNegocio(["100.50", "0", ""], 2), {
+    valido: true, valores: [100.5, 0, null], total: 100.5, porActivo: 50.25
+  });
+  assert.equal(A.costosNegocio(["0", "", ""], 2).porActivo, 0);
+  assert.equal(A.costosNegocio([100, 20, 0], 0).porActivo, null);
+  assert.equal(A.costosNegocio([100, 20, 0]).porActivo, null);
+  for (const invalido of [-1, NaN, Infinity, "abc", " ", true]) {
+    const costos = A.costosNegocio([invalido, 20, 0], 3);
+    assert.deepEqual([costos.valido, costos.total, costos.porActivo], [false, null, null]);
+  }
+});
+
+test("agrega estadísticas al CSV existente sin volcar costos, correos extra ni montos", () => {
+  const personas = [{ correo: "dueno@correo.co", registro: "2026-10-01", monto: "monto privado" }];
+  const comparativo = A.comparativoMensual({ personas }, ahora);
+  const csv = A.usuariosACsv(personas, {
+    comparativo, proyeccion: A.proyeccionUsuarios(10, 2), hitos: A.hitosUsuarios(10),
+    costos: { total: "costo privado" }
+  });
+  assert.ok(csv.startsWith(A.usuariosACsv(personas)));
+  assert.match(csv, /"Registros nuevos","0","1","-100"/);
+  assert.match(csv, /"Movimientos anotados","sin dato","sin dato",""/);
+  assert.match(csv, /"6 meses","22"/);
+  assert.match(csv, /"10","Logrado",""/);
+  assert.match(csv, /"25","Pendiente","15"/);
+  assert.equal(csv.match(/dueno@correo\.co/g).length, 1);
+  assert.doesNotMatch(csv, /privado/);
+  const sinDatos = A.usuariosACsv([], { comparativo });
+  assert.match(sinDatos, /"Proyección estimada","Usuarios"\r\n"sin dato"/);
+  assert.match(sinDatos, /"Hitos \(usuarios\)"[^\r]+\r\n"sin dato"/);
+});
