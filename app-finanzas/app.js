@@ -260,6 +260,11 @@
     $("pantalla-registro").classList.toggle("valores-ocultos", ocultos);
     $("chat").hidden = ocultos;
     $("chat-oculto").hidden = !ocultos;
+    actualizarBotonNota();
+    $("notas-nova-lista").hidden = ocultos;
+    $("notas-nova-ocultas").hidden = !ocultos;
+    if (ocultos) $("simulacion-valor").value = "";
+    document.querySelectorAll("[data-plan-nova]").forEach(function (b) { b.hidden = ocultos; });
     var d = $("det-ojo");
     d.innerHTML = b.innerHTML; d.setAttribute("aria-pressed", String(ocultos)); d.setAttribute("aria-label", b.getAttribute("aria-label"));
   }
@@ -892,6 +897,7 @@
     if (!cont) return;
     var s = A.suscripciones(datos.movimientos, new Date());
     if (!destino) cont.replaceChildren();
+    if (!ocultos) cont.append(botonHabito("Revisar suscripciones con NOVA", revisarSuscripcionesNova));
     if (!s.lista.length) {
       cont.append(el("p", "nota", "Cuando NOVA vea un cobro que se repite cada mes con el mismo nombre (Netflix, Spotify, el plan del celular, el arriendo…), aparece aquí con lo que suma al año."));
       return;
@@ -1075,6 +1081,8 @@
     pintarAnalisis();
     pintarEstadoPapelera();
     if (!$("pantalla-papelera").hidden) pintarPapelera();
+    if (!$("pantalla-simulacion").hidden) calcularSimulacion();
+    if (!$("pantalla-notas-nova").hidden) pintarNotasNova();
   }
   function esperarMinutoLocal() {
     setTimeout(function () {
@@ -1187,6 +1195,126 @@
 
   $("agregar-inversion").addEventListener("click", function () { abrirRegistroPatrimonio("inversiones"); });
   $("agregar-bien").addEventListener("click", function () { abrirRegistroPatrimonio("bienes"); });
+
+  function movimientosPlan(ahora) {
+    return datos.movimientos.filter(function (m) {
+      return !m.transferencia && m.estado !== "pendiente" && (m.tipo === "ingreso" || m.tipo === "gasto") &&
+        new Date(m.fecha) <= ahora;
+    });
+  }
+
+  function ultimosTresMeses() {
+    var ahora = new Date();
+    var hasta = Periodos.periodo("mensual", ahora).desde;
+    var desde = A.desplazar("mensual", ahora, -3).desde;
+    return A.enRango(movimientosPlan(ahora), { desde: desde, hasta: hasta });
+  }
+
+  function categoriaParaNova(id) {
+    var c = categoria(id);
+    if (!c) return "Sin categoría";
+    return Parser.CATEGORIAS.some(function (base) { return base.nombre === c.nombre && base.tipo === c.tipo; })
+      ? c.nombre : "Categoría " + c.id;
+  }
+
+  function enviarAgregadosNova(pregunta) {
+    if (ocultos || !fuente) return;
+    abrirChat(null);
+    preguntarNova(pregunta, { agregados: true });
+  }
+
+  document.querySelectorAll("[data-plan-nova]").forEach(function (b) {
+    b.addEventListener("click", function () {
+      if (ocultos || !fuente) return;
+      var movs = ultimosTresMeses();
+      if (!movs.length) return toast("Aún no hay movimientos de los últimos 3 meses completos");
+      var ingresos = A.totales(movs).ingresos / 3;
+      var gastos = A.porCategoria(movs, "gasto").map(function (g) {
+        return { categoria: categoriaParaNova(g.id), promedio: g.total / 3 };
+      });
+      var limites = datos.limites.filter(function (l) { return estadoLimite(l).vigente; }).map(function (l) {
+        return { categoria: l.categoria_id == null ? "Todas" : categoriaParaNova(l.categoria_id), ciclo: Periodos.CICLOS[l.ciclo], monto: num(l.monto) };
+      });
+      if (datos.perfil.presupuesto_monto) {
+        limites.unshift({ categoria: "General", ciclo: Periodos.CICLOS[cicloEfectivo()], monto: num(datos.perfil.presupuesto_monto) });
+      }
+      enviarAgregadosNova(NovaRespuestas.preguntaPlanPresupuesto(ingresos, gastos, limites, monedaBase()));
+    });
+  });
+
+  function revisarSuscripcionesNova() {
+    if (ocultos || !fuente) return;
+    var ahora = new Date();
+    var desde = A.desplazar("mensual", ahora, -12).desde;
+    var gastos = A.enRango(movimientosPlan(ahora), { desde: desde, hasta: Periodos.periodo("mensual", ahora).hasta })
+      .filter(function (m) { return m.tipo === "gasto"; });
+    var filas = NovaRespuestas.candidatosSuscripciones(gastos.map(function (m) {
+      return { comercio: m.descripcion, categoria: categoriaParaNova(m.categoria_id), fecha: A.fechaAnotada(m.fecha), monto: num(m.monto) };
+    }));
+    if (!filas.length) return toast("Todavía no hay cobros recurrentes para revisar");
+    enviarAgregadosNova(NovaRespuestas.preguntaSuscripciones(filas, monedaBase()));
+  }
+
+  function calcularSimulacion() {
+    var tipo = $("simulacion-tipo").value;
+    var etiquetas = { arriendo: "Aumento del arriendo (%)", ingreso: "Meses sin el ingreso principal", gasto: "Nuevo gasto al mes (" + monedaBase() + ")" };
+    $("simulacion-etiqueta").textContent = etiquetas[tipo];
+    $("simulacion-nova").hidden = true;
+    var salida = $("simulacion-resultado");
+    salida.textContent = "";
+    $("simulacion-campos").hidden = ocultos;
+    if (ocultos) { salida.textContent = "Muestra los valores para simular."; return null; }
+    var valor = $("simulacion-valor").valueAsNumber;
+    if (!Number.isFinite(valor)) return null;
+    var movs = ultimosTresMeses();
+    if (!movs.length) { salida.textContent = "Aún no hay movimientos de los últimos 3 meses completos."; return null; }
+    var t = A.totales(movs);
+    var arriendo = movs.filter(function (m) {
+      return m.tipo === "gasto" && /\b(arriendo|alquiler|renta)\b/.test(A.sinTildes(m.descripcion));
+    });
+    var ingresosPorOrigen = new Map();
+    movs.forEach(function (m) {
+      if (m.tipo !== "ingreso") return;
+      var origen = A.sinTildes(m.descripcion).trim() || m.categoria_id;
+      ingresosPorOrigen.set(origen, (ingresosPorOrigen.get(origen) || 0) + num(m.monto));
+    });
+    var principal = 0;
+    ingresosPorOrigen.forEach(function (total) { principal = Math.max(principal, total); });
+    var base = {
+      ingresos: t.ingresos / 3, ingresoPrincipal: principal / 3, gastos: t.gastos / 3,
+      arriendo: A.totales(arriendo).gastos / 3, colchon: Math.max(0, saldoTotal())
+    };
+    var r = NovaHerramientas.simular(tipo, valor, base);
+    if (!r) {
+      salida.textContent = tipo === "arriendo" && !base.arriendo ? "No encontré un gasto de arriendo en esos meses." :
+        tipo === "ingreso" && !base.ingresoPrincipal ? "No hay ingresos en esos meses." :
+        tipo === "ingreso" ? "Ingresa un número entero de meses mayor que cero." : "Ingresa un valor válido mayor que cero.";
+      return null;
+    }
+    var ahorro = (r.ahorro < 0 ? "−" : "") + dinero(Math.abs(r.ahorro));
+    salida.textContent = (tipo === "ingreso" ? "Ingreso principal estimado de " + dinero(base.ingresoPrincipal) + " al mes. " : "") +
+      "El ahorro mensual baja " + dinero(-r.cambio) + " y queda en " + ahorro + ". " +
+      (r.mesesColchon === null ? "El escenario no consume el colchón." :
+        "El colchón cubre " + numeroCO.format(Math.round(r.mesesColchon * 100) / 100) + " meses de déficit.") +
+      (r.duracion === null ? "" : r.mesesColchon === null || r.mesesColchon >= r.duracion ?
+        " Alcanza para los " + r.duracion + " meses del escenario." : " Se agota antes de que vuelvan los ingresos.");
+    $("simulacion-nova").hidden = false;
+    return { tipo: tipo, valor: valor, base: base, resultado: r };
+  }
+
+  $("abrir-simulacion").addEventListener("click", function () {
+    $("simulacion-valor").value = "";
+    calcularSimulacion();
+    abrirCapa("pantalla-simulacion");
+  });
+  $("simulacion-tipo").addEventListener("change", function () { $("simulacion-valor").value = ""; calcularSimulacion(); });
+  $("simulacion-valor").addEventListener("input", calcularSimulacion);
+  $("simulacion-campos").addEventListener("submit", function (e) { e.preventDefault(); });
+  $("simulacion-nova").addEventListener("click", function () {
+    if (ocultos || !fuente) return;
+    var s = calcularSimulacion();
+    if (s) enviarAgregadosNova(NovaRespuestas.preguntaSimulacion(s.tipo, s.valor, s.base, s.resultado, monedaBase()));
+  });
 
   function pintarPlanes() {
     mensaje("inversiones-mensaje", "");
@@ -4548,11 +4676,11 @@
 
   // Avisos en el celular (solo en la app instalada): se vuelven a programar cada vez que cambia algo.
   // Cada domingo a las 7 p. m. un recordatorio para revisar la semana (4 domingos hacia adelante).
-  function avisosSemanales() {
-    var lista = [], d = new Date();
+  function avisosSemanales(ahora) {
+    var lista = [], d = new Date(ahora);
     d.setHours(19, 0, 0, 0);
     d.setDate(d.getDate() + ((7 - d.getDay()) % 7));
-    if (d < new Date()) d.setDate(d.getDate() + 7);
+    if (d < ahora) d.setDate(d.getDate() + 7);
     for (var k = 0; k < 4; k++) {
       var sem = k === 0 ? NovaConsejos.semana(datos.movimientos, d) : null;
       var texto = sem && sem.movimientos ? "Esta semana gastaste " + pesos.format(sem.gastos) + (sem.ingresos ? " e ingresaste " + pesos.format(sem.ingresos) : "") + (sem.cambio != null ? " (" + Math.abs(sem.cambio) + " % " + (sem.cambio > 0 ? "más" : "menos") + " que la anterior)" : "") + ". ¡Mira cómo planear la próxima!" : "Es domingo: mira cómo te fue esta semana y planea la siguiente.";
@@ -4562,21 +4690,21 @@
     return lista;
   }
   // Recordatorios opcionales: anotar los gastos cada noche y el día antes de un pago programado.
-  function avisosRecordatorios() {
-    var lista = [], ahora = new Date();
+  function avisosRecordatorios(ahora) {
+    var lista = [];
     if (leerLocal("nova-rec-noche", false)) {
       // A la hora que la persona eligió (9 p. m. si no eligió). Hoy no suena si ya anotó algo: cada vez que anota,
       // NOVA vuelve a programar los avisos (ver pintar()). Trae los botones de los registros comunes.
       var horaRec = Number(leerLocal("nova-rec-noche-hora", 21)) || 21, hoyK = A.claveDia(ahora);
       var yaAnoto = datos.movimientos.some(function (m) { return A.claveDia(m.fecha) === hoyK; });
       for (var k = 0; k < 7; k++) {
-        var d = new Date(); d.setDate(d.getDate() + k); d.setHours(horaRec, 0, 0, 0);
+        var d = new Date(ahora); d.setDate(d.getDate() + k); d.setHours(horaRec, 0, 0, 0);
         if (k === 0 && yaAnoto) continue;
         if (d > ahora) lista.push({ id: 700000001 + k, titulo: "¿Gastaste algo hoy?", texto: datos.frecuentes.length ? "Anótalo en un segundo con los botones, o abre NOVA." : "Tómate un minuto para anotar lo de hoy en NOVA.", cuando: d, botones: true });
       }
     }
     if (leerLocal("nova-rec-respaldo", false)) {
-      var dom = new Date(); dom.setHours(18, 0, 0, 0); dom.setDate(dom.getDate() + ((7 - dom.getDay()) % 7));
+      var dom = new Date(ahora); dom.setHours(18, 0, 0, 0); dom.setDate(dom.getDate() + ((7 - dom.getDay()) % 7));
       if (dom < ahora) dom.setDate(dom.getDate() + 7);
       for (var s = 0; s < 4; s++) { lista.push({ id: 700000300 + s, titulo: "💾 Hora de tu respaldo semanal", texto: "Entra a Configuración → Exportar datos → «Guardar copia en Google Drive».", cuando: new Date(dom.getTime()) }); dom.setDate(dom.getDate() + 7); }
     }
@@ -4598,6 +4726,19 @@
     }
     return lista;
   }
+  var noMolestar = leerLocal("nova-no-molestar", null) || {};
+  $("no-molestar").checked = !!noMolestar.activo;
+  $("no-molestar-inicio").value = noMolestar.inicio || "22:00";
+  $("no-molestar-fin").value = noMolestar.fin || "07:00";
+  ["no-molestar", "no-molestar-inicio", "no-molestar-fin"].forEach(function (id) {
+    $(id).addEventListener("change", function () {
+      var inicio = $("no-molestar-inicio"), fin = $("no-molestar-fin");
+      if (!inicio.reportValidity() || !fin.reportValidity()) return;
+      var config = { activo: $("no-molestar").checked, inicio: inicio.value, fin: fin.value };
+      if (!guardarLocal("nova-no-molestar", config)) return toast("No se pudo guardar el horario");
+      programarAvisos();
+    });
+  });
   $("rec-noche").checked = !!leerLocal("nova-rec-noche", false);
   $("rec-noche-hora").value = String(Number(leerLocal("nova-rec-noche-hora", 21)) || 21);
   $("rec-noche-hora").addEventListener("change", function (e) { guardarLocal("nova-rec-noche-hora", Number(e.target.value)); programarAvisos(); toast("Recordatorio a las " + e.target.selectedOptions[0].textContent); });
@@ -4638,7 +4779,12 @@
   function programarAvisos() {
     var N = enApp && window.Capacitor.Plugins && window.Capacitor.Plugins.LocalNotifications;
     if (!N || !fuente || fuente.demo) return Promise.resolve();
-    var avisos = (conductor() ? A.avisosDocumentos(datos.documentos) : []).concat(A.avisosDeudas(resumenDeDeudas().lista)).concat(avisosSemanales()).concat(avisosRecordatorios()).slice(0, 60);
+    var ahora = new Date(), silencio = leerLocal("nova-no-molestar", null);
+    var referencia = NovaHerramientas.referenciaAvisos(ahora, silencio);
+    var avisos = (conductor() ? A.avisosDocumentos(datos.documentos, referencia) : [])
+      .concat(A.avisosDeudas(resumenDeDeudas().lista, referencia), avisosSemanales(referencia), avisosRecordatorios(referencia))
+      .map(function (a) { return Object.assign(a, { cuando: NovaHerramientas.horaAviso(a.cuando, silencio) }); })
+      .filter(function (a) { return a.cuando > ahora; }).slice(0, 60);
     return N.getPending().then(function (p) {
       var viejos = (p && p.notifications || []).map(function (n) { return { id: n.id }; });
       return viejos.length ? N.cancel({ notifications: viejos }) : null;
@@ -8026,6 +8172,55 @@
     li.scrollIntoView({ block: "nearest" });
     return li;
   }
+  function ultimaRespuestaNova() {
+    if (!chatActual) return null;
+    for (var i = chatActual.mensajes.length - 1; i >= 0; i--) {
+      if (chatActual.mensajes[i].rol === "nova") return chatActual.mensajes[i];
+    }
+    return null;
+  }
+
+  function actualizarBotonNota() {
+    $("chat-guardar-nota").hidden = ocultos || !ultimaRespuestaNova();
+  }
+
+  function pintarNotasNova() {
+    var lista = $("notas-nova-lista");
+    lista.replaceChildren();
+    if (ocultos || !fuente) return;
+    var clave = claveComodidad("notas-nova");
+    var notas = NovaHerramientas.actualizarNotas(leerLocal(clave, []));
+    if (!notas.length) lista.append(el("li", "vacio", "Todavía no hay notas guardadas."));
+    notas.forEach(function (n) {
+      var fila = el("li", "tarjeta formulario");
+      fila.append(el("small", "nota", fechaCorta.format(new Date(n.fecha))),
+        el("p", "nota-nova-texto", marcasIA(n.texto).texto),
+        botonHabito("Borrar nota", function () {
+          if (ocultos || !fuente || clave !== claveComodidad("notas-nova")) return;
+          var nuevas = NovaHerramientas.actualizarNotas(leerLocal(clave, []), { borrar: n.id });
+          if (!guardarLocal(clave, nuevas)) return toast("No se pudo borrar la nota");
+          pintarNotasNova();
+          toast("Nota borrada");
+        }));
+      lista.append(fila);
+    });
+  }
+
+  $("chat-guardar-nota").addEventListener("click", function () {
+    if (ocultos || !fuente) return;
+    var respuesta = ultimaRespuestaNova();
+    if (!respuesta) return;
+    var clave = claveComodidad("notas-nova");
+    var nota = { id: idLocal(), texto: respuesta.texto, fecha: new Date().toISOString() };
+    if (!nota.texto.trim()) return;
+    var notas = NovaHerramientas.actualizarNotas(leerLocal(clave, []), { nota: nota });
+    toast(guardarLocal(clave, notas) ? "Nota guardada" : "No se pudo guardar la nota");
+  });
+  $("chat-ver-notas").addEventListener("click", function () {
+    pintarNotasNova();
+    abrirCapa("pantalla-notas-nova");
+  });
+
   function pintarChat() {
     $("chat").replaceChildren();
     chatActual.mensajes.forEach(function (m, i) {
@@ -8036,6 +8231,7 @@
       var antes = chatActual.mensajes[i - 1];
       if (m.rol !== "usuario" && antes && antes.rol === "usuario") { var t = tarjetaIA(antes.texto, m.texto); if (t) $("chat").append(t); }
     });
+    actualizarBotonNota();
     $("chat-bienvenida").hidden = chatActual.mensajes.length > 0;
     $("chat-titulo").textContent = chatActual.titulo || "Nueva conversación";
     $("chat-borrar").hidden = !chatActual.id;
@@ -8100,11 +8296,13 @@
     pregunta = String(pregunta || "").trim();
     if (!pregunta) return;
     opciones = opciones || {};
+    var soloCifras = opciones.grafico || opciones.agregados;
+    if (ocultos && soloCifras) return;
     var imagen = opciones.imagen;
     var textoVisible = (opciones.porVoz ? "🎤 " : "") + pregunta;
     if (!cliente || !fuente || fuente.demo) {
       // En la demostración la IA no responde, pero la tarjeta con los números sí sale.
-      var tDemo = imagen || opciones.grafico ? null : tarjetaIA(pregunta); // con foto, la pregunta es sobre la imagen, no sobre tus números
+      var tDemo = imagen || soloCifras ? null : tarjetaIA(pregunta); // con foto, la pregunta es sobre la imagen, no sobre tus números
       $("chat-bienvenida").hidden = true;
       burbuja("yo", textoVisible, imagen); $("chat-pregunta").value = "";
       if (opciones.grafico) burbuja("nova", "En la demostración puedes ver arriba las cifras del gráfico. Inicia sesión para recibir su explicación.");
@@ -8132,12 +8330,13 @@
     burbuja("yo", textoVisible, imagen);
     $("chat-pregunta").value = "";
     var espera = burbuja("nova pensando", "✦ Pensando…");
-    var historial = chat.mensajes.slice(-6);
+    var historial = soloCifras ? [] : chat.mensajes.slice(-6);
     // La pregunta se guarda de una vez: aunque la IA falle o tarde, queda en tu historial.
     chat.mensajes.push({ rol: "usuario", texto: (imagen ? "📷 " : "") + textoVisible });
     var guardada = guardarConversacion().catch(function () { mensaje("chat-mensaje", "La pregunta no se pudo guardar en tu historial, pero puedes seguir chateando.", true); });
     Promise.resolve().then(function () {
-      return preguntarEnFlujo({ pregunta: pregunta, historial: historial, contexto: opciones.grafico ? { hoy: hoyLocal() } : contextoFinanzas(), imagen: imagen, mime: opciones.mime }, function (texto) {
+      if (soloCifras && ocultos) return "";
+      return preguntarEnFlujo({ pregunta: pregunta, historial: historial, contexto: soloCifras ? { hoy: hoyLocal() } : contextoFinanzas(), imagen: imagen, mime: opciones.mime }, function (texto) {
         if (mio !== chatToken) return;
         pintarTextoIA(espera, texto);
         espera.classList.remove("pensando");
@@ -8149,15 +8348,16 @@
       if (!respuesta) throw new Error("La IA no pudo responder. Intenta otra vez en un momento.");
       pintarTextoIA(espera, respuesta);
       espera.classList.remove("pensando");
-      var tar = imagen || opciones.grafico ? null : tarjetaIA(pregunta, respuesta);
+      var tar = imagen || soloCifras ? null : tarjetaIA(pregunta, respuesta);
       if (tar) { espera.after(tar); tar.scrollIntoView({ block: "nearest" }); }
       chat.mensajes.push({ rol: "nova", texto: respuesta });
+      if (chat === chatActual) actualizarBotonNota();
       return guardada.then(function () { return guardarConversacion(); }).catch(function () { mensaje("chat-mensaje", "La respuesta no se pudo guardar en tu historial, pero puedes seguir chateando.", true); }).then(pintarIA);
     }).catch(function (e) {
       if (mio !== chatToken) return;
       espera.remove();
       mensaje("chat-mensaje", (e && e.message) || "No se pudo responder. Intenta otra vez.", true);
-      $("chat-pregunta").value = pregunta;      // para reintentar con un toque
+      if (!soloCifras) $("chat-pregunta").value = pregunta;      // para reintentar con un toque
     }).finally(function () { if (mio === chatToken) chatControl = null; });
   }
   $("chat-pregunta").addEventListener("focus", function () { setTimeout(function () { try { $("chat-pregunta").scrollIntoView({ block: "center" }); } catch (e) { /* sin scroll */ } }, 350); });

@@ -122,7 +122,122 @@
     return pregunta;
   }
 
-  var api = { preguntaGrafico: preguntaGrafico, periodo: periodo, categoriaNombrada: categoriaNombrada, serie: serie, tarjeta: tarjeta };
+  function preguntaConFilas(inicio, filas) {
+    var omitidas = "\nSe omitieron algunas filas para abreviar.";
+    for (var i = 0; i < filas.length; i++) {
+      if (inicio.length + filas[i].length + 1 + omitidas.length > 1200) return inicio + omitidas;
+      inicio += "\n" + filas[i];
+    }
+    return inicio;
+  }
+
+  function etiquetaBreve(texto, maximo) {
+    return String(texto || "").replace(/\s+/g, " ").trim().slice(0, maximo);
+  }
+
+  function preguntaPlanPresupuesto(ingresos, gastos, limites, moneda) {
+    function monto(n) { return Number(n.toFixed(2)); }
+    var filas = gastos.slice().sort(function (a, b) { return b.promedio - a.promedio; }).slice(0, 8)
+      .map(function (g) { return "Gasto mensual " + etiquetaBreve(g.categoria, 36) + ": " + monto(g.promedio); });
+    limites.forEach(function (l) {
+      filas.push("Límite " + etiquetaBreve(l.categoria, 36) + " (" + etiquetaBreve(l.ciclo, 12) + "): " + monto(l.monto));
+    });
+    return preguntaConFilas("Propón un plan mensual por categoría, con montos que en total no superen los ingresos. " +
+      "Considera los límites vigentes y expresa las cifras en " + etiquetaBreve(moneda, 8) +
+      ". Ingreso mensual promedio de los últimos 3 meses completos: " + monto(ingresos) + ".", filas);
+  }
+
+  function comercioClave(nombre) {
+    return String(nombre || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase()
+      .replace(/[^a-z0-9]+/g, " ").trim();
+  }
+
+  function comerciosParecidos(a, b) {
+    var extras = /^(pago|plan|membresia|suscripcion|mensual|premium|digital|servicio|com|co)$/;
+    return a.split(" ").some(function (palabra) {
+      return palabra.length >= 4 && !extras.test(palabra) && b.split(" ").indexOf(palabra) >= 0;
+    }) || a.replace(/ /g, "") === b.replace(/ /g, "");
+  }
+
+  // Cada fila usa el monto exacto y la racha que termina en su último cobro.
+  function candidatosSuscripciones(cobros) {
+    var grupos = new Map();
+    cobros.forEach(function (c) {
+      var nombre = comercioClave(c.comercio);
+      if (!nombre || !Number.isFinite(c.monto) || c.monto <= 0 || !/^\d{4}-\d{2}-\d{2}$/.test(c.fecha)) return;
+      var clave = c.monto + "|" + nombre;
+      if (!grupos.has(clave)) grupos.set(clave, { nombre: nombre, meses: new Map(), ultimo: c });
+      var g = grupos.get(clave);
+      var mes = Number(c.fecha.slice(0, 4)) * 12 + Number(c.fecha.slice(5, 7));
+      g.meses.set(mes, (g.meses.get(mes) || 0) + 1);
+      if (c.fecha > g.ultimo.fecha) g.ultimo = c;
+    });
+    var series = Array.from(grupos.values());
+    var filas = series.map(function (g) {
+      var ultimoMes = Math.max.apply(null, Array.from(g.meses.keys()));
+      var meses = 0;
+      while (g.meses.has(ultimoMes - meses) && g.meses.get(ultimoMes - meses) <= 2) meses++;
+      var duplicado = meses >= 3 && [0, 1, 2].every(function (i) { return g.meses.get(ultimoMes - i) >= 2; });
+      return {
+        nombre: g.nombre, ultimoMes: ultimoMes, categoria: g.ultimo.categoria, monto: g.ultimo.monto,
+        ultimo: g.ultimo.fecha, meses: meses, duplicado: duplicado
+      };
+    }).filter(function (f) { return f.meses >= 2; });
+    // Una misma serie puede aparecer con variantes del comercio en meses distintos.
+    series.filter(function (g) { return g.meses.size <= 2; })
+      .sort(function (a, b) { return b.ultimo.fecha.localeCompare(a.ultimo.fecha); })
+      .forEach(function (g) {
+        if (filas.some(function (f) { return f.monto === g.ultimo.monto && comerciosParecidos(f.nombre, g.nombre); })) return;
+        var mesesVistos = new Set();
+        series.forEach(function (otra) {
+          if (otra.ultimo.monto !== g.ultimo.monto || otra.ultimo.categoria !== g.ultimo.categoria ||
+            !comerciosParecidos(g.nombre, otra.nombre)) return;
+          otra.meses.forEach(function (cantidad, mes) { if (cantidad === 1) mesesVistos.add(mes); });
+        });
+        var ultimoMes = Number(g.ultimo.fecha.slice(0, 4)) * 12 + Number(g.ultimo.fecha.slice(5, 7));
+        var meses = 0;
+        while (mesesVistos.has(ultimoMes - meses)) meses++;
+        if (meses >= 3) filas.push({
+          nombre: g.nombre, ultimoMes: ultimoMes, categoria: g.ultimo.categoria, monto: g.ultimo.monto,
+          ultimo: g.ultimo.fecha, meses: meses, duplicado: false
+        });
+      });
+    filas.forEach(function (f) {
+      f.duplicado = f.duplicado || filas.some(function (otra) {
+        return otra !== f && f.monto === otra.monto && comerciosParecidos(f.nombre, otra.nombre) &&
+          Math.min(f.ultimoMes, otra.ultimoMes) - Math.max(f.ultimoMes - f.meses, otra.ultimoMes - otra.meses) >= 3;
+      });
+    });
+    return filas.sort(function (a, b) { return Number(b.duplicado) - Number(a.duplicado) || b.ultimo.localeCompare(a.ultimo); });
+  }
+
+  function preguntaSuscripciones(candidatos, moneda) {
+    return preguntaConFilas("Revisa estos cobros recurrentes en " + etiquetaBreve(moneda, 8) +
+      " e indica cuáles podrían estar olvidados o duplicados y cómo confirmarlo. La recurrencia por sí sola no demuestra falta de uso.",
+    candidatos.map(function (c, i) {
+      return (i + 1) + ". " + etiquetaBreve(c.categoria, 32) + ": " + c.monto + "/" +
+        (c.frecuencia || "mes") + ", último " + (c.ultimo || "sin dato") + ", " +
+        (c.meses == null ? "racha sin dato" : c.meses + " meses seguidos") + (c.duplicado ? ", posible duplicado" : "");
+    }));
+  }
+
+  function preguntaSimulacion(tipo, valor, base, resultado, moneda) {
+    var escenario = {
+      arriendo: "subida del arriendo del " + valor + " % sobre " + Number(base.arriendo.toFixed(2)),
+      ingreso: "pérdida del ingreso principal mensual durante " + valor + " meses",
+      gasto: "nuevo gasto fijo mensual de " + valor
+    }[tipo];
+    function monto(n) { return Number(n.toFixed(2)); }
+    return "Analiza este escenario: " + escenario + ". Cifras en " + etiquetaBreve(moneda, 8) +
+      ". Ingresos y gastos mensuales: " + monto(base.ingresos) + " y " + monto(base.gastos) +
+      ". Colchón: " + monto(base.colchon) + ". Cambio en el ahorro mensual: " + monto(resultado.cambio) +
+      ". Ahorro simulado: " + monto(resultado.ahorro) + ". " +
+      (resultado.mesesColchon === null ? "Sin déficit mensual." : "Meses de colchón ante el déficit: " + monto(resultado.mesesColchon) + ".") +
+      " Sugiere ajustes concretos para este escenario.";
+  }
+
+  var api = { preguntaPlanPresupuesto: preguntaPlanPresupuesto, candidatosSuscripciones: candidatosSuscripciones,
+    preguntaSuscripciones: preguntaSuscripciones, preguntaSimulacion: preguntaSimulacion, preguntaGrafico: preguntaGrafico, periodo: periodo, categoriaNombrada: categoriaNombrada, serie: serie, tarjeta: tarjeta };
   if (typeof module === "object" && module.exports) module.exports = api;
   else raiz.NovaRespuestas = api;
 })(typeof window !== "undefined" ? window : this);

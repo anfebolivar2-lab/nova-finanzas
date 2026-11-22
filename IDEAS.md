@@ -171,19 +171,19 @@ Lista de ideas propuestas para revisar; ninguna está hecha todavía.
 - ✅ Aviso del día de pago: "¿anotamos tu sueldo?".
 - ✅ Resumen de fin de año compartible como imagen.
 - Notificación silenciosa de "gasto alto del día".
-- Horario de "no molestar" para las notificaciones.
+- ✅ Horario de "no molestar" para las notificaciones.
 - ✅ Consejo financiero corto del día (uno distinto cada día).
 
 ## NOVA IA
 
 - ✅ Preguntas sugeridas según tus datos ("¿por qué gasté más este mes?").
 - ✅ Que la IA explique cualquier gráfico con un toque.
-- Plan de presupuesto generado por la IA con tus números reales.
-- La IA detecta suscripciones que olvidaste.
+- ✅ Plan de presupuesto generado por la IA con tus números reales.
+- ✅ La IA detecta suscripciones que olvidaste.
 - ✅ (en PR) Chat por voz con NOVA IA.
 - La IA categoriza los gastos sin categoría en lote (preguntando antes).
-- Simulador "¿qué pasa si…?" (si me suben el arriendo, si cambio de trabajo).
-- Resumen de la conversación con la IA guardado como nota.
+- ✅ Simulador "¿qué pasa si…?" (si me suben el arriendo, si cambio de trabajo).
+- ✅ Resumen de la conversación con la IA guardado como nota.
 
 ## Diseño y facilidad de uso
 
