@@ -497,7 +497,7 @@ body.con-capa { overflow: hidden; }
 .chat-capa .chat { flex: 0 1 auto; overflow: visible; }
 
 .monto-fila { display: flex; align-items: center; justify-content: center; gap: 4px; }
-.monto-fila .monto-grande { width: auto; flex: 1; }
+.monto-fila .monto-grande { width: auto; min-width: 0; flex: 1; }
 .monto-fila .icono-btn { color: var(--muted); flex: none; }
 .moneda-boton { align-self: center; display: inline-flex; gap: 8px; align-items: center; padding: 6px 16px; }
 .moneda-bloque { gap: 6px; }
@@ -868,6 +868,8 @@ button.mini { padding: 6px 12px; border-radius: 999px; font-size: .8rem; }
 .ia-tabla { border-collapse: collapse; width: 100%; font-size: .88rem; white-space: normal; }
 .ia-tabla th, .ia-tabla td { padding: 6px 8px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }
 .ia-tabla th { font-weight: 800; background: var(--surface); }
+.calc-tabla-corta { max-height: 15rem; overflow: auto; }
+.calc-tabla-corta .ia-tabla :is(th, td):first-child { min-width: 0; }
 .ia-tabla .num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .ia-fuentes { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-top: 8px; white-space: normal; }
 .ia-fuentes small { color: var(--muted); width: 100%; }
@@ -961,3 +963,14 @@ button.mini { padding: 6px 12px; border-radius: 999px; font-size: .8rem; }
 .barras-analisis .par small { font-size: .65rem; text-align: center; }
 .linea.linea-mini { display: block; max-width: 310px; }
 .fila-analisis { overflow-wrap: anywhere; }
+
+.montos-rapidos, .det-acciones { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; }
+.montos-rapidos button { padding: 8px; font-size: .85rem; }
+.regla-barra { width: 100%; accent-color: var(--accent); }
+.promedio-verde { color: var(--positivo); }
+.promedio-amarillo { color: #b77b0b; }
+.promedio-rojo { color: var(--danger); }
+.toast.valores-ocultos .toast-valor { display: none; }
+
+#pantalla-registro.valores-ocultos :is(#reg-monto-texto, #reg-orig, #reg-cop) { -webkit-text-security: disc; }
+#pantalla-registro.valores-ocultos :is(#reg-resultado, #reg-conversion) { visibility: hidden; }
