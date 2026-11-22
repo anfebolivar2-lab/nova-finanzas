@@ -1049,3 +1049,103 @@ test("resumenAnio excluye otros años y traspasos y calcula el mes y la categor�
   });
   assert.equal(A.resumenAnio(movs, 2024), null);
 });
+
+test("sugerencias por hora: usa las cuatro franjas y deja fuera la madrugada", () => {
+  const horas = [5, 10, 15, 19];
+  const gastos = horas.flatMap((hora) => [27, 28].map((dia) => ({
+    tipo: "gasto", monto: 3000, descripcion: "Gasto " + hora, fecha: new Date(2026, 9, dia, hora)
+  })));
+  [5, 9, 10, 14, 15, 18, 19, 23].forEach((hora) => {
+    const esperado = horas.filter((inicio) => inicio <= hora).pop();
+    assert.deepStrictEqual(A.sugerenciasPorHora(gastos, new Date(2026, 9, 29, hora)), [
+      gastos.find((g) => g.descripcion === "Gasto " + esperado && g.fecha.getDate() === 28)
+    ]);
+  });
+  assert.deepStrictEqual(A.sugerenciasPorHora(gastos, new Date(2026, 9, 29, 4)), []);
+});
+
+test("sugerencias por hora: agrupa nombres, usa el último gasto y limita a tres", () => {
+  const gasto = (dia, descripcion, extra) => Object.freeze(Object.assign({
+    tipo: "gasto", monto: 3000, descripcion, fecha: new Date(2026, 9, dia, 7)
+  }, extra));
+  const cafe = gasto(26, "Café", { monto: 4500, cuenta_id: 2, categoria_id: 5 });
+  const bus = gasto(28, "Bus"), pan = gasto(27, "Pan");
+  const movs = Object.freeze([
+    cafe, gasto(25, " CAFE "), gasto(23, "cafe"), bus, gasto(24, "Bus"), pan, gasto(24, "Pan"),
+    gasto(26, "Taxi"), gasto(24, "Taxi"), gasto(25, "Cena"),
+    gasto(26, "Cena", { transferencia: "x" }), gasto(28, "Cena", { tipo: "ingreso" }),
+    gasto(27, "Cena", { programado_id: 5 }), gasto(30, "Cena"),
+    gasto(27, "Cena", { fecha: "inválida" }), gasto(27, "Cena", { monto: 0 })
+  ]);
+  const hoy = new Date(2026, 9, 29, 8);
+  assert.deepStrictEqual(A.sugerenciasPorHora(movs, hoy), [cafe, bus, pan]);
+  assert.deepStrictEqual(A.sugerenciasPorHora([bus], hoy), []);
+});
+
+test("racha actual y récord: cuenta días únicos, conserva la racha desde ayer y excluye fechas futuras", () => {
+  const fechas = [new Date(2026, 9, 30), new Date(2026, 9, 31), new Date(2026, 10, 1),
+    new Date(2026, 10, 4), new Date(2026, 10, 4, 20), new Date(2026, 10, 5), new Date(2026, 10, 10), "inválida"];
+  const movs = fechas.reverse().map((fecha) => ({ fecha }));
+  assert.deepStrictEqual(A.rachaDias(movs, new Date(2026, 10, 5)), { actual: 2, record: 3 });
+  assert.deepStrictEqual(A.rachaDias(movs, new Date(2026, 10, 6)), { actual: 2, record: 3 });
+  assert.deepStrictEqual(A.rachaDias(movs, new Date(2026, 10, 7)), { actual: 0, record: 3 });
+  assert.deepStrictEqual(A.rachaDias([], HOY), { actual: 0, record: 0 });
+});
+
+test("hitos de racha: devuelve la insignia más alta alcanzada", () => {
+  assert.strictEqual(A.hitoDeRacha(2), null);
+  const dias = [3, 7, 14, 30, 60, 100];
+  dias.forEach((hito, i) => {
+    const premio = A.hitoDeRacha(hito);
+    assert.strictEqual(premio.dias, hito);
+    assert.ok(premio.emoji && premio.mensaje);
+    assert.deepStrictEqual(A.hitoDeRacha(dias[i + 1] ? dias[i + 1] - 1 : 101), premio);
+  });
+});
+
+test("usura: solo avisa al superar una tasa configurada y válida", () => {
+  assert.strictEqual(A.superaUsura("30,51", "30.5"), true);
+  assert.strictEqual(A.superaUsura(31, 30), true);
+  assert.strictEqual(A.superaUsura("30,5", 30.5), false);
+  assert.strictEqual(A.superaUsura(29, 30), false);
+  ["", "  ", null, undefined, "25xyz", "0x20", -1, 0, NaN, Infinity, true].forEach((invalida) => {
+    assert.strictEqual(A.superaUsura(40, invalida), false);
+    assert.strictEqual(A.superaUsura(invalida, 30), false);
+  });
+  assert.ok(Math.abs(A.tasaAnualDesdeMensual(2) - 26.824179456) < 0.000001);
+  assert.strictEqual(A.superaUsura(A.tasaAnualDesdeMensual(2), 25), true);
+  assert.strictEqual(A.tasaAnualDesdeMensual(0), 0);
+});
+
+test("evolución de deuda: ordena abonos propios y limita el saldo a cero", () => {
+  const deuda = Object.freeze({ id: 1, monto: "1000", fecha: "2026-10-01" });
+  const abonos = Object.freeze([
+    { id: 4, deuda_id: 1, monto: 800, fecha: "2026-10-05" },
+    { id: 3, deuda_id: 1, monto: 200, fecha: "2026-10-03" },
+    { id: 2, deuda_id: 1, monto: "100", fecha: "2026-10-03" },
+    { id: 5, deuda_id: 2, monto: 500, fecha: "2026-10-02" },
+    { id: 6, deuda_id: 1, monto: -5, fecha: "2026-10-02" }
+  ]);
+  assert.deepStrictEqual(A.evolucionDeuda(deuda, abonos), [
+    { fecha: "2026-10-01", saldo: 1000 }, { fecha: "2026-10-03", saldo: 900 },
+    { fecha: "2026-10-03", saldo: 700 }, { fecha: "2026-10-05", saldo: 0 }
+  ]);
+  assert.deepStrictEqual(A.evolucionDeuda(deuda, []), [{ fecha: "2026-10-01", saldo: 1000 }]);
+});
+
+test("pagos programados: incluye hoy y mañana en hora local, ordena y omite ingresos e inactivos", () => {
+  const ahora = new Date(2026, 11, 31, 23, 50);
+  const hoy = { tipo: "gasto", proxima: "2026-12-31" };
+  const manana = { activo: true, tipo: "gasto", proxima: "2027-01-01" };
+  const despues = { tipo: "gasto", proxima: "2027-01-02" };
+  const pagos = Object.freeze([manana, despues, hoy,
+    { activo: false, proxima: hoy.proxima }, { tipo: "ingreso", proxima: manana.proxima },
+    { proxima: "2026-12-30" }, { proxima: "inválida" }, {}]);
+  assert.deepStrictEqual(A.programadosProximos(pagos, ahora), [
+    { programado: hoy, fecha: new Date(2026, 11, 31), dias: 0 },
+    { programado: manana, fecha: new Date(2027, 0, 1), dias: 1 }
+  ]);
+  assert.deepStrictEqual(A.programadosProximos(pagos, ahora, 0).map((p) => p.programado), [hoy]);
+  assert.deepStrictEqual(A.programadosProximos(pagos, ahora, 2).map((p) => p.programado), [hoy, manana, despues]);
+  assert.deepStrictEqual(A.programadosProximos([], ahora), []);
+});

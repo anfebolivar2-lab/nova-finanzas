@@ -75,6 +75,80 @@
     return n;
   }
 
+  function rachaDias(movs, ahora) {
+    var hoy = claveDia(ahora || new Date());
+    var dias = Array.from(new Set(movs.map(function (m) {
+      return m.fecha ? claveDia(m.fecha) : "";
+    }).filter(function (dia) { return /^\d{4}-\d{2}-\d{2}$/.test(dia) && dia <= hoy; }))).sort();
+    var record = 0, tramo = 0, anterior = "";
+    dias.forEach(function (dia) {
+      tramo = anterior && siguienteFecha(anterior, "diaria") === dia ? tramo + 1 : 1;
+      record = Math.max(record, tramo);
+      anterior = dia;
+    });
+    return { actual: racha(movs, ahora), record: record };
+  }
+
+  function hitoDeRacha(dias) {
+    var hitos = [
+      [3, "🌱", "¡Empezaste un buen hábito!"],
+      [7, "🔥", "¡Una semana anotando!"],
+      [14, "⭐", "¡Dos semanas de constancia!"],
+      [30, "🏅", "¡Un mes seguido anotando!"],
+      [60, "🏆", "¡Sesenta días cuidando tus cuentas!"],
+      [100, "💎", "¡Cien días sin saltarte uno!"]
+    ];
+    for (var i = hitos.length - 1; i >= 0; i--) {
+      var hito = hitos[i];
+      if (dias >= hito[0]) return { dias: hito[0], emoji: hito[1], mensaje: hito[2] };
+    }
+    return null;
+  }
+
+  function franjaGasto(hora) {
+    return hora >= 19 ? 3 : hora >= 15 ? 2 : hora >= 10 ? 1 : hora >= 5 ? 0 : -1;
+  }
+
+  function sugerenciasPorHora(movs, ahora) {
+    var fechaActual = new Date(ahora || new Date()), franja = franjaGasto(fechaActual.getHours());
+    if (franja < 0) return [];
+    var grupos = new Map();
+    movs.forEach(function (m) {
+      if (m.tipo !== "gasto" || m.transferencia || m.programado_id || !(num(m.monto) > 0)) return;
+      var fecha = new Date(m.fecha || ""), nombre = sinTildes(m.descripcion).trim().replace(/\s+/g, " ");
+      if (!nombre || !(fecha <= fechaActual) || franjaGasto(fecha.getHours()) !== franja) return;
+      var grupo = grupos.get(nombre);
+      if (!grupo) {
+        grupo = { movimiento: m, fecha: fecha, cantidad: 0 };
+        grupos.set(nombre, grupo);
+      }
+      grupo.cantidad++;
+      if (fecha > grupo.fecha) {
+        grupo.fecha = fecha;
+        grupo.movimiento = m;
+      }
+    });
+    return Array.from(grupos.values()).filter(function (g) { return g.cantidad >= 2; })
+      .sort(function (a, b) { return b.cantidad - a.cantidad || b.fecha - a.fecha; })
+      .slice(0, 3).map(function (g) { return g.movimiento; });
+  }
+
+  function porcentajeValido(valor) {
+    if (typeof valor === "number") return Number.isFinite(valor) && valor >= 0 ? valor : NaN;
+    if (typeof valor !== "string" || !/^\+?(?:\d+(?:[.,]\d*)?|[.,]\d+)$/.test(valor.trim())) return NaN;
+    var numero = Number(valor.trim().replace(",", "."));
+    return Number.isFinite(numero) ? numero : NaN;
+  }
+
+  function tasaAnualDesdeMensual(tasa) {
+    return Math.expm1(12 * Math.log1p(tasa / 100)) * 100;
+  }
+
+  function superaUsura(tasaEa, usura) {
+    var tasa = porcentajeValido(tasaEa), limite = porcentajeValido(usura);
+    return limite > 0 && tasa > limite;
+  }
+
   // Cómo terminará el periodo si sigues gastando a este ritmo. Solo tiene sentido en el periodo actual.
   function proyeccionPeriodo(movs, rango, ahora) {
     ahora = new Date(ahora || new Date());
@@ -387,6 +461,21 @@
     return { fechas: out, proxima: f };
   }
 
+  function programadosProximos(programados, ahora, dias) {
+    var desde = inicioDia(ahora || new Date());
+    var limite = Number.isInteger(dias) && dias >= 0 ? dias : 1;
+    var hasta = new Date(desde);
+    hasta.setDate(hasta.getDate() + limite);
+    return programados.filter(function (p) {
+      return p.activo !== false && p.tipo !== "ingreso" && p.proxima;
+    }).map(function (p) {
+      var fecha = parteFecha(p.proxima);
+      if (claveDia(fecha) !== String(p.proxima).slice(0, 10)) return null;
+      return { programado: p, fecha: fecha, dias: Math.round((fecha - desde) / DIA) };
+    }).filter(function (p) { return p && p.fecha >= desde && p.fecha <= hasta; })
+      .sort(function (a, b) { return a.dias - b.dias; });
+  }
+
   // ---------- Grupos de categorías ----------
   var GRUPO_APPS = "Apps de transporte", GRUPO_TRABAJO = "Trabajo con vehículo";
   var GRUPOS = {
@@ -609,6 +698,18 @@
     var t = { debo: 0, me_deben: 0, pendientes: 0 };
     lista.forEach(function (x) { if (x.falta > 0) { t[x.deuda.tipo] += x.falta; t.pendientes++; } });
     return { lista: lista, debo: t.debo, meDeben: t.me_deben, pendientes: t.pendientes, balance: t.me_deben - t.debo };
+  }
+
+  function evolucionDeuda(deuda, abonos) {
+    var saldo = Math.max(0, num(deuda.monto));
+    var puntos = [{ fecha: deuda.fecha, saldo: saldo }];
+    abonos.filter(function (a) { return a.deuda_id === deuda.id && num(a.monto) > 0 && a.fecha; })
+      .sort(function (a, b) { return String(a.fecha).localeCompare(String(b.fecha)) || num(a.id) - num(b.id); })
+      .forEach(function (a) {
+        saldo = Math.max(0, saldo - num(a.monto));
+        puntos.push({ fecha: a.fecha, saldo: saldo });
+      });
+    return puntos;
   }
 
   // ---------- ¿Me alcanza? ----------
@@ -1219,7 +1320,9 @@
     avisoPorDefecto: avisoPorDefecto, presetDe: presetDe,
     esGanancia: esGanancia, esGastoTrabajo: esGastoTrabajo, esFijo: esFijo, rangoJornada: rangoJornada, resumenTrabajo: resumenTrabajo,
     estadoDocumento: estadoDocumento, sumarMeses: sumarMeses, proximoVencimiento: proximoVencimiento, avisosDocumentos: avisosDocumentos,
-    resumenDeudas: resumenDeudas, avisosDeudas: avisosDeudas, racha: racha, saldosGrupo: saldosGrupo, cuotaMeta: cuotaMeta, proyeccionPeriodo: proyeccionPeriodo
+    rachaDias: rachaDias, hitoDeRacha: hitoDeRacha, sugerenciasPorHora: sugerenciasPorHora,
+    porcentajeValido: porcentajeValido, tasaAnualDesdeMensual: tasaAnualDesdeMensual, superaUsura: superaUsura, programadosProximos: programadosProximos,
+    evolucionDeuda: evolucionDeuda, resumenDeudas: resumenDeudas, avisosDeudas: avisosDeudas, racha: racha, saldosGrupo: saldosGrupo, cuotaMeta: cuotaMeta, proyeccionPeriodo: proyeccionPeriodo
   };
   if (typeof module === "object" && module.exports) module.exports = api;
   else raiz.NovaAnalisis = api;
