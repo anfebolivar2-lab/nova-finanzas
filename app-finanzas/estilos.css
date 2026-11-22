@@ -32,7 +32,7 @@
 
 * { box-sizing: border-box; }
 html, body { margin: 0; }
-body { background: var(--bg); color: var(--ink); font: 16px/1.5 var(--font); -webkit-font-smoothing: antialiased; }
+body { background: var(--bg); color: var(--ink); font: 1rem/1.5 var(--font); -webkit-font-smoothing: antialiased; }
 [hidden] { display: none !important; }
 svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; flex: none; }
 h1, h2 { margin: 0; text-wrap: balance; }
@@ -680,6 +680,24 @@ button.mini { padding: 6px 12px; border-radius: 999px; font-size: .8rem; }
 :root[data-theme="claro"][data-acento="morado"] { --accent: #7a4fd6; --accent-ink: #fff; --accent-soft: rgba(122,79,214,.12); --glow: rgba(122,79,214,.18); --positivo: #7a4fd6; }
 :root[data-theme="claro"][data-acento="naranja"] { --accent: #d9731a; --accent-ink: #fff; --accent-soft: rgba(217,115,26,.12); --glow: rgba(217,115,26,.18); --positivo: #d9731a; }
 :root[data-letra="grande"] { font-size: 118%; }
+:root[data-letra="muy-grande"] { font-size: 135%; }
+#ajuste-tema { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+#ajuste-tema button, .selector-letra button { min-width: 0; padding-inline: 6px; }
+.selector-letra { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.lista-local { display: grid; gap: 8px; list-style: none; padding: 0; margin: 0; }
+.lista-local li { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 4px 12px; overflow-wrap: anywhere; }
+.lista-local li > span, .lista-local .casilla { flex: 1 1 11rem; min-width: 0; }
+.lista-local .casilla span { min-width: 0; }
+#compras-barra { width: 100%; accent-color: var(--accent); }
+.bloqueo { overflow-y: auto; }
+.bloqueo-caja { margin: auto; }
+
+@media (max-width: 420px) {
+  :root[data-letra="muy-grande"] .app { overflow-wrap: anywhere; padding-bottom: calc(112px + env(safe-area-inset-bottom)); }
+  :root[data-letra="muy-grande"] .cabecera .logo { font-size: 1.6rem; }
+  :root[data-letra="muy-grande"] .nav-inferior { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+  :root[data-letra="muy-grande"] .nav-inferior button { font-size: .7rem; }
+}
 
 /* Saludo, consejos, calendario, logros y calculadoras */
 .saludo { margin: 0; font-weight: 700; color: var(--muted); }

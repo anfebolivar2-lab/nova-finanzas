@@ -224,7 +224,7 @@
     document.querySelectorAll("[data-acento]").forEach(function (b) { if (b.tagName === "BUTTON") b.setAttribute("aria-checked", String(b.dataset.acento === a)); });
   }
   function aplicarLetra(l) {
-    if (l !== "grande") l = "normal";
+    if (["grande", "muy-grande"].indexOf(l) < 0) l = "normal";
     document.documentElement.setAttribute("data-letra", l);
     try { localStorage.setItem("nova-letra", l); } catch (e) { /* sin almacenamiento */ }
     document.querySelectorAll("[data-letra]").forEach(function (b) { if (b.tagName === "BUTTON") b.setAttribute("aria-checked", String(b.dataset.letra === l)); });
@@ -233,8 +233,14 @@
   aplicarLetra((function () { try { return localStorage.getItem("nova-letra") || "normal"; } catch (e) { return "normal"; } })());
 
   // ---------- Tema y valores ocultos ----------
+  var temaElegido;
+  function actualizarTema() {
+    var tema = temaElegido === "hora" ? A.temaPorHora(new Date()) : temaElegido;
+    document.documentElement.setAttribute("data-theme", tema);
+  }
   function aplicarTema(t) {
-    document.documentElement.setAttribute("data-theme", t);
+    temaElegido = t;
+    actualizarTema();
     try { localStorage.setItem("nova-tema", t); } catch (e) { /* sin almacenamiento */ }
     document.querySelectorAll("[data-tema]").forEach(function (b) { b.setAttribute("aria-checked", String(b.dataset.tema === t)); });
   }
@@ -846,7 +852,166 @@
     });
     cont.append(ul);
   }
+  // ---------- Lista de compras y pruebas gratis ----------
+  function claveComodidad(nombre) { return "nova-" + nombre + ":" + ((fuente && fuente.email) || "demo"); }
+
+  function idLocal() { return Date.now() + "-" + Math.random().toString(36).slice(2); }
+
+  function claveCompras() { return claveComodidad("compras:" + (espacioId || "principal")); }
+
+  function leerCompras() { return leerLocal(claveCompras(), { presupuesto: 0, items: [] }); }
+
+  function guardarCompras(lista) {
+    guardarLocal(claveCompras(), lista);
+    pintarCompras();
+  }
+
+  function pintarTotalCompras(lista) {
+    var r = A.totalLista(lista.items, lista.presupuesto);
+    $("compras-total").textContent = "Total estimado: " + dinero(r.total) + " · Comprado: " + dinero(r.comprado);
+    $("compras-barra").hidden = ocultos || !lista.presupuesto;
+    $("compras-barra").value = ocultos ? 0 : r.porcentaje;
+    $("compras-saldo").hidden = !lista.presupuesto;
+    $("compras-saldo").textContent = ocultos ? "Presupuesto: " + dinero(lista.presupuesto) :
+      (r.saldo < 0 ? "Te pasas por " : "Te quedan ") + dinero(Math.abs(r.saldo)) + " de " + dinero(lista.presupuesto);
+  }
+
+  function pintarCompras() {
+    var lista = leerCompras(), presupuesto = $("compras-presupuesto"), precio = $("compras-precio");
+    presupuesto.value = !ocultos && lista.presupuesto ? String(lista.presupuesto).replace(".", ",") : "";
+    formatearMontoEscrito(presupuesto);
+    if (ocultos) precio.value = "";
+    presupuesto.disabled = precio.disabled = ocultos;
+    $("form-compras-presupuesto").hidden = $("form-compras-item").hidden = ocultos;
+    pintarTotalCompras(lista);
+    var ul = $("compras-items");
+    ul.replaceChildren();
+    if (!lista.items.length) ul.append(el("li", "nota", "Aún no has agregado productos."));
+    lista.items.forEach(function (item) {
+      var li = el("li"), etiqueta = el("label", "casilla"), casilla = el("input");
+      casilla.type = "checkbox"; casilla.checked = item.comprado;
+      etiqueta.append(casilla, el("span", null, item.nombre + " · " + dinero(item.precio)));
+      casilla.addEventListener("change", function () {
+        var actual = leerCompras();
+        var producto = actual.items.find(function (x) { return x.id === item.id; });
+        if (!producto) return pintarCompras();
+        producto.comprado = casilla.checked;
+        guardarLocal(claveCompras(), actual);
+        pintarTotalCompras(actual);
+      });
+      var quitar = el("button", "enlace", "Quitar");
+      quitar.type = "button";
+      quitar.setAttribute("aria-label", "Quitar " + item.nombre);
+      quitar.addEventListener("click", function () {
+        if (!confirm("¿Quitar «" + item.nombre + "» de la lista?")) return;
+        var actual = leerCompras();
+        actual.items = actual.items.filter(function (x) { return x.id !== item.id; });
+        guardarCompras(actual);
+      });
+      li.append(etiqueta, quitar); ul.append(li);
+    });
+  }
+
+  $("form-compras-presupuesto").addEventListener("submit", function (e) {
+    e.preventDefault();
+    var monto = leerValor($("compras-presupuesto").value);
+    if (!Number.isFinite(monto) || monto < 0) return mensaje("compras-mensaje", "Escribe un presupuesto válido.", true);
+    var lista = leerCompras();
+    lista.presupuesto = monto;
+    guardarCompras(lista);
+    mensaje("compras-mensaje", "");
+    toast("Presupuesto guardado");
+  });
+
+  $("form-compras-item").addEventListener("submit", function (e) {
+    e.preventDefault();
+    var nombre = $("compras-nombre").value.trim(), precio = leerValor($("compras-precio").value);
+    if (!nombre || !Number.isFinite(precio) || precio < 0) return mensaje("compras-mensaje", "Escribe el nombre y un precio válido.", true);
+    var lista = leerCompras();
+    lista.items.push({ id: idLocal(), nombre: nombre, precio: precio, comprado: false });
+    guardarCompras(lista);
+    e.target.reset();
+    mensaje("compras-mensaje", "");
+    $("compras-nombre").focus();
+  });
+
+  function leerPruebas() { return leerLocal(claveComodidad("pruebas-gratis"), []); }
+
+  function filaPrueba(prueba, texto) {
+    var li = el("li"), boton = el("button", "enlace", "Ya la cancelé");
+    boton.type = "button";
+    boton.setAttribute("aria-label", "Ya la cancelé: " + prueba.nombre);
+    boton.addEventListener("click", function () {
+      if (!confirm("¿Quitar el recordatorio de «" + prueba.nombre + "»?")) return;
+      guardarLocal(claveComodidad("pruebas-gratis"), leerPruebas().filter(function (x) { return x.id !== prueba.id; }));
+      pintarPruebasGratis();
+      pintarInicio();
+      pintarAnalisis();
+      toast("Recordatorio quitado");
+    });
+    li.append(el("span", null, texto), boton);
+    return li;
+  }
+
+  function pintarPruebasGratis() {
+    var ul = $("pruebas-gratis");
+    ul.replaceChildren();
+    leerPruebas().forEach(function (prueba) {
+      var fecha = prueba.fecha.split("-");
+      ul.append(filaPrueba(prueba, prueba.nombre + " · Termina el " + fecha[2] + "/" + fecha[1] + "/" + fecha[0]));
+    });
+  }
+
+  $("form-prueba-gratis").addEventListener("submit", function (e) {
+    e.preventDefault();
+    var nombre = $("prueba-nombre").value.trim(), fecha = $("prueba-fecha").value;
+    if (!nombre || !Number.isFinite(A.diaDePrueba(fecha)) || fecha < A.claveDia(new Date())) {
+      return mensaje("prueba-mensaje", "Escribe el nombre y una fecha de hoy en adelante.", true);
+    }
+    var pruebas = leerPruebas();
+    pruebas.push({ id: idLocal(), nombre: nombre, fecha: fecha });
+    guardarLocal(claveComodidad("pruebas-gratis"), pruebas);
+    e.target.reset();
+    mensaje("prueba-mensaje", "");
+    pintarPruebasGratis();
+    pintarInicio();
+    pintarAnalisis();
+    toast("Recordatorio guardado");
+  });
+
+  function wPruebasGratis(art) {
+    var pruebas = A.pruebasPorVencer(leerPruebas(), new Date());
+    if (!pruebas.length) return;
+    titulo(art, "Pruebas gratis por terminar");
+    var ul = el("ul", "lista-local");
+    pruebas.forEach(function (prueba) {
+      var plazo = prueba.dias === 0 ? "Termina hoy" : prueba.dias === 1 ? "Termina mañana" : "Termina en " + prueba.dias + " días";
+      ul.append(filaPrueba(prueba, prueba.nombre + " · " + plazo));
+    });
+    art.append(ul);
+  }
+
+  var diaComodidad = A.claveDia(new Date());
+  function revisarHoraLocal() {
+    actualizarTema();
+    var dia = A.claveDia(new Date());
+    if (dia === diaComodidad) return;
+    diaComodidad = dia;
+    if ($("pantalla-app").hidden) return;
+    pintarInicio();
+    pintarAnalisis();
+  }
+  function esperarMinutoLocal() {
+    setTimeout(function () {
+      revisarHoraLocal();
+      esperarMinutoLocal();
+    }, 60000 - Date.now() % 60000);
+  }
+  esperarMinutoLocal();
+  document.addEventListener("visibilitychange", function () { if (!document.hidden) revisarHoraLocal(); });
+
   function pintarPlanes() {
+    pintarCompras();
     pintarSuscripciones();
     var ul = $("lista-limites");
     ul.replaceChildren();
@@ -1046,7 +1211,8 @@
     { id: "gasto-inusual", nombre: "Gastos inusuales", inicio: true },
     { id: "fondo-emergencia", nombre: "Fondo de emergencia" },
     { id: "servicios-por-mes", nombre: "Servicios públicos mes a mes" },
-    { id: "consejo-dia", nombre: "Consejo financiero del día", inicio: true }
+    { id: "consejo-dia", nombre: "Consejo financiero del día", inicio: true },
+    { id: "pruebas-gratis", nombre: "Pruebas gratis por terminar", inicio: true }
   ];
   function configWidgets() {
     var guardado = leerLocal("nova-widgets", null) || [];
@@ -1097,7 +1263,7 @@
       "ingresos-gastos-12": wIngresosGastos12, "tendencia-categorias": wTendenciaCategorias,
       "ranking-comercios": wRankingComercios, "compara-anios": wComparaAnios, "flujo-semanal": wFlujoSemanal,
       "dia-mas-caro": wDiaMasCaro, "patrimonio-neto": wPatrimonioNeto,
-      "fondo-emergencia": wFondoEmergencia, "servicios-por-mes": wServiciosPorMes, "consejo-dia": wConsejoDia
+      "fondo-emergencia": wFondoEmergencia, "servicios-por-mes": wServiciosPorMes, "consejo-dia": wConsejoDia, "pruebas-gratis": wPruebasGratis
     }[id];
     render(art, movs, ciclo, ref, rango);
     return art;
@@ -3900,7 +4066,7 @@
         f.entrada.disabled = ocultos;
       });
     }
-    pintarInicio(); pintarPlanes(); pintarAnalisis(); pintarBuscar(); pintarAjustes(); pintarIA(); pintarConductor(); pintarDeudas(); pintarGrupos(); pintarCalendario(); pintarEspacioCabecera(); if (pilaCapas.indexOf("pantalla-detalle") >= 0) pintarDetalle(); if (deudaAbierta && pilaCapas.indexOf("pantalla-abonos") >= 0) pintarAbonos();
+    pintarInicio(); pintarPlanes(); pintarAnalisis(); pintarBuscar(); pintarAjustes(); pintarPruebasGratis(); pintarIA(); pintarConductor(); pintarDeudas(); pintarGrupos(); pintarCalendario(); pintarEspacioCabecera(); if (pilaCapas.indexOf("pantalla-detalle") >= 0) pintarDetalle(); if (deudaAbierta && pilaCapas.indexOf("pantalla-abonos") >= 0) pintarAbonos();
   }
 
   function alerta(e) { mensaje("rapido-mensaje", "No se pudo guardar: " + (e && e.message ? e.message : e), true); }
@@ -7158,7 +7324,9 @@
       ordenarMovimientos();
       monedaVista = monedaBase();
       mostrar("app"); ir("inicio"); pintar();
+      ultimaActividad = Date.now();
       if (!fuente.demo) bloquearSiHayPin();
+      revisarInactividad();
       pintarEstadoPapelera(); tutorialSiHaceFalta(); novedadesSiHaceFalta();
       $("btn-dueno").hidden = !soyDueno(); marcarUso();
       while (accionesPendientes.length) anotarTeclaRapida(accionesPendientes.shift());
@@ -7312,7 +7480,36 @@
   }
 
   // ---------- Bloqueo con PIN (el PIN se guarda solo en este dispositivo, cifrado) ----------
-  var PIN_CLAVE = "nova-pin", PIN2_CLAVE = "nova-pin2", pinModo = null, pinPrimero = "", ocultoDesde = 0;
+  var PIN_CLAVE = "nova-pin", PIN2_CLAVE = "nova-pin2", pinModo = null, pinPrimero = "";
+  var minutosBloqueo = leerLocal("nova-bloqueo-minutos", 5), ultimaActividad = Date.now(), timerBloqueo;
+  var contenidoBloqueado = document.querySelectorAll("#pantalla-app, .capa, .hoja-fondo, #tutorial, #novedades, #toast");
+  $("bloqueo-minutos").value = String(minutosBloqueo);
+  $("bloqueo-minutos").addEventListener("change", function () {
+    minutosBloqueo = Number(this.value);
+    guardarLocal("nova-bloqueo-minutos", minutosBloqueo);
+    ultimaActividad = Date.now();
+    revisarInactividad();
+  });
+
+  function revisarInactividad() {
+    clearTimeout(timerBloqueo);
+    timerBloqueo = null;
+    if (!fuente || $("pantalla-app").hidden || pinModo === "abrir" || !leerPin()) return;
+    var espera = A.esperaBloqueo(minutosBloqueo, ultimaActividad, Date.now());
+    if (espera === null) return;
+    if (espera === 0) bloquearSiHayPin();
+    else timerBloqueo = setTimeout(revisarInactividad, espera);
+  }
+
+  function registrarActividad() {
+    if (document.hidden || pinModo === "abrir" || $("pantalla-app").hidden) return;
+    if (A.esperaBloqueo(minutosBloqueo, ultimaActividad, Date.now()) === 0 && leerPin()) {
+      revisarInactividad();
+      return;
+    }
+    ultimaActividad = Date.now();
+    if (!timerBloqueo) revisarInactividad();
+  }
   function leerPin2() { try { return localStorage.getItem(PIN2_CLAVE); } catch (e) { return null; } }
   function leerPin() { try { return localStorage.getItem(PIN_CLAVE); } catch (e) { return null; } }
   function hashPin(pin) {
@@ -7322,15 +7519,25 @@
       return Array.prototype.map.call(new Uint8Array(b), function (x) { return ("0" + x.toString(16)).slice(-2); }).join("");
     });
   }
-  function pintarEstadoPin() { $("pin2-estado").textContent = leerPin2() ? "Activado: ese PIN abre NOVA con los valores ocultos" : "Un segundo PIN que abre NOVA con los valores ocultos"; $("pin-estado").textContent = leerPin() ? "Activado: se pide al abrir NOVA" : "Pide un PIN cada vez que abres NOVA"; }
+  function pintarEstadoPin() { $("ajuste-bloqueo").hidden = !leerPin(); $("pin2-estado").textContent = leerPin2() ? "Activado: ese PIN abre NOVA con los valores ocultos" : "Un segundo PIN que abre NOVA con los valores ocultos"; $("pin-estado").textContent = leerPin() ? "Activado: se pide al abrir NOVA" : "Pide un PIN cada vez que abres NOVA"; }
   function abrirBloqueo(modo) {
     pinModo = modo; pinPrimero = "";
+    if (modo === "abrir") {
+      contenidoBloqueado.forEach(function (c) { c.inert = true; });
+    }
     var t = { crear: "Crea un PIN de 4 a 6 números", repetir: "Repite el PIN", abrir: "Escribe tu PIN", quitar: "Escribe tu PIN para quitarlo", crear2: "Crea tu PIN discreto (distinto al principal)", repetir2: "Repite el PIN discreto" };
     $("bloqueo-titulo").textContent = t[modo]; $("bloqueo-pin").value = ""; mensaje("bloqueo-mensaje", "");
     $("bloqueo-cancelar").hidden = modo === "abrir"; $("bloqueo-olvide").hidden = modo === "crear";
     $("bloqueo").hidden = false; setTimeout(function () { $("bloqueo-pin").focus(); }, 50);
   }
-  function cerrarBloqueo() { $("bloqueo").hidden = true; $("bloqueo-pin").value = ""; pinModo = null; }
+  function cerrarBloqueo() {
+    if (pinModo === "abrir") {
+      contenidoBloqueado.forEach(function (c) { c.inert = false; });
+    }
+    $("bloqueo").hidden = true; $("bloqueo-pin").value = ""; pinModo = null; pinPrimero = "";
+    ultimaActividad = Date.now();
+    revisarInactividad();
+  }
   function confirmarPin() {
     var pin = $("bloqueo-pin").value.replace(/\D/g, "");
     if (pin.length < 4) return mensaje("bloqueo-mensaje", "Escribe de 4 a 6 números.", true);
@@ -7339,6 +7546,7 @@
     if (pinModo === "repetir2") {
       if (pin !== pinPrimero) { abrirBloqueo("crear2"); return mensaje("bloqueo-mensaje", "No coinciden. Empieza de nuevo.", true); }
       return hashPin(pin).then(function (hp) {
+        if (pinModo !== "repetir2") return;
         if (hp === leerPin()) { abrirBloqueo("crear2"); return mensaje("bloqueo-mensaje", "Tiene que ser distinto al PIN principal.", true); }
         try { localStorage.setItem(PIN2_CLAVE, hp); } catch (e) { /* nada */ }
         cerrarBloqueo(); pintarEstadoPin(); toast("¡PIN discreto activado!", "Abre NOVA con los valores ocultos");
@@ -7346,9 +7554,11 @@
     }
     if (pinModo === "repetir") {
       if (pin !== pinPrimero) { abrirBloqueo("crear"); return mensaje("bloqueo-mensaje", "No coinciden. Empieza de nuevo.", true); }
-      return hashPin(pin).then(function (hp) { try { localStorage.setItem(PIN_CLAVE, hp); } catch (e) { /* nada */ } cerrarBloqueo(); pintarEstadoPin(); toast("¡PIN activado!", "Se pedirá al abrir NOVA"); });
+      return hashPin(pin).then(function (hp) { if (pinModo !== "repetir") return; try { localStorage.setItem(PIN_CLAVE, hp); } catch (e) { /* nada */ } cerrarBloqueo(); pintarEstadoPin(); toast("¡PIN activado!", "Se pedirá al abrir NOVA"); });
     }
+    var modo = pinModo;
     hashPin(pin).then(function (hp) {
+      if (pinModo !== modo) return;
       if (pinModo === "abrir" && hp !== leerPin() && leerPin2() && hp === leerPin2()) {
         ocultos = true; guardarLocal("nova-ocultos", true); pintarOjo(); cerrarBloqueo(); if (fuente) pintar(); return;
       }
@@ -7372,10 +7582,11 @@
     if (!leerPin()) return toast("Primero activa el PIN principal");
     abrirBloqueo("crear2");
   });
-  document.addEventListener("visibilitychange", function () {
-    if (document.hidden) ocultoDesde = Date.now();
-    else if (ocultoDesde && Date.now() - ocultoDesde > 30000 && $("bloqueo").hidden) bloquearSiHayPin();
+  ["pointerdown", "pointermove", "keydown", "input", "scroll"].forEach(function (evento) {
+    document.addEventListener(evento, registrarActividad, { capture: true, passive: true });
   });
+  document.addEventListener("visibilitychange", revisarInactividad);
+  window.addEventListener("pageshow", revisarInactividad);
   pintarEstadoPin();
 
   // ---------- Respaldos ----------
