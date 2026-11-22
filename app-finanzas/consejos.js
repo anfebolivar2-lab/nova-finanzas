@@ -593,7 +593,77 @@
     return "gasté " + valor + moneda + (comercio ? " en " + comercio : "");
   }
 
-  var api = { consejos: consejos, gastoInusual: gastoInusual, semana: semana, logros: logros, cuotaCredito: cuotaCredito, ahorroFuturo: ahorroFuturo, regla503020: regla503020, calendario: calendario, plata: plata,
+  var CONSEJOS_DIARIOS = [
+    "Separa una parte de tu ingreso para ahorrar el día que te paguen.",
+    "Define para qué quieres ahorrar y ponle una fecha a la meta.",
+    "Guarda el fondo de emergencia en un lugar de fácil acceso.",
+    "Si usas tu fondo de emergencia, planea cómo volver a llenarlo.",
+    "Programa un aporte de ahorro pequeño que puedas sostener.",
+    "Compara el precio por kilo o litro en el mercado.",
+    "Haz una lista antes de comprar y revisa qué tienes en casa.",
+    "Deja pasar un día antes de decidir sobre una compra por impulso.",
+    "Antes de comprar algo nuevo, compara cuánto cuesta reparar lo que tienes.",
+    "Separa cada mes algo para gastos anuales como seguros o matrículas.",
+    "Anota cuánto debes, cuánto cuesta cada deuda y cuándo vence.",
+    "Pon recordatorios antes de las fechas de pago de tus deudas.",
+    "Si puedes abonar de más, empezar por la deuda de mayor tasa suele ahorrar intereses.",
+    "Pregunta cómo hacer un abono directo al capital de tu crédito.",
+    "Compara el total a pagar, incluidos los seguros, antes de firmar un crédito.",
+    "Revisa cuánto pagarías en total si solo haces el pago mínimo de tu tarjeta.",
+    "Si se acerca un pago que no puedes cubrir, habla con la entidad antes del vencimiento.",
+    "Antes de comprar cartera, suma al nuevo crédito todos los costos del cambio.",
+    "Cuenta las cuotas que ya tienes antes de comprometerte con otra.",
+    "Guarda el comprobante cuando termines de pagar una deuda.",
+    "Arma tu presupuesto con lo que te llega después de descuentos.",
+    "Si tus ingresos cambian cada mes, planea primero con un mes de ingresos bajos.",
+    "Anota también lo que pagas en efectivo.",
+    "Revisa una vez por semana cuánto queda para tus gastos del mes.",
+    "Separa los gastos esenciales de los que puedes aplazar.",
+    "Revisa cuáles suscripciones usaste antes del próximo cobro.",
+    "Pon una alerta antes de que termine cada prueba gratis.",
+    "Deja un margen en el presupuesto para gastos pequeños que olvidaste.",
+    "Anota cuánto gastaste en servicios para comparar con las próximas facturas.",
+    "Acuerda con tu hogar cómo repartirán los gastos compartidos.",
+    "Antes de invertir, decide cuándo vas a necesitar esa plata.",
+    "Lee cómo puedes retirar tu dinero y cuánto cuesta hacerlo.",
+    "Compara rendimientos para el mismo plazo después de comisiones.",
+    "Repartir una inversión puede reducir el riesgo de depender de un solo activo.",
+    "Un buen rendimiento pasado no garantiza ganancias futuras.",
+    "Mantén el dinero para pagos próximos en un lugar de fácil acceso.",
+    "Pregunta si puedes perder parte del dinero antes de invertir.",
+    "Revisa quién supervisa a la entidad antes de entregarle tu plata.",
+    "Si no entiendes de dónde sale el rendimiento, tómate tiempo para averiguarlo.",
+    "Ten en cuenta cuánto suben los precios al evaluar una ganancia.",
+    "Usa una contraseña distinta para cada cuenta importante.",
+    "Activa la verificación en dos pasos en tu correo y en tu banco si está disponible.",
+    "Mantén en privado los códigos de verificación, incluso si te los piden por teléfono.",
+    "Abre la app del banco directamente si recibes un enlace inesperado.",
+    "Confirma por otro medio si un conocido pide una transferencia urgente.",
+    "Revisa el nombre del destinatario y el monto antes de transferir.",
+    "Activa avisos de compras para detectar movimientos que no reconozcas.",
+    "Si ves un cargo extraño, comunícate con el banco por un canal oficial.",
+    "Mantén al día el sistema y las apps de tu teléfono.",
+    "Desconfía de las promesas de ganancias altas sin riesgo.",
+    "Revisa el costo de envío antes de comparar precios en línea.",
+    "Calcula cuántas horas de trabajo cuesta una compra grande.",
+    "Si te ofrecen un descuento, revisa cuánto costaba antes el producto.",
+    "Mira el cobro de manejo y las comisiones de tus cuentas.",
+    "Guarda en un lugar seguro los documentos y comprobantes importantes.",
+    "Revisa los datos de tus pagos automáticos cuando cambies de cuenta.",
+    "Cuando recibas un ingreso extra, decide cuánto guardar antes de gastarlo.",
+    "Si una meta se siente lejana, divídela en aportes más pequeños.",
+    "Ponle una fecha a la próxima revisión de tu presupuesto.",
+    "Antes de compartir un dato personal, verifica quién lo pide y para qué."
+  ];
+
+  function consejoDelDia(fecha) {
+    var d = new Date(fecha);
+    var anio = d.getFullYear();
+    var diaDelAnio = (Date.UTC(anio, d.getMonth(), d.getDate()) - Date.UTC(anio, 0, 1)) / 86400000;
+    return Number.isFinite(diaDelAnio) ? CONSEJOS_DIARIOS[diaDelAnio % CONSEJOS_DIARIOS.length] : null;
+  }
+
+  var api = { consejoDelDia: consejoDelDia, consejos: consejos, gastoInusual: gastoInusual, semana: semana, logros: logros, cuotaCredito: cuotaCredito, ahorroFuturo: ahorroFuturo, regla503020: regla503020, calendario: calendario, plata: plata,
     gastoMensualPromedio: gastoMensualPromedio, mejorPeorMes: mejorPeorMes, salud: salud, iva: iva, dividirCuenta: dividirCuenta, costoHabito: costoHabito,
     contadoVsCuotas: contadoVsCuotas, cdt: cdt, primaCesantias: primaCesantias, salirDeDeuda: salirDeDeuda, reto52: reto52,
     suscripciones: suscripciones, inflacionPersonal: inflacionPersonal, mesesConDatos: mesesConDatos, compararMeses: compararMeses, costoEvento: costoEvento, etiquetasUsadas: etiquetasUsadas, importarCSV: importarCSV,

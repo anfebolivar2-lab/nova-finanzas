@@ -1043,7 +1043,10 @@
     { id: "patrimonio-neto", nombre: "Patrimonio neto" },
     { id: "promedio-dia", nombre: "Gasto promedio por día", inicio: true },
     { id: "regla503020", nombre: "Regla 50/30/20" },
-    { id: "gasto-inusual", nombre: "Gastos inusuales", inicio: true }
+    { id: "gasto-inusual", nombre: "Gastos inusuales", inicio: true },
+    { id: "fondo-emergencia", nombre: "Fondo de emergencia" },
+    { id: "servicios-por-mes", nombre: "Servicios públicos mes a mes" },
+    { id: "consejo-dia", nombre: "Consejo financiero del día", inicio: true }
   ];
   function configWidgets() {
     var guardado = leerLocal("nova-widgets", null) || [];
@@ -1093,7 +1096,8 @@
       "cortes-tarjeta": wCortesTarjeta, "saldo-bajo": wSaldoBajo, "avisos-limite": wAvisosLimite, "resumen-mes": wResumenMes, "meta-sugerida": wMetaSugerida,
       "ingresos-gastos-12": wIngresosGastos12, "tendencia-categorias": wTendenciaCategorias,
       "ranking-comercios": wRankingComercios, "compara-anios": wComparaAnios, "flujo-semanal": wFlujoSemanal,
-      "dia-mas-caro": wDiaMasCaro, "patrimonio-neto": wPatrimonioNeto
+      "dia-mas-caro": wDiaMasCaro, "patrimonio-neto": wPatrimonioNeto,
+      "fondo-emergencia": wFondoEmergencia, "servicios-por-mes": wServiciosPorMes, "consejo-dia": wConsejoDia
     }[id];
     render(art, movs, ciclo, ref, rango);
     return art;
@@ -1101,6 +1105,52 @@
   document.querySelectorAll("[data-periodo-analisis]").forEach(function (b) {
     b.addEventListener("click", function () { desfaseAnalisis += Number(b.dataset.periodoAnalisis); pintarAnalisis(); });
   });
+
+  function wFondoEmergencia(art) {
+    titulo(art, "Fondo de emergencia");
+    var cuentas = datos.cuentas.filter(function (c) { return c.tipo === "ahorro" || c.tipo === "efectivo"; });
+    var tieneAhorro = cuentas.length > 0;
+    if (!tieneAhorro) cuentas = datos.cuentas.filter(function (c) { return c.tipo !== "credito"; });
+    var saldo = cuentas.reduce(function (total, c) { return total + saldoCuenta(c); }, 0);
+    var r = A.fondoEmergencia(datos.movimientos, saldo, new Date());
+    if (!r) return art.append(el("p", "nota", "Faltan gastos registrados en los últimos 3 meses completos."));
+    art.append(el("p", "nota", "Gasto promedio de los últimos 3 meses completos · " + dinero(r.gastoMensual)),
+      el("p", "nota", (tieneAhorro ? "Disponible en ahorros y efectivo" : "Disponible en cuentas sin crédito") +
+        " · " + dinero(r.saldoDisponible)));
+    r.metas.forEach(function (meta) {
+      var nombre = "Meta de " + meta.meses + " meses";
+      art.append(el("strong", null, nombre + " · " + dinero(meta.monto)));
+      if (!ocultos) {
+        var barra = el("progress", "regla-barra");
+        barra.max = 1;
+        barra.value = meta.progreso;
+        barra.setAttribute("aria-label", nombre);
+        art.append(barra);
+      }
+      art.append(el("p", "nota", meta.falta > 0 ? "Te faltan " + dinero(meta.falta) : "Meta alcanzada"));
+    });
+  }
+
+  function wServiciosPorMes(art) {
+    titulo(art, "Servicios públicos mes a mes");
+    var movs = datos.movimientos.map(function (m) {
+      return Object.assign({}, m, { categoria: nombreCategoria(m.categoria_id) });
+    });
+    art.append(el("p", "nota", "Incluye lo que llevas registrado del mes en curso."));
+    A.serviciosPorMes(movs, new Date()).forEach(function (servicio) {
+      var meses = servicio.meses.map(function (mes) {
+        return A.nombreCorto("mensual", mes) + " " + dinero(mes.total);
+      });
+      var cambio = servicio.diferencia > 0 ? "Subió" : servicio.diferencia < 0 ? "Bajó" : "Sin cambio";
+      art.append(el("strong", null, servicio.nombre), el("p", "nota", meses.join(" · ")),
+        el("p", "nota", cambio + " frente al mes anterior"));
+    });
+  }
+
+  function wConsejoDia(art) {
+    titulo(art, "Consejo financiero del día");
+    art.append(el("p", null, NovaConsejos.consejoDelDia(new Date())));
+  }
 
   function wPromedioDia(art) {
     titulo(art, "Gasto promedio por día");
@@ -1841,6 +1891,7 @@
       var v = {};
       campos.forEach(function (f) {
         var texto = entradas[f.id].value.trim();
+        if (!texto && f.omitirVacio) return;
         if (f.fecha) v[f.id] = texto;
         else if (f.plata) v[f.id] = !texto && f.opcional ? 0 : opciones && /^[$\s]*[-−]/.test(texto) ? NaN : leerValor(texto);
         else if (opciones) v[f.id] = texto ? Number(texto.replace(",", ".")) : f.opcional ? 0 : NaN;
@@ -1850,7 +1901,7 @@
       try { resultado = calcular(v); } catch (e) { resultado = null; }
       var mensaje = opciones ? "Revisa los datos para calcular." : "Escribe los datos.";
       res.replaceChildren(typeof resultado === "string" || !resultado ? el("p", "calc-res", resultado || mensaje) : resultado);
-      if (resultado && opciones) res.append(el("p", "nota", AVISO_CALCULADORA));
+      if (resultado && opciones) res.append(el("p", "nota", opciones.aviso || AVISO_CALCULADORA));
     }
     Object.keys(entradas).forEach(function (k) { entradas[k].addEventListener("input", actualizar); });
     if (opciones) actualizar();
@@ -1965,9 +2016,86 @@
     return detalle;
   }
 
+  function calculadorasDeCredito(art) {
+    var C = window.NovaCalculadoras;
+    if (!C) return;
+    var aviso = "Cálculo estimado. Verifica con tu banco";
+    var tasa = "Tasa efectiva anual (%)";
+
+    calculadora(art, "Horas de trabajo que cuesta una compra", [
+      { id: "ht-ingreso", etq: "Ingreso mensual neto", plata: true },
+      { id: "ht-horas", etq: "Horas de trabajo al mes", valor: 192 },
+      { id: "ht-precio", etq: "Precio de la compra", plata: true }
+    ], function (v) {
+      var r = C.horasDeTrabajo(v["ht-ingreso"], v["ht-horas"], v["ht-precio"]);
+      if (!r) return null;
+      var formato = new Intl.NumberFormat("es-CO", { maximumFractionDigits: 2 });
+      return formato.format(r.horas) + " h de trabajo · " + formato.format(r.dias) + " días de 8 h";
+    }, { aviso: aviso });
+
+    var campos = [];
+    [1, 2, 3].forEach(function (n) {
+      var prefijo = "Oferta " + n + " · ";
+      campos.push(
+        { id: "cc-monto-" + n, etq: prefijo + "Monto", plata: true, omitirVacio: n === 3 },
+        { id: "cc-tasa-" + n, etq: prefijo + tasa, omitirVacio: n === 3 },
+        { id: "cc-meses-" + n, etq: prefijo + "Plazo en meses", omitirVacio: n === 3 },
+        { id: "cc-seguro-" + n, etq: prefijo + "Seguro mensual (opcional)", plata: true, omitirVacio: true }
+      );
+    });
+    calculadora(art, "Comparar créditos", campos, function (v) {
+      var ofertas = [1, 2, 3].map(function (n) {
+        return { monto: v["cc-monto-" + n], tasaEaPct: v["cc-tasa-" + n],
+          meses: v["cc-meses-" + n], seguroMensual: v["cc-seguro-" + n] };
+      });
+      if (Object.values(ofertas[2]).every(function (valor) { return valor === undefined; })) ofertas.pop();
+      var r = C.compararCreditos(ofertas);
+      if (!r) return null;
+      var resultado = el("div");
+      r.ofertas.forEach(function (o, i) {
+        resultado.append(el("p", "calc-res", "Oferta " + (i + 1) + " · Cuota mensual " + dinero(o.cuota) +
+          " · Total pagado " + dinero(o.total) + " · Intereses " + dinero(o.intereses)));
+      });
+      var mejores = r.masBaratas.map(function (i) { return "oferta " + (i + 1); });
+      resultado.append(el("p", "nota", mejores.length === 1 ?
+        "Menor total pagado · " + mejores[0] : "Empate en el menor total pagado · " + mejores.join(" y ")));
+      if (ofertas.some(function (o) { return o.monto !== ofertas[0].monto; })) {
+        resultado.append(el("p", "nota", "Las ofertas prestan montos distintos. Compara el mismo monto para decidir cuál te cuesta menos."));
+      }
+      return resultado;
+    }, { aviso: aviso, ayuda: "Completa dos ofertas y deja la tercera vacía si no la necesitas. La cuota y el total incluyen el seguro. Los intereses se muestran por separado." });
+
+    calculadora(art, "Crédito de vivienda o leasing", [
+      { id: "cv-valor", etq: "Valor del inmueble o bien", plata: true },
+      { id: "cv-inicial", etq: "Cuota inicial (%)", valor: 30 },
+      { id: "cv-tasa", etq: tasa },
+      { id: "cv-anios", etq: "Plazo en años" },
+      { id: "cv-vida", etq: "Seguro de vida mensual", plata: true, valor: 30000, opcional: true },
+      { id: "cv-bien", etq: "Seguro de incendio o todo riesgo mensual", plata: true, valor: 30000, opcional: true }
+    ], function (v) {
+      var r = C.creditoVivienda(v["cv-valor"], v["cv-inicial"], v["cv-tasa"], v["cv-anios"], v["cv-vida"], v["cv-bien"]);
+      return r ? "Monto del crédito " + dinero(r.monto) + " · Cuota base " + dinero(r.cuotaBase) +
+        " · Cuota con seguros " + dinero(r.cuotaConSeguros) + " · Total pagado, incluida la inicial " + dinero(r.total) : null;
+    }, { aviso: aviso, ayuda: "Ajusta con tu banco los valores de los seguros. El cálculo usa una cuota fija y supone que financias el valor restante completo. Si tu leasing tiene una opción de compra final, confirma ese valor con tu banco." });
+
+    calculadora(art, "Compra de cartera", [
+      { id: "cp-saldo", etq: "Saldo actual", plata: true },
+      { id: "cp-actual", etq: "Tasa efectiva anual actual (%)" },
+      { id: "cp-meses", etq: "Cuotas restantes" },
+      { id: "cp-nueva", etq: "Nueva tasa efectiva anual (%)" },
+      { id: "cp-costos", etq: "Costos de la compra de cartera", plata: true, opcional: true }
+    ], function (v) {
+      var r = C.compraCartera(v["cp-saldo"], v["cp-actual"], v["cp-meses"], v["cp-nueva"], v["cp-costos"]);
+      return r ? "Con tu crédito actual " + dinero(r.totalActual) + " · Con el nuevo, incluidos los costos " + dinero(r.totalNuevo) +
+        " · " + (r.ahorro < 0 ? "Costo adicional " : "Ahorro total ") + dinero(Math.abs(r.ahorro)) +
+        " · " + (r.conviene ? "Conviene por costo total." : r.ahorro === 0 ? "Pagas lo mismo." : "No conviene por costo total.") : null;
+    }, { aviso: aviso, ayuda: "Compara cuotas fijas con el mismo plazo restante. Los costos del cambio se pagan aparte, al inicio." });
+  }
+
   function wMasCalculadoras(art) {
     titulo(art, "Más calculadoras");
     calculadorasTrabajoYAhorro(art);
+    calculadorasDeCredito(art);
     var N = NovaConsejos;
     calculadora(art, "🧾 IVA (19 %)", [{ id: "iva-valor", etq: "Valor", ph: "100 mil", plata: true }, { id: "iva-pct", etq: "IVA (%)", ph: "19" }, { id: "iva-modo", etq: "¿El valor ya incluye IVA? (1 = sí, 0 = no)", ph: "0" }], function (v) {
       var r = N.iva(v["iva-valor"], v["iva-pct"] || 19, v["iva-modo"] === 1 ? "menos" : "mas");
