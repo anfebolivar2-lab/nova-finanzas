@@ -286,6 +286,7 @@
         <strong id="presupuesto-valor"></strong>
         <div class="barra"><span id="presupuesto-barra"></span></div>
         <span id="presupuesto-nota" class="nota"></span>
+        <button type="button" class="mini" data-plan-nova>Pídele un plan a NOVA</button>
       </article>
 
       <div class="dos-col">
@@ -324,6 +325,8 @@
     <section class="vista" data-vista="planes" hidden>
       <div class="seccion-cabecera"><h1 class="titulo-vista">Planes</h1><button type="button" class="icono-btn btn-calendario" data-calendario="planes" aria-label="Ver calendario día por día"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg></button></div>
       <div class="inf-barra"><span>Informe con tus límites y metas</span><span class="inf-iconos"><button type="button" class="inf-ico" data-informe="pdf" data-ctx="planes" aria-label="Descargar informe en PDF"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 2h8l5 5v13a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2z" fill="#e5483d"/><path d="M14 2v5h5" fill="#f2a29c"/><text x="12" y="17" text-anchor="middle" font-size="6.2" font-weight="800" fill="#fff" font-family="Arial,sans-serif">PDF</text></svg></button><button type="button" class="inf-ico" data-informe="excel" data-ctx="planes" aria-label="Descargar informe en Excel"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 2h8l5 5v13a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2z" fill="#1f9d55"/><path d="M14 2v5h5" fill="#8fd1ac"/><text x="12" y="17" text-anchor="middle" font-size="6.2" font-weight="800" fill="#fff" font-family="Arial,sans-serif">XLS</text></svg></button></span></div>
+      <button type="button" class="mini" data-plan-nova>Pídele un plan a NOVA</button>
+      <button type="button" class="mini" id="abrir-simulacion">¿Qué pasa si…?</button>
       <div id="planes-vacio" class="tarjeta vacio-grande" hidden>
         <span class="vacio-icono">+</span>
         <strong>No tienes ningún plan</strong>
@@ -692,6 +695,11 @@
         <ul id="pruebas-gratis" class="lista-local"></ul>
       </article>
       <h2 class="grupo-ajustes">Recordatorios (app Android)</h2>
+      <div class="menu">
+        <label class="menu-fila"><span><strong>No molestar</strong><small>Los recordatorios se posponen hasta el fin del horario.</small></span><input type="checkbox" class="interruptor" id="no-molestar"></label>
+        <label class="menu-fila sub"><span>Hora de inicio</span><input type="time" id="no-molestar-inicio" value="22:00" required></label>
+        <label class="menu-fila sub"><span>Hora de fin</span><input type="time" id="no-molestar-fin" value="07:00" required></label>
+      </div>
       <div class="menu">
         <label class="menu-fila"><span class="menu-icono">🌙</span><span><strong>¿Gastaste algo hoy?</strong><small>Un aviso cada noche, solo si ese día no anotaste nada, con botones para anotar rápido</small></span><input type="checkbox" id="rec-noche" class="interruptor"></label>
         <label class="menu-fila sub"><span class="menu-icono">⏰</span><span><strong>Hora del aviso</strong></span><select id="rec-noche-hora" aria-label="Hora del aviso"><option value="19">7 p. m.</option><option value="20">8 p. m.</option><option value="21">9 p. m.</option><option value="22">10 p. m.</option><option value="23">11 p. m.</option></select></label>
@@ -1521,6 +1529,25 @@
 </section>
 
 <!-- Chat con NOVA IA -->
+<section id="pantalla-simulacion" class="capa" hidden>
+  <div class="sub-cabecera"><button type="button" class="icono-btn" data-cerrar aria-label="Volver"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button><h1>¿Qué pasa si…?</h1></div>
+  <div class="tarjeta formulario">
+    <form id="simulacion-campos">
+      <label for="simulacion-tipo">Escenario</label>
+      <select id="simulacion-tipo">
+        <option value="arriendo">Sube el arriendo</option>
+        <option value="ingreso">Pierdo mi ingreso principal temporalmente</option>
+        <option value="gasto">Sumo un gasto fijo</option>
+      </select>
+      <label id="simulacion-etiqueta" for="simulacion-valor">Aumento del arriendo (%)</label>
+      <input id="simulacion-valor" type="number" min="0" step="any" required>
+    </form>
+    <p class="nota">Se usan los últimos 3 meses completos y tu saldo disponible como colchón.</p>
+    <p id="simulacion-resultado" class="calc-res" role="status"></p>
+    <button type="button" id="simulacion-nova" class="mini" hidden>Pregúntale a NOVA</button>
+  </div>
+</section>
+
 <section id="pantalla-chat" class="capa chat-capa" hidden>
   <div class="sub-cabecera"><button type="button" class="icono-btn" data-cerrar aria-label="Volver"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button><h1 id="chat-titulo">Nueva conversación</h1>
     <button type="button" id="chat-borrar" class="icono-btn" aria-label="Borrar esta conversación" hidden><svg viewBox="0 0 24 24"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg></button></div>
@@ -1532,6 +1559,10 @@
   </div>
   <p id="chat-oculto" class="nota" hidden>Los mensajes del chat se ocultan mientras están ocultos los valores.</p>
   <ol id="chat" class="chat" aria-live="polite"></ol>
+  <div class="sugerencias">
+    <button type="button" id="chat-guardar-nota" class="mini" hidden>Guardar como nota</button>
+    <button type="button" id="chat-ver-notas" class="mini">Notas de NOVA</button>
+  </div>
   <form id="form-chat" class="rapido-fila chat-entrada" autocomplete="off">
     <div id="chat-adjunto" hidden>
       <img alt="Foto adjunta">
@@ -1546,6 +1577,12 @@
   </form>
   <p id="chat-mantenimiento" class="mensaje error aviso-config-texto" role="status" hidden></p>
   <p id="chat-mensaje" class="mensaje" role="status"></p>
+</section>
+
+<section id="pantalla-notas-nova" class="capa" hidden>
+  <div class="sub-cabecera"><button type="button" class="icono-btn" data-cerrar aria-label="Volver"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button><h1>Notas de NOVA</h1></div>
+  <p id="notas-nova-ocultas" class="nota" hidden>Muestra los valores para ver tus notas.</p>
+  <ul id="notas-nova-lista" class="lista-simple"></ul>
 </section>
 
 <!-- Elegir moneda -->
@@ -1683,6 +1720,7 @@
 <script src="informes.js"></script>
 <script src="espacios.js"></script>
 <script src="respuestas.js"></script>
+<script src="herramientas.js"></script>
 <script src="sincronizacion.js"></script>
 <script src="vendor/supabase.js"></script>
 <script src="tarjeta.js"></script>

@@ -1098,3 +1098,5 @@ button.mini { padding: 6px 12px; border-radius: 999px; font-size: .8rem; }
   .estado-financiero tr { break-inside: avoid; }
   .estado-financiero h2 { break-after: avoid; }
 }
+
+.nota-nova-texto { white-space: pre-wrap; overflow-wrap: anywhere; }

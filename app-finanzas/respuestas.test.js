@@ -75,3 +75,52 @@ test("abrevia preguntas de gráficos largos sin cortar ninguna cifra", () => {
   assert.ok(lineas.length > 0 && lineas.length < filas.length);
   lineas.forEach((linea, i) => assert.ok(linea.endsWith(": " + i + " / " + (i + 1))));
 });
+
+test("el plan usa los ocho gastos más altos y los límites vigentes con su ciclo", () => {
+  const gastos = Array.from({ length: 10 }, (_, i) => ({ categoria: "Categoría " + i, promedio: i * 25 }));
+  const limites = [{ categoria: "General", ciclo: "Mensual", monto: 1500, nota: "Texto privado" }];
+  const pregunta = R.preguntaPlanPresupuesto(2000, gastos, limites, "COP");
+  assert.match(pregunta, /3 meses completos: 2000/);
+  assert.match(pregunta, /Límite General \(Mensual\): 1500/);
+  assert.match(pregunta, /Gasto mensual Categoría 9: 225/);
+  assert.doesNotMatch(pregunta, /Categoría [01]:|Texto privado/);
+  assert.equal(pregunta.split("\n").filter(l => l.startsWith("Gasto mensual")).length, 8);
+  assert.equal(gastos[0].promedio, 0);
+  assert.ok(R.preguntaPlanPresupuesto(2000, gastos, Array(100).fill(limites[0]), "COP").length <= 1200);
+});
+
+test("los duplicados requieren tres meses de coincidencia, montos iguales y comercios parecidos", () => {
+  const cobros = [];
+  for (let mes = 1; mes <= 3; mes++) {
+    const fecha = "2026-0" + mes + "-04";
+    ["Streaming Alfa", "Alfa Premium", "Otro comercio"].forEach(comercio => {
+      cobros.push({ comercio, categoria: "Suscripciones", monto: 100, fecha, nota: "Nota privada" });
+    });
+  }
+  cobros.push({ comercio: "Streaming Alfa", categoria: "Suscripciones", monto: 200, fecha: "2026-04-04" });
+  const candidatos = R.candidatosSuscripciones(cobros);
+  assert.equal(candidatos.length, 3);
+  assert.deepStrictEqual(candidatos.map(c => [c.meses, c.duplicado]), [[3, true], [3, true], [3, false]]);
+  const pregunta = R.preguntaSuscripciones(candidatos, "COP");
+  assert.match(pregunta, /Suscripciones: 100\/mes, último 2026-03-04, 3 meses seguidos/);
+  assert.doesNotMatch(pregunta, /Alfa|Otro comercio|Nota privada/);
+  assert.ok(R.preguntaSuscripciones(Array(50).fill(candidatos[0]), "COP").length <= 1200);
+});
+
+test("se reconoce una racha mensual aunque cambie la variante del comercio", () => {
+  const candidatos = R.candidatosSuscripciones(["Alfa básico", "Alfa pago", "Alfa"].map((comercio, i) => ({
+    comercio, categoria: "Suscripciones", monto: 100, fecha: "2026-0" + (i + 1) + "-04"
+  })));
+  assert.equal(candidatos.length, 1);
+  assert.equal(candidatos[0].meses, 3);
+  assert.equal(candidatos[0].duplicado, false);
+});
+
+test("la pregunta del simulador incluye las cifras calculadas y la duración", () => {
+  const pregunta = R.preguntaSimulacion("ingreso", 3, { ingresos: 800, gastos: 500, arriendo: 100, colchon: 1000 },
+    { cambio: -800, ahorro: -500, mesesColchon: 2 }, "COP");
+  assert.match(pregunta, /durante 3 meses/);
+  assert.match(pregunta, /Ahorro simulado: -500/);
+  assert.match(pregunta, /ante el déficit: 2/);
+  assert.ok(pregunta.length <= 1200);
+});
