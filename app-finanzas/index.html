@@ -347,6 +347,26 @@
       <ul id="lista-grupos" class="lista-simple"></ul>
       <div class="seccion-cabecera"><h2>Suscripciones y pagos fijos</h2></div>
       <div id="suscripciones" class="tarjeta suscripciones"></div>
+      <article class="tarjeta formulario" id="lista-compras">
+        <h2 class="titulo-tarjeta">Lista de compras</h2>
+        <form id="form-compras-presupuesto" class="formulario">
+          <label for="compras-presupuesto">Presupuesto</label>
+          <input id="compras-presupuesto" class="monto-entrada" inputmode="decimal" maxlength="24" required>
+          <button type="submit">Guardar presupuesto</button>
+        </form>
+        <p id="compras-total" class="nota" role="status"></p>
+        <progress id="compras-barra" max="100" value="0" aria-label="Presupuesto usado por la lista"></progress>
+        <p id="compras-saldo" class="nota"></p>
+        <ul id="compras-items" class="lista-local"></ul>
+        <form id="form-compras-item" class="formulario">
+          <label for="compras-nombre">Producto</label>
+          <input id="compras-nombre" maxlength="80" required>
+          <label for="compras-precio">Precio estimado</label>
+          <input id="compras-precio" class="monto-entrada" inputmode="decimal" maxlength="24" required>
+          <button type="submit" class="primario">Agregar producto</button>
+        </form>
+        <p id="compras-mensaje" class="mensaje" role="status"></p>
+      </article>
       <div class="seccion-cabecera"><h2>Metas de ahorro</h2></div>
       <ul id="lista-metas" class="lista-metas"></ul>
       <form id="form-meta" class="tarjeta formulario">
@@ -567,13 +587,24 @@
         <button type="button" id="btn-papelera"><span class="menu-icono">🗑️</span><span><strong>Papelera</strong><small id="papelera-estado">Recupera lo que borraste en los últimos 30 días</small></span></button>
         <label class="menu-fila"><span class="menu-icono">📳</span><span><strong>Sacudir para ocultar valores</strong><small>Sacude el celular 3 veces para ocultar o mostrar</small></span><input type="checkbox" id="sacudir-ocultar" class="interruptor"></label>
       </div>
+      <article id="ajuste-bloqueo" class="tarjeta formulario" hidden>
+        <label for="bloqueo-minutos">Bloquear después de</label>
+        <select id="bloqueo-minutos" aria-describedby="bloqueo-ayuda">
+          <option value="0">Nunca</option>
+          <option value="1">1 minuto</option>
+          <option value="5">5 minutos</option>
+          <option value="15">15 minutos</option>
+        </select>
+        <p id="bloqueo-ayuda" class="nota">Tiempo sin usar NOVA, incluso en segundo plano. El PIN se sigue pidiendo al abrir la app.</p>
+      </article>
       <p class="mensaje" id="respaldo-mensaje" role="status"></p>
 
       <h2 class="grupo-ajustes">Apariencia</h2>
       <article class="tarjeta formulario">
         <span class="etiqueta">Tema</span>
-        <div class="segmentado" role="radiogroup" aria-label="Tema">
-          <button type="button" role="radio" data-tema="sistema">Automático</button>
+        <div class="segmentado" role="radiogroup" aria-label="Tema" id="ajuste-tema">
+          <button type="button" role="radio" data-tema="sistema">Como el teléfono</button>
+          <button type="button" role="radio" data-tema="hora">Automático por hora</button>
           <button type="button" role="radio" data-tema="oscuro">Oscuro</button>
           <button type="button" role="radio" data-tema="claro">Claro</button>
         </div>
@@ -585,9 +616,10 @@
           <button type="button" role="radio" data-acento="naranja">Naranja</button>
         </div>
         <span class="etiqueta">Tamaño de letra</span>
-        <div class="segmentado dos" role="radiogroup" aria-label="Tamaño de letra">
+        <div class="segmentado selector-letra" role="radiogroup" aria-label="Tamaño de letra">
           <button type="button" role="radio" data-letra="normal">Normal</button>
           <button type="button" role="radio" data-letra="grande">Grande</button>
+          <button type="button" role="radio" data-letra="muy-grande">Muy grande</button>
         </div>
       </article>
       <h2 class="grupo-ajustes">Tu plata</h2>
@@ -606,6 +638,19 @@
       <div class="menu">
         <label class="menu-fila"><span class="menu-icono">🪙</span><span><strong>Redondeo ahorrador</strong><small>Cada gasto se redondea a mil y lo que sobra se aparta en una alcancía virtual</small></span><input type="checkbox" id="redondeo-activo" class="interruptor"></label>
       </div>
+      <h2 class="grupo-ajustes">Pruebas gratis</h2>
+      <article class="tarjeta formulario">
+        <form id="form-prueba-gratis" class="formulario">
+          <label for="prueba-nombre">Nombre del servicio</label>
+          <input id="prueba-nombre" maxlength="80" required>
+          <label for="prueba-fecha">Fecha en que termina</label>
+          <input id="prueba-fecha" type="date" required>
+          <button type="submit" class="primario">Guardar recordatorio</button>
+        </form>
+        <p class="nota">Te avisamos en Inicio desde tres días antes de que termine.</p>
+        <p id="prueba-mensaje" class="mensaje" role="status"></p>
+        <ul id="pruebas-gratis" class="lista-local"></ul>
+      </article>
       <h2 class="grupo-ajustes">Recordatorios (app Android)</h2>
       <div class="menu">
         <label class="menu-fila"><span class="menu-icono">🌙</span><span><strong>¿Gastaste algo hoy?</strong><small>Un aviso cada noche, solo si ese día no anotaste nada, con botones para anotar rápido</small></span><input type="checkbox" id="rec-noche" class="interruptor"></label>
@@ -1379,7 +1424,7 @@
     <button type="button" class="enlace" id="tutorial-saltar">Saltar</button>
   </div>
 </div>
-<div id="bloqueo" class="bloqueo" hidden>
+<div id="bloqueo" class="bloqueo" role="dialog" aria-modal="true" aria-labelledby="bloqueo-titulo" hidden>
   <div class="bloqueo-caja">
     <div class="logo grande"><span>NOVA</span><svg class="chispa" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2l2.2 7.8L22 12l-7.8 2.2L12 22l-2.2-7.8L2 12l7.8-2.2z"/></svg></div>
     <h2 id="bloqueo-titulo">Escribe tu PIN</h2>

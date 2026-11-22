@@ -1065,7 +1065,52 @@
     }, []);
   }
 
+  function temaPorHora(fecha) {
+    var hora = fecha.getHours();
+    return hora >= 6 && hora < 18 ? "claro" : "oscuro";
+  }
+
+  function esperaBloqueo(minutos, ultimaActividad, ahora) {
+    if ([1, 5, 15].indexOf(minutos) < 0) return null;
+    return Math.max(0, minutos * 60000 - Math.max(0, ahora - ultimaActividad));
+  }
+
+  function totalLista(items, presupuesto) {
+    var total = 0, comprado = 0;
+    items.forEach(function (item) {
+      var precio = Number(item.precio);
+      if (!Number.isFinite(precio) || precio < 0) return;
+      var centavos = Math.round(precio * 100);
+      total += centavos;
+      if (item.comprado) comprado += centavos;
+    });
+    var limite = Number.isFinite(presupuesto) && presupuesto > 0 ? Math.round(presupuesto * 100) : 0;
+    return {
+      total: total / 100,
+      comprado: comprado / 100,
+      saldo: (limite - total) / 100,
+      porcentaje: limite ? Math.min(100, total / limite * 100) : 0
+    };
+  }
+
+  function diaDePrueba(fecha) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(fecha)) return NaN;
+    var marca = Date.parse(fecha + "T00:00:00Z");
+    return Number.isFinite(marca) && new Date(marca).toISOString().slice(0, 10) === fecha ? marca / DIA : NaN;
+  }
+
+  function pruebasPorVencer(pruebas, ahora) {
+    var hoy = diaDePrueba(claveDia(ahora));
+    return pruebas.map(function (prueba) {
+      return Object.assign({}, prueba, { dias: diaDePrueba(prueba.fecha) - hoy });
+    }).filter(function (prueba) {
+      return prueba.dias >= 0 && prueba.dias <= 3;
+    }).sort(function (a, b) { return a.dias - b.dias; });
+  }
+
   var api = {
+    temaPorHora: temaPorHora, esperaBloqueo: esperaBloqueo, totalLista: totalLista,
+    diaDePrueba: diaDePrueba, pruebasPorVencer: pruebasPorVencer,
     ingresosGastos12: ingresosGastos12, tendenciaCategorias: tendenciaCategorias, rankingComercios: rankingComercios,
     comparaAnios: comparaAnios, flujoSemanal: flujoSemanal, diaMasCaro: diaMasCaro, patrimonioNeto: patrimonioNeto,
     sumarMontoRapido: sumarMontoRapido, sugerirDescripciones: sugerirDescripciones,

@@ -910,3 +910,40 @@ test("servicios: cuatro meses, fechas límite, categorías, palabras completas y
   ]);
   assert.ok(A.serviciosPorMes([], ahora).every(f => f.meses.every(mes => mes.total === 0)));
 });
+
+test("tema por hora: cambia a las seis de la mañana y de la tarde", () => {
+  [[5, 59, "oscuro"], [6, 0, "claro"], [17, 59, "claro"], [18, 0, "oscuro"]].forEach(([hora, min, tema]) => {
+    assert.strictEqual(A.temaPorHora(new Date(2026, 10, 22, hora, min)), tema);
+  });
+});
+
+test("bloqueo: tiempo restante, vencimiento y nunca", () => {
+  assert.strictEqual(A.esperaBloqueo(0, 1000, 999999), null);
+  assert.strictEqual(A.esperaBloqueo(1, 1000, 60999), 1);
+  assert.strictEqual(A.esperaBloqueo(1, 1000, 61000), 0);
+  assert.strictEqual(A.esperaBloqueo(5, 1000, 500), 300000);
+  assert.strictEqual(A.esperaBloqueo(15, 1000, 601000), 300000);
+});
+
+test("lista de compras: separa comprado, calcula el saldo y limita la barra", () => {
+  const items = [{ precio: 0.1, comprado: true }, { precio: 0.2 }, { precio: -4 }, { precio: Infinity }];
+  assert.deepStrictEqual(A.totalLista(items, 0.6), { total: 0.3, comprado: 0.1, saldo: 0.3, porcentaje: 50 });
+  assert.deepStrictEqual(A.totalLista(items, 0.25), { total: 0.3, comprado: 0.1, saldo: -0.05, porcentaje: 100 });
+  assert.deepStrictEqual(A.totalLista([], 0), { total: 0, comprado: 0, saldo: 0, porcentaje: 0 });
+});
+
+test("pruebas gratis: de hoy a tres días por fecha local, en orden y sin modificar la lista", () => {
+  const pruebas = [
+    { fecha: "2027-01-02", nombre: "En tres días" },
+    { fecha: "2027-01-03", nombre: "En cuatro días" },
+    { fecha: "2026-12-29", nombre: "Ayer" },
+    { fecha: "2026-12-30", nombre: "Hoy" },
+    { fecha: "2027-02-30", nombre: "Fecha inválida" }
+  ];
+  assert.deepStrictEqual(A.pruebasPorVencer(pruebas, new Date(2026, 11, 30, 23, 59)),
+    [{ ...pruebas[3], dias: 0 }, { ...pruebas[0], dias: 3 }]);
+  assert.strictEqual(pruebas[0].dias, undefined);
+  assert.ok(Number.isNaN(A.diaDePrueba("2027-02-29")));
+  assert.ok(Number.isFinite(A.diaDePrueba("2028-02-29")));
+  assert.strictEqual(A.pruebasPorVencer([{ fecha: "2026-03-09" }], new Date(2026, 2, 7, 23, 50))[0].dias, 2);
+});
