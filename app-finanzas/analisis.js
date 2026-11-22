@@ -668,16 +668,130 @@
   }
 
   // ---------- Exportar ----------
-  function csv(filas, columnas) {
+  function csv(filas, columnas, separador) {
+    separador = separador || ";";
     function celda(v) {
       var t = v == null ? "" : Array.isArray(v) ? v.join(" ") : String(v);
       // Evita que Excel tome como fórmula un texto que empieza por =, +, - o @.
-      if (/^[=+\-@]/.test(t) && !/^-?\d/.test(t)) t = "'" + t;
-      return /[";\n\r]/.test(t) ? '"' + t.replace(/"/g, '""') + '"' : t;
+      if (/^\s*[=+\-@]/.test(t) && !/^-?\d+(?:\.\d+)?$/.test(t)) t = "'" + t;
+      return (/["\n\r]/.test(t) || t.indexOf(separador) >= 0) ? '"' + t.replace(/"/g, '""') + '"' : t;
     }
-    var lineas = [columnas.map(function (c) { return celda(c.titulo); }).join(";")];
-    filas.forEach(function (f) { lineas.push(columnas.map(function (c) { return celda(c.valor(f)); }).join(";")); });
+    var lineas = [columnas.map(function (c) { return celda(c.titulo); }).join(separador)];
+    filas.forEach(function (f) { lineas.push(columnas.map(function (c) { return celda(c.valor(f)); }).join(separador)); });
     return "﻿" + lineas.join("\r\n");
+  }
+
+  function movimientosACsv(movs, categorias, cuentas) {
+    var nombresCat = new Map(categorias.map(function (c) { return [c.id, c.nombre]; }));
+    var nombresCuenta = new Map(cuentas.map(function (c) { return [c.id, c.nombre]; }));
+    return csv(movs, [
+      { titulo: "Fecha", valor: function (m) { return fechaAnotada(m.fecha); } },
+      { titulo: "Tipo", valor: function (m) { return m.tipo === "ingreso" ? "Ingreso" : "Gasto"; } },
+      { titulo: "Descripción", valor: function (m) { return m.descripcion; } },
+      { titulo: "Categoría", valor: function (m) { return nombresCat.get(m.categoria_id) || "Sin categoría"; } },
+      { titulo: "Cuenta", valor: function (m) { return nombresCuenta.get(m.cuenta_id) || ""; } },
+      { titulo: "Monto", valor: function (m) { return (m.tipo === "ingreso" ? 1 : -1) * num(m.monto); } },
+      { titulo: "Nota", valor: function (m) { return m.nota; } }
+    ], ",");
+  }
+
+  function gestoDeslizar(dx, dy, umbral) {
+    return dx <= -(umbral || 48) && -dx > Math.abs(dy);
+  }
+
+  function emojiPegado(valor) {
+    var texto = valor.trim();
+    var simbolo = "(?:\\p{Regional_Indicator}{2}|[#*0-9]\\uFE0F?\\u20E3|\\p{Extended_Pictographic}\\uFE0F?\\p{Emoji_Modifier}?)";
+    return new RegExp("^" + simbolo + "(?:\\u200D" + simbolo + ")*$", "u").test(texto) ? texto : "";
+  }
+
+  function limpiarPapelera(papelera, ahora) {
+    var limite = new Date(ahora).getTime() - 30 * DIA;
+    return papelera.filter(function (e) { return e && new Date(e.borrado).getTime() >= limite; });
+  }
+
+  function agregarAPapelera(papelera, tabla, fila, ahora, id) {
+    var entrada = { id: id, tabla: tabla, fila: JSON.parse(JSON.stringify(fila)), borrado: new Date(ahora).toISOString() };
+    return [entrada].concat(limpiarPapelera(papelera, ahora).filter(function (e) {
+      return e.tabla !== tabla || e.fila.id !== fila.id;
+    }));
+  }
+
+  function remapearPapelera(papelera, mapa, tabla) {
+    return papelera.map(function (entrada) {
+      var fila = Object.assign({}, entrada.fila), cambio = false;
+      Object.keys(fila).forEach(function (clave) {
+        if (!(clave === "id" && entrada.tabla === tabla) && !/_id$/.test(clave)) return;
+        if (!Object.prototype.hasOwnProperty.call(mapa, fila[clave])) return;
+        fila[clave] = mapa[fila[clave]];
+        cambio = true;
+      });
+      return cambio ? Object.assign({}, entrada, { fila: fila }) : entrada;
+    });
+  }
+
+  function fechaAnotada(fecha) {
+    return typeof fecha === "string" && /^\d{4}-\d{2}-\d{2}$/.test(fecha) ? fecha : claveDia(fecha);
+  }
+
+  function semanaDe(fecha) {
+    var partes = fechaAnotada(fecha).split("-").map(Number);
+    var lunes = new Date(partes[0], partes[1] - 1, partes[2]);
+    lunes.setDate(lunes.getDate() - (lunes.getDay() + 6) % 7);
+    var indice = Math.floor((Date.UTC(lunes.getFullYear(), lunes.getMonth(), lunes.getDate()) + 3 * DIA) / (7 * DIA));
+    var desde = claveDia(lunes);
+    lunes.setDate(lunes.getDate() + 7);
+    return { indice: indice, desde: desde, hasta: claveDia(lunes) };
+  }
+
+  var RETOS = [
+    { titulo: "Sin domicilios", patron: /\b(domicilios?|rappi|delivery)\b/ },
+    { titulo: "Sin taxi ni Uber", patron: /\b(taxis?|uber|didi|indriver|cabify)\b/ },
+    { titulo: "Cero antojos", patron: /\b(antojos?|dulces?|postres?|snacks?|cafeterias?)\b/ },
+    { titulo: "Lleva el almuerzo de casa", patron: /\b(almuerzos?|restaurantes?|comidas? (?:fuera|rapidas?))\b/ },
+    { titulo: "Planea un plan gratis", patron: /\b(entretenimiento|cine|ocio)\b/ },
+    { titulo: "Deja las compras para después", patron: /\b(compras|ropa|zapatos)\b/ }
+  ];
+
+  function retoDeLaSemana(semana, categorias) {
+    var opciones = RETOS.map(function (reto) {
+      if (!categorias) return { titulo: reto.titulo };
+      var elegibles = categorias.filter(function (c) { return c.tipo === "gasto" && reto.patron.test(sinTildes(c.nombre)); });
+      return elegibles.length ? { titulo: reto.titulo, categorias: elegibles.map(function (c) { return c.id; }), nombre: elegibles.map(function (c) { return c.nombre; }).join(", ") } : null;
+    }).filter(Boolean);
+    if (!opciones.length) return null;
+    return opciones[((semana % opciones.length) + opciones.length) % opciones.length];
+  }
+
+  function cumplioReto(reto, movs, desde) {
+    if (!reto || !reto.categorias || !reto.categorias.length) return false;
+    var semana = semanaDe(desde), inicio = fechaAnotada(desde);
+    return !movs.some(function (m) {
+      if (m.tipo !== "gasto" || reto.categorias.indexOf(m.categoria_id) < 0) return false;
+      var fecha = fechaAnotada(m.fecha);
+      return fecha >= inicio && fecha < semana.hasta;
+    });
+  }
+
+  function actualizarRetos(historial, movs, semana) {
+    return historial.map(function (r) {
+      if (r.desde >= semana.desde || typeof r.cumplido === "boolean") return r;
+      return Object.assign({}, r, { cumplido: cumplioReto(r.reto, movs, r.desde) });
+    });
+  }
+
+  function remapearRetos(historial, mapa) {
+    return historial.map(function (semana) {
+      var ids = semana.reto.categorias;
+      var nuevos = ids.map(function (id) { return mapa[id] === undefined ? id : mapa[id]; });
+      if (ids.every(function (id, i) { return id === nuevos[i]; })) return semana;
+      return Object.assign({}, semana, { reto: Object.assign({}, semana.reto, { categorias: nuevos }) });
+    });
+  }
+
+  function insigniasReto(historial) {
+    var total = historial.filter(function (r) { return r.cumplido === true; }).length;
+    return { total: total, insignias: [1, 3, 5].filter(function (hito) { return total >= hito; }) };
   }
 
   // ---------- Deudas ----------
@@ -797,20 +911,34 @@
   // ---------- Calendario ----------
   // Un mes día por día: cuánto se gastó y se ganó cada día, el día de más gasto y los días sin gastar.
   // nivel (0 a 4) dice qué tan fuerte pintar cada día comparado con el día de más gasto del mes.
-  // Los movimientos pendientes no cuentan. Los días sin gastar se cuentan solo hasta hoy.
+  // Los pendientes se listan sin sumarlos. Los días sin gastar se cuentan solo hasta hoy.
+  // Totales de gastos pagados por fecha local. El mes se indica como "AAAA-MM".
+  function totalesPorDia(movs, mes) {
+    var dias = {};
+    movs.forEach(function (m) {
+      if (m.tipo !== "gasto" || m.estado === "pendiente") return;
+      var clave = fechaAnotada(m.fecha);
+      if (clave.slice(0, 7) === mes) dias[clave] = (dias[clave] || 0) + num(m.monto);
+    });
+    return dias;
+  }
+
   function calendarioMes(movs, anio, mes, hoy) {
     var ultimo = new Date(anio, mes + 1, 0).getDate(), porClave = {};
+    var gastos = totalesPorDia(movs, claveDia(new Date(anio, mes, 1)).slice(0, 7));
     var dias = [];
     for (var d = 1; d <= ultimo; d++) {
       var dia = { clave: claveDia(new Date(anio, mes, d)), dia: d, gastos: 0, ingresos: 0, cantidad: 0, movimientos: [], nivel: 0, nivelIngreso: 0 };
+      dia.gastos = gastos[dia.clave] || 0;
       porClave[dia.clave] = dia; dias.push(dia);
     }
     movs.forEach(function (m) {
-      if (m.estado === "pendiente") return;
-      var dia = porClave[claveDia(m.fecha)];
+      var dia = porClave[fechaAnotada(m.fecha)];
       if (!dia) return;
-      if (m.tipo === "ingreso") dia.ingresos += num(m.monto); else dia.gastos += num(m.monto);
-      dia.cantidad++; dia.movimientos.push(m);
+      dia.movimientos.push(m);
+      if (m.estado === "pendiente") return;
+      if (m.tipo === "ingreso") dia.ingresos += num(m.monto);
+      dia.cantidad++;
     });
     var hoyClave = claveDia(hoy || new Date()), max = 0, maxIng = 0, top = null, totalG = 0, totalI = 0, conGasto = 0, sinGasto = 0, transcurridos = 0;
     dias.forEach(function (x) {
@@ -1315,7 +1443,10 @@
     porCategoria: porCategoria, porEtiqueta: porEtiqueta, vistaRapida: vistaRapida, serie: serie, proyeccion: proyeccion,
     seguroParaGastar: seguroParaGastar, nombreDia: nombreDia, porDia: porDia, claveDia: claveDia, buscar: filtrarMovimientos, filtrarMovimientos: filtrarMovimientos,
     sinTildes: sinTildes, evaluar: evaluar, FRECUENCIAS: FRECUENCIAS, siguienteFecha: siguienteFecha,
-    fechasPendientes: fechasPendientes, GRUPOS: GRUPOS, grupoDe: grupoDe, csv: csv, MESES: MESES,
+    fechasPendientes: fechasPendientes, GRUPOS: GRUPOS, grupoDe: grupoDe, csv: csv, movimientosACsv: movimientosACsv, gestoDeslizar: gestoDeslizar, emojiPegado: emojiPegado,
+    limpiarPapelera: limpiarPapelera, agregarAPapelera: agregarAPapelera, remapearPapelera: remapearPapelera, fechaAnotada: fechaAnotada,
+    semanaDe: semanaDe, retoDeLaSemana: retoDeLaSemana, cumplioReto: cumplioReto,
+    actualizarRetos: actualizarRetos, remapearRetos: remapearRetos, insigniasReto: insigniasReto, totalesPorDia: totalesPorDia, MESES: MESES,
     GRUPO_APPS: GRUPO_APPS, GRUPO_TRABAJO: GRUPO_TRABAJO, CATEGORIAS_CONDUCTOR: CATEGORIAS_CONDUCTOR, DOCUMENTOS: DOCUMENTOS,
     avisoPorDefecto: avisoPorDefecto, presetDe: presetDe,
     esGanancia: esGanancia, esGastoTrabajo: esGastoTrabajo, esFijo: esFijo, rangoJornada: rangoJornada, resumenTrabajo: resumenTrabajo,

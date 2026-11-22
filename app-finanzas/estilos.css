@@ -716,13 +716,6 @@ button.mini { padding: 6px 12px; border-radius: 999px; font-size: .8rem; }
 .consejo-icono { font-size: 1.4rem; line-height: 1.2; }
 .consejo div { display: flex; flex-direction: column; gap: 2px; }
 .consejo small { color: var(--muted); }
-.calendario { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
-.cal-dia { aspect-ratio: 1; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: .75rem; background: var(--surface-2); color: var(--muted); }
-.cal-dia.vacio { background: transparent; }
-.cal-dia[data-n="1"] { background: color-mix(in srgb, var(--accent) 25%, var(--surface-2)); color: var(--ink); }
-.cal-dia[data-n="2"] { background: color-mix(in srgb, var(--accent) 45%, var(--surface-2)); color: var(--ink); }
-.cal-dia[data-n="3"] { background: color-mix(in srgb, var(--accent) 70%, var(--surface-2)); color: var(--accent-ink); }
-.cal-dia[data-n="4"] { background: var(--accent); color: var(--accent-ink); font-weight: 800; }
 .calor-hora { display: grid; grid-template-columns: auto repeat(6, 1fr); gap: 3px; }
 .calor-hora-enc { align-self: center; padding: 0 2px; text-align: center; color: var(--muted); font-size: .75rem; }
 .calor-hora-celda {
@@ -771,7 +764,7 @@ button.mini { padding: 6px 12px; border-radius: 999px; font-size: .8rem; }
 .cal-celda { aspect-ratio: 1 / 1.15; min-width: 0; padding: 4px 2px; border-radius: 10px; display: flex; flex-direction: column; align-items: center; justify-content: space-between;
   background: var(--surface); border: 1px solid var(--line); color: var(--ink); font-weight: 600; }
 .cal-num { font-size: .85rem; line-height: 1.1; }
-.cal-valor { font-size: .68rem; font-weight: 800; line-height: 1.1; font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; max-width: 100%; }
+.cal-valor { font-size: .68rem; font-weight: 800; line-height: 1.1; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; max-width: 100%; }
 .cal-celda.n0:not(.futuro) .cal-valor { color: var(--positivo); }
 /* Gastos: de un rojo suave a uno fuerte. Ingresos: tonos del color principal. */
 .cal-celda.n1 { background: rgba(229, 72, 61, .16); }
@@ -1018,3 +1011,17 @@ button.mini { padding: 6px 12px; border-radius: 999px; font-size: .8rem; }
 #pantalla-dueno progress { width: 100%; accent-color: var(--accent); }
 #sugerencia-texto, #dueno-aviso-texto { width: 100%; resize: vertical; }
 #sugerencia-contador { text-align: right; }
+
+/* Acciones de movimientos y papelera. */
+.mov-deslizable { min-width: 0; }
+.mov-deslizable .mov { gap: 4px; padding-right: 6px; cursor: default; }
+.mov-cuerpo { display: flex; align-items: center; gap: 10px; flex: 1; min-width: 0; cursor: pointer; touch-action: pan-y pinch-zoom; }
+.mov-menu.icono-btn { flex: 0 0 32px; width: 32px; min-height: 44px; }
+.mov-acciones { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px; }
+.mov-deslizable > .mov-acciones { padding: 4px 6px; }
+.mov-acciones[hidden] { display: none; }
+.papelera-fila { flex-wrap: wrap; cursor: default; }
+.papelera-fila .mov-texto { min-width: 130px; }
+.papelera-fila .mov-acciones { margin-left: auto; }
+.reto-logros { display: flex; flex-wrap: wrap; gap: 6px; }
+.reto-anterior summary { cursor: pointer; margin-block: 8px; }
