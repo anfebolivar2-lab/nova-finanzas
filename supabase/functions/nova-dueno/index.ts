@@ -51,17 +51,22 @@ async function filas(tabla: string, columnas: string): Promise<Record<string, un
 async function descargasApk() {
   let total = 0;
   const porRepo: { repo: string; descargas: number }[] = [];
+  const porArchivo: Record<string, number> = {};
   for (const repo of REPOS) {
     try {
       const r = await fetch(`https://api.github.com/repos/${repo}/releases?per_page=50`, { headers: { "User-Agent": "nova-dueno", Accept: "application/vnd.github+json" } });
       if (!r.ok) continue;
       let n = 0;
-      for (const rel of await r.json()) for (const a of rel.assets || []) if (/\.apk$/i.test(a.name)) n += Number(a.download_count) || 0;
+      for (const rel of await r.json()) for (const a of rel.assets || []) if (/\.apk$/i.test(a.name)) {
+        const c = Number(a.download_count) || 0;
+        n += c;
+        porArchivo[a.name] = (porArchivo[a.name] || 0) + c;
+      }
       porRepo.push({ repo, descargas: n });
       total += n;
     } catch (_e) { /* sin GitHub: se cuenta lo que haya */ }
   }
-  return { total, porRepo };
+  return { total, porRepo, porArchivo };
 }
 
 const clave = (f: unknown) => String(f || "").slice(0, 10);
@@ -136,6 +141,15 @@ async function extrasPanel(correoDe: Record<string, string>, ahora: number) {
   return extra;
 }
 
+// Cuántas personas distintas usan deudas, gastos compartidos y documentos (solo conteos).
+async function adopcionPanel() {
+  const contar = async (tabla: string) => {
+    try { return new Set((await filas(tabla, "user_id")).map((x) => String(x.user_id))).size; } catch (_e) { return 0; }
+  };
+  const [deudas, grupos, documentos] = await Promise.all([contar("fin_deudas"), contar("fin_grupos"), contar("fin_documentos")]);
+  return { deudas, grupos, documentos };
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: CORS });
   if (req.method !== "POST") return responder(405, { error: "Usa POST" });
@@ -158,10 +172,15 @@ Deno.serve(async (req) => {
 
   try {
     const [lista, movs, chats, metas, espacios, perfiles, apk] = await Promise.all([
-      usuarios(), filas("fin_movimientos", "user_id,fecha"), filas("fin_conversaciones", "user_id"), filas("fin_metas", "user_id"),
+      usuarios(), filas("fin_movimientos", "user_id,fecha,moneda,foto_ruta"), filas("fin_conversaciones", "user_id"), filas("fin_metas", "user_id"),
       filas("fin_espacios", "user_id"), filas("fin_perfiles", "user_id,modo_conductor"), descargasApk(),
     ]);
     const ahora = Date.now(), hoy = new Date();
+    const ahoraMs = Date.now();
+    const diasPorUsuario: Record<string, Set<string>> = {};
+    const horas: number[] = Array(24).fill(0), semana: number[] = Array(7).fill(0);
+    const monedas: Record<string, number> = {}, usuariosConFoto = new Set<string>();
+    let fotos = 0;
     const porUsuario: Record<string, { movs: number; ultimo: string }> = {};
     const movsPorDia: Record<string, number> = {}, activosPorDia: Record<string, Set<string>> = {};
     for (const m of movs) {
@@ -172,6 +191,18 @@ Deno.serve(async (req) => {
       const k = clave(f);
       movsPorDia[k] = (movsPorDia[k] || 0) + 1;
       (activosPorDia[k] = activosPorDia[k] || new Set()).add(u);
+      // v4: solo CUÁNDO se usó la app (hora de Colombia), nunca cuánto dinero.
+      const t = Date.parse(f);
+      if (Number.isFinite(t)) {
+        const co = new Date(t - 5 * 3_600_000);
+        if (ahoraMs - t <= 90 * DIA) {
+          (diasPorUsuario[u] = diasPorUsuario[u] || new Set()).add(co.toISOString().slice(0, 10));
+          horas[co.getUTCHours()]++; semana[co.getUTCDay()]++;
+        }
+      }
+      const mon = String(m.moneda || "COP").toUpperCase().slice(0, 3);
+      monedas[mon] = (monedas[mon] || 0) + 1;
+      if (m.foto_ruta) { fotos++; usuariosConFoto.add(u); }
     }
     const contar = (xs: Record<string, unknown>[]) => { const c: Record<string, number> = {}; xs.forEach((x) => { const u = String(x.user_id); c[u] = (c[u] || 0) + 1; }); return c; };
     const chatsU = contar(chats), metasU = contar(metas), espaciosU = contar(espacios);
@@ -188,6 +219,7 @@ Deno.serve(async (req) => {
         plataforma: String(md.nova_plataforma || ""), version: String(md.nova_version || ""),
         movimientos: porUsuario[u.id]?.movs || 0, chats: chatsU[u.id] || 0, metas: metasU[u.id] || 0, espacios: espaciosU[u.id] || 0,
         conductor: conductores.has(u.id),
+        dias: Array.from(diasPorUsuario[u.id] || []).sort(),
       };
     }).sort((a, b) => b.ultimoUso.localeCompare(a.ultimoUso));
     const reales = personas.filter((p) => !p.prueba);
@@ -215,6 +247,8 @@ Deno.serve(async (req) => {
         pruebas: personas.length - reales.length,
       },
       versiones, dias, personas,
+      horas, semana, monedas, fotos: { total: fotos, personas: usuariosConFoto.size },
+      adopcion: await adopcionPanel(),
       ...(await extrasPanel(Object.fromEntries(lista.map((u) => [u.id, u.email || ""])), ahora)),
     });
   } catch (e) {

@@ -119,7 +119,14 @@
     return letras.length <= limite ? letras.join("") : letras.slice(0, limite - 1).join("") + "…";
   }
 
+  function personasVisibles(personas, ocultarPrueba) {
+    return (Array.isArray(personas) ? personas : []).filter(function (p) {
+      return p && (!ocultarPrueba || p.prueba !== true);
+    });
+  }
+
   var api = {
+    personasVisibles: personasVisibles,
     filtrarPersonas: filtrarPersonas, contarFiltros: contarFiltros, ultimos30Dias: ultimos30Dias,
     barrasVersiones: barrasVersiones, cantidad: cantidad, registrosParaMeta: registrosParaMeta, porcentaje: porcentaje, validarAviso: validarAviso,
     sugerenciasPendientes: sugerenciasPendientes, recientes: recientes, recortarTexto: recortarTexto

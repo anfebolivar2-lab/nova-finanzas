@@ -4866,6 +4866,7 @@
     var id = pilaCapas.pop();
     if (id) $(id).hidden = true;
     if (id === "hoja-respaldo") limpiarClaveRespaldo();
+    if (id === "pantalla-dueno" && $("dueno-ficha").open) $("dueno-ficha").close();
     if (!pilaCapas.length) document.body.classList.remove("con-capa");
   }
   function cerrarCapa() { if (pilaCapas.length) history.back(); }
@@ -6390,7 +6391,7 @@
     pintarPersonasDueno();
   }
   function pl(n, uno, varios) { return numDueno.format(n) + " " + (n === 1 ? uno : varios); }
-  function barrasDueno(cont, dias, campo) {
+  function barrasDueno(cont, dias, campo, opciones) {
     cont.replaceChildren();
     if (!dias.length) {
       cont.append(el("p", "nota", "Todavía no hay datos."));
@@ -6403,13 +6404,22 @@
       var cantidad = Dueno.cantidad(d[campo]);
       var b = el("i", cantidad ? null : "cero");
       b.style.height = Math.max(2, Dueno.porcentaje(cantidad, escala)) + "%";
-      b.title = fechaCorta.format(new Date(d.dia + "T12:00:00")) + ": " + cantidad;
+      if (d.pico) b.classList.add("dueno-pico");
+      b.title = (d.etiqueta || fechaCorta.format(new Date(d.dia + "T12:00:00"))) + ": " + cantidad;
       fila.append(b);
     });
-    var total = dias.reduce(function (s, d) { return s + Dueno.cantidad(d[campo]); }, 0);
     var ejes = el("div", "dueno-ejes");
-    ejes.append(el("span", null, fechaCorta.format(new Date(dias[0].dia + "T12:00:00"))), el("span", null, "Total: " + numDueno.format(total) + " · máximo " + max + " en un día"), el("span", null, "Hoy"));
+    if (opciones && opciones.marcas) {
+      ejes.classList.add("dueno-marcas");
+      opciones.marcas.forEach(function (marca) { ejes.append(el("span", null, marca)); });
+    } else {
+      var total = opciones ? null : dias.reduce(function (s, d) { return s + Dueno.cantidad(d[campo]); }, 0);
+      ejes.append(el("span", null, fechaCorta.format(new Date(dias[0].dia + "T12:00:00"))));
+      if (!opciones) ejes.append(el("span", null, "Total: " + numDueno.format(total) + " · máximo " + max + " en un día"));
+      ejes.append(el("span", null, "Hoy"));
+    }
     cont.append(fila, ejes);
+    if (opciones) cont.append(el("p", "nota", opciones.resumen));
   }
   var Dueno = window.NovaDueno;
   var registrosMetaDueno = 0;
@@ -6446,7 +6456,7 @@
     });
   }
 
-  var fechaPanel = new Intl.DateTimeFormat("es-CO", { dateStyle: "medium", timeStyle: "short" });
+  var fechaPanel = new Intl.DateTimeFormat("es-CO", { dateStyle: "medium", timeStyle: "short", timeZone: "America/Bogota" });
   function fechaDueno(valor) {
     var tiempo = Date.parse(valor);
     return Number.isFinite(tiempo) ? fechaPanel.format(tiempo) : "Fecha desconocida";
@@ -6524,8 +6534,166 @@
     actuarDueno($("dueno-aviso-crear"), aviso, "dueno-aviso-mensaje", "Aviso creado", function () { form.reset(); });
   });
 
+  var Analitica = window.NovaAnalitica;
+  var datosAnaliticaDueno;
+  var ocultarPruebaDueno = $("dueno-ocultar-prueba");
+  ocultarPruebaDueno.checked = leerLocal("nova-dueno-ocultar-prueba", false) === true;
+  var porcentajeDueno = new Intl.NumberFormat("es-CO", { maximumFractionDigits: 1 });
+  function textoPorcentajeDueno(valor) {
+    return valor == null ? "—" : porcentajeDueno.format(valor) + " %";
+  }
+  function kpisAnaliticaDueno(id, filas) {
+    var cont = $(id);
+    cont.replaceChildren();
+    filas.forEach(function (fila) {
+      var tarjeta = el("div", "dueno-kpi");
+      tarjeta.append(el("strong", null, fila[1]), el("span", null, fila[0]));
+      if (fila[2]) tarjeta.append(el("small", null, fila[2]));
+      cont.append(tarjeta);
+    });
+  }
+  function barrasHorizontalesDueno(id, filas, detalle) {
+    var cont = $(id);
+    cont.replaceChildren();
+    filas.forEach(function (fila) {
+      var grupo = el("div");
+      var etiqueta = fila.nombre + " · " + (fila.total == null ? "Sin dato por persona" : numDueno.format(fila.total));
+      if (fila.porcentaje != null) etiqueta += " · " + textoPorcentajeDueno(fila.porcentaje) + detalle;
+      grupo.append(el("span", "nota", etiqueta));
+      if (fila.porcentaje != null) {
+        var barra = el("progress");
+        barra.max = 100;
+        barra.value = fila.porcentaje;
+        barra.setAttribute("aria-label", etiqueta);
+        grupo.append(barra);
+      }
+      cont.append(grupo);
+    });
+  }
+  function barrasHorarioDueno(id, valores, etiquetas, filtrado) {
+    var cont = $(id);
+    if (filtrado || !Array.isArray(valores) || valores.length !== etiquetas.length) {
+      cont.replaceChildren(el("p", "nota", filtrado ? "No hay un desglose sin las cuentas de prueba." : "Todavía no hay datos."));
+      return;
+    }
+    var pico = Analitica.picoDe(valores);
+    var filas = etiquetas.map(function (etiqueta, i) {
+      return { etiqueta: etiqueta, total: valores[i], pico: i === pico };
+    });
+    var marcas = id === "dueno-semana" ? etiquetas : ["00:00", "06:00", "12:00", "18:00", "23:00"];
+    barrasDueno(cont, filas, "total", { marcas: marcas, resumen: pico < 0 ? "Sin anotaciones" :
+      "Mayor uso en " + etiquetas[pico] + " · " + pl(valores[pico], "anotación", "anotaciones") });
+  }
+  function pintarAnaliticaDueno(d, ahora) {
+    var todas = Dueno.personasVisibles(d.personas, false);
+    var personas = Dueno.personasVisibles(todas, ocultarPruebaDueno.checked);
+    // Sin una lista completa, los agregados tampoco se pueden filtrar por cuenta.
+    var filtrado = ocultarPruebaDueno.checked && (!Array.isArray(d.personas) || personas.length !== todas.length);
+    personasDueno = personas;
+    if (ocultarPruebaDueno.checked && vistaDueno.filtro === "prueba") vistaDueno.filtro = "todos";
+    $("dueno-exportar").disabled = !Array.isArray(d.personas);
+
+    var nuevos = Analitica.nuevosPor(personas, ahora);
+    kpisAnaliticaDueno("dueno-nuevos", [["Hoy", nuevos.dia], ["Esta semana", nuevos.semana], ["Este mes", nuevos.mes]]);
+    var crecimiento = Array.isArray(d.personas) ? Analitica.crecimientoAcumulado(personas, ahora, 30) : [];
+    barrasDueno($("dueno-crecimiento"), crecimiento, "total", { resumen: "Total acumulado: " + numDueno.format(crecimiento.length ? crecimiento[crecimiento.length - 1].total : 0) });
+
+    var uso = Analitica.usoActivo(personas, ahora);
+    kpisAnaliticaDueno("dueno-uso", [["Hoy (DAU)", uso.dau], ["Últimos 7 días (WAU)", uso.wau],
+      ["Últimos 30 días (MAU)", uso.mau], ["DAU/MAU", textoPorcentajeDueno(uso.porcentaje), "De quienes usaron NOVA en 30 días, cuántos volvieron hoy."]]);
+    barrasHorarioDueno("dueno-horas", d.horas, Array.from({ length: 24 }, function (_, i) {
+      return String(i).padStart(2, "0") + ":00";
+    }), filtrado);
+    barrasHorarioDueno("dueno-semana", d.semana, Analitica.etiquetasSemana(), filtrado);
+
+    var segmentos = Analitica.segmentos(personas, ahora);
+    listaDueno("dueno-segmentos", [
+      ["Nunca anotaron nada", segmentos.sinAnotar], ["En riesgo · más de 14 días sin usar NOVA", segmentos.riesgo],
+      ["Fieles · anotaron en 20 de los últimos 30 días o más", segmentos.fieles]
+    ], "", function (li, fila) {
+      var detalle = el("details"), datos = Analitica.correosSegmento(fila[1]);
+      var lista = el("ul", "lista-banco dueno-correos-segmento");
+      detalle.append(el("summary", null, fila[0] + " · " + numDueno.format(fila[1].length)), lista);
+      datos.correos.forEach(function (correo) { lista.append(el("li", null, correo)); });
+      if (!datos.correos.length) lista.append(el("li", "nota", "Nadie en este segmento."));
+      if (datos.restantes) lista.append(el("li", "nota", "y " + numDueno.format(datos.restantes) + " más"));
+      li.append(detalle);
+    });
+
+    kpisAnaliticaDueno("dueno-retencion", Analitica.retencion(personas, ahora).map(function (fila) {
+      return ["A " + pl(fila.dias, "día", "días"), textoPorcentajeDueno(fila.porcentaje),
+        fila.volvieron + " de " + fila.elegibles + " volvieron"];
+    }));
+    var tabla = $("dueno-cohortes");
+    tabla.replaceChildren();
+    Analitica.cohortes(personas, ahora).forEach(function (fila) {
+      var tr = el("tr"), th = el("th", null, fechaCorta.format(new Date(fila.semana + "T12:00:00")));
+      th.scope = "row";
+      th.append(el("small", null, pl(fila.total, "persona", "personas")));
+      tr.append(th);
+      fila.porcentajes.forEach(function (valor) {
+        var td = el("td", null, textoPorcentajeDueno(valor));
+        if (valor != null) td.style.setProperty("--retencion", valor + "%");
+        tr.append(td);
+      });
+      tabla.append(tr);
+    });
+    barrasHorizontalesDueno("dueno-embudo", Analitica.embudo(personas), " del paso anterior");
+    var funciones = Analitica.adopcion(todas, d.resumen, d.adopcion, filtrado ? null : d.monedas, d.fotos);
+    barrasHorizontalesDueno("dueno-adopcion", funciones.funciones, "");
+    listaDueno("dueno-monedas", funciones.monedas || [], filtrado ? "No hay un desglose por moneda sin las cuentas de prueba." :
+      funciones.monedas ? "No se registraron anotaciones en otras monedas." : "Todavía no hay datos por moneda.", function (li, moneda) {
+      li.append(el("span", null, moneda.moneda + " · " + pl(moneda.total, "anotación", "anotaciones")));
+    });
+    listaDueno("dueno-poco-uso", funciones.pocoUsadas, "Ninguna función con datos está por debajo del 10 %.", function (li, fila) {
+      li.append(el("span", null, fila.nombre + " · " + textoPorcentajeDueno(fila.porcentaje)));
+    });
+
+    var versiones = filtrado ? Analitica.versionesDe(personas) : d.versiones || Analitica.versionesDe(personas);
+    var ultima = Analitica.porcentajeUltimaVersion(versiones);
+    $("dueno-ultima-version").textContent = ultima ? "Versión " + ultima.version + " · " +
+      textoPorcentajeDueno(ultima.porcentaje) + " de las personas con versión registrada" : "Todavía no hay datos de versiones.";
+    pintarVersionesDueno(versiones);
+    var apk = Analitica.repartoApk(d.apk && d.apk.porArchivo);
+    barrasHorizontalesDueno("dueno-reparto-apk", apk ? [
+      { nombre: "APK normal", total: apk.normal, porcentaje: apk.porcentajeNormal },
+      { nombre: "APK avanzada", total: apk.avanzada, porcentaje: apk.porcentajeAvanzada }
+    ] : [], "");
+    if (!apk) $("dueno-reparto-apk").append(el("p", "nota", "Todavía no hay descargas por archivo."));
+    pintarPersonasDueno();
+  }
+  function abrirFichaDueno(persona) {
+    var ficha = Analitica.fichaUsuario(persona, Date.now());
+    $("dueno-ficha-correo").textContent = ficha.correo || "Sin correo";
+    var datos = $("dueno-ficha-datos");
+    datos.replaceChildren();
+    [
+      ["Registro", fechaDueno(ficha.registro)], ["Último uso", ficha.ultimoUso ? fechaDueno(ficha.ultimoUso) : "Sin dato"],
+      ["Plataforma", ficha.plataforma === "android" ? "Android" : ficha.plataforma === "web" ? "Navegador" : "Sin dato"],
+      ["Versión", ficha.version], ["Movimientos anotados", ficha.movimientos], ["Chats con la IA", ficha.chats],
+      ["Metas", ficha.metas], ["Espacios", ficha.espacios], ["Días que anotó en los últimos 30", ficha.diasActivos30],
+      ["Racha actual de días anotando", ficha.racha]
+    ].forEach(function (fila) {
+      datos.append(el("dt", null, fila[0]), el("dd", null, fila[1] == null || fila[1] === "" ? "Sin dato" : String(fila[1])));
+    });
+    $("dueno-ficha").showModal();
+  }
+  ocultarPruebaDueno.addEventListener("change", function () {
+    guardarLocal("nova-dueno-ocultar-prueba", ocultarPruebaDueno.checked);
+    if (datosAnaliticaDueno && soyDueno()) pintarAnaliticaDueno(datosAnaliticaDueno, Date.now());
+  });
+  $("dueno-exportar").addEventListener("click", function () {
+    if (!soyDueno() || !personasDueno) return;
+    var url = URL.createObjectURL(new Blob([Analitica.usuariosACsv(personasDueno)], { type: "text/csv;charset=utf-8" }));
+    var enlace = el("a");
+    enlace.href = url;
+    enlace.download = "nova-usuarios.csv";
+    enlace.click();
+    setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
+  });
+
   function pintarDueno(d) {
-    var r = d.resumen;
+    var r = d.resumen || {};
     $("dueno-hora").textContent = d.generado ? "Datos de " + fechaDueno(d.generado) + "." : "";
     var kpis = [
       ["👥", r.registrados, "Personas registradas", "+" + r.nuevos7 + " esta semana · " + r.confirmados + " confirmaron el correo"],
@@ -6553,12 +6721,11 @@
     var ahora = Date.now(), errores = d.errores || {};
     barrasDueno($("dueno-chats"), Dueno.ultimos30Dias(d.chatsPorDia, ahora), "total");
     barrasDueno($("dueno-errores"), Dueno.ultimos30Dias(errores.porDia, ahora), "total");
-    pintarVersionesDueno(d.versiones);
     registrosMetaDueno = Dueno.registrosParaMeta(r.nuevos30, dias);
     pintarMetaDueno();
     pintarListasDueno(d, errores);
-    personasDueno = Array.isArray(d.personas) ? d.personas.filter(Boolean) : [];
-    pintarPersonasDueno();
+    datosAnaliticaDueno = d;
+    pintarAnaliticaDueno(d, ahora);
   }
   function pintarPersonasDueno() {
     if (!personasDueno) return;
@@ -6568,6 +6735,7 @@
     botonesFiltrosDueno.forEach(function (boton, i) {
       var filtro = filtrosDueno[i];
       boton.textContent = filtro[1] + " (" + numDueno.format(conteos[filtro[0]]) + ")";
+      boton.hidden = filtro[0] === "prueba" && ocultarPruebaDueno.checked;
       boton.setAttribute("aria-pressed", String(vistaDueno.filtro === filtro[0]));
     });
     $("dueno-conteo").textContent = "Mostrando " + numDueno.format(personas.length) + " de " + numDueno.format(conteos.todos) + " personas";
@@ -6575,8 +6743,12 @@
     if (!personas.length) ul.append(el("li", "vacio", "Nadie coincide con la búsqueda."));
     personas.forEach(function (p) {
       var li = el("li", "banco-item dueno-persona"), cab = el("div", "banco-cab");
-      var app = el("span", "banco-app");
-      app.append(el("span", "dueno-emoji", p.dueno ? "👑" : p.prueba ? "🧪" : "👤"), el("span", "dueno-correo", p.correo));
+      var app = el("button", "banco-app dueno-abrir-ficha");
+      app.type = "button";
+      var icono = el("span", "dueno-emoji", p.dueno ? "👑" : p.prueba ? "🧪" : "👤");
+      icono.setAttribute("aria-hidden", "true");
+      app.append(icono, el("span", "dueno-correo", p.correo || "Sin correo"));
+      app.addEventListener("click", function () { abrirFichaDueno(p); });
       cab.append(app, el("small", null, p.ultimoUso ? "usó " + cuandoBanco(Date.parse(p.ultimoUso)) : "nunca entró"));
       var det = "Se registró el " + fechaDueno(p.registro) + (p.confirmado ? "" : " · no ha confirmado el correo") + (p.prueba ? " · cuenta de prueba" : "");
       var chips = el("div", "dueno-chips");
@@ -6595,7 +6767,7 @@
         return cliente.auth.refreshSession().then(function () { return pedirDueno(true); });
       }
       if (estado === 401 || estado === 403) { var e = new Error("sesion"); e.estado = estado; throw e; }
-      if (res.error || !res.data || !res.data.resumen) throw new Error("sin datos");
+      if (res.error || !res.data || typeof res.data !== "object") throw new Error("sin datos");
       return res.data;
     });
   }
