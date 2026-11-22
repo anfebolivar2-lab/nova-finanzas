@@ -95,7 +95,7 @@
     m.classList.toggle("error", !!error);
   }
 
-  var toastTimer = null;
+  var toastTimer = null, deshacerHasta = 0;
   // Mascota de NOVA (Novi, un búho verde con la chispa del logo), dibujada aquí mismo.
   var NOVI = '<svg class="toast-novi" viewBox="0 0 64 76" aria-hidden="true"><ellipse cx="32" cy="72" rx="20" ry="3" fill="rgba(0,0,0,.18)"/>' +
     '<path d="M10 30 L8 8 L24 20 Z M54 30 L56 8 L40 20 Z" fill="#12805c"/><ellipse cx="32" cy="44" rx="25" ry="27" fill="#1f9d6f"/>' +
@@ -106,9 +106,15 @@
     '<path d="M24 70l-3 4h8zM40 70l3 4h-8z" fill="#f3b23c"/></svg>';
   // Tarjeta de arriba: titulo, detalle y valor opcionales.
   function toast(titulo, detalle, valor, accion) {
+    var espera = deshacerHasta - Date.now();
+    if (espera > 0 && !(accion && accion.duracion)) {
+      setTimeout(function () { toast(titulo, detalle, valor, accion); }, espera);
+      return;
+    }
     var t = $("toast");
     var falla = /^(No se pudo|No pude|Un cambio guardado sin internet)/.test(titulo);
     t.className = "toast" + (falla ? " toast-error" : "") + (accion ? " toast-con-accion" : "");
+    t.classList.toggle("valores-ocultos", ocultos);
     t.textContent = "";
     t.insertAdjacentHTML("afterbegin", NOVI);
     var col = el("div", "toast-texto");
@@ -118,16 +124,23 @@
     if (valor != null) t.append(el("span", "toast-valor", valor));
     if (accion) {
       var bt = el("button", "toast-accion", accion.texto); bt.type = "button";
-      bt.addEventListener("click", function () { clearTimeout(toastTimer); t.hidden = true; accion.fn(); });
+      bt.addEventListener("click", function () {
+        if (accion.duracion && Date.now() >= deshacerHasta) return;
+        if (accion.confirmar && !accion.confirmar()) return;
+        deshacerHasta = 0;
+        clearTimeout(toastTimer); t.hidden = true; accion.fn();
+      });
       t.append(bt);
     }
+    var duracion = accion ? accion.duracion || 7000 : 3200;
+    deshacerHasta = accion && accion.duracion ? Date.now() + duracion : 0;
     var barra = el("span", "toast-barra"); t.append(barra);
-    barra.style.animationDuration = accion ? "7s" : "";
+    barra.style.animationDuration = accion ? duracion + "ms" : "";
     t.hidden = false;
     try { if (!falla && navigator.vibrate) navigator.vibrate(25); } catch (e) { /* sin vibración */ }
     var dur = barra.style.animationDuration; barra.style.animation = "none"; void barra.offsetWidth; barra.style.animation = ""; barra.style.animationDuration = dur;
     clearTimeout(toastTimer);
-    toastTimer = setTimeout(function () { t.hidden = true; }, accion ? 7000 : 3200);
+    toastTimer = setTimeout(function () { t.hidden = true; }, duracion);
   }
 
   // Convierte "2 millones", "850.000" o "20k" en número usando el mismo intérprete.
@@ -235,6 +248,8 @@
     b.innerHTML = ocultos ? OJO_CERRADO : OJO_ABIERTO;
     b.setAttribute("aria-pressed", String(ocultos));
     b.setAttribute("aria-label", ocultos ? "Mostrar los valores" : "Ocultar los valores");
+    $("toast").classList.toggle("valores-ocultos", ocultos);
+    $("pantalla-registro").classList.toggle("valores-ocultos", ocultos);
     $("chat").hidden = ocultos;
     $("chat-oculto").hidden = !ocultos;
     var d = $("det-ojo");
@@ -579,7 +594,7 @@
     var ic = pintarIcono(el("span", "mov-icono"), c);
     var txt = el("div", "mov-texto");
     var otraMoneda = m.moneda && m.moneda !== monedaBase() && num(m.monto_original) > 0;
-    txt.append(el("strong", null, m.descripcion), el("small", null, c.nombre + (m.nota ? " · " + m.nota : "") + (otraMoneda ? " · " + Mon.formatoMonto(m.monto_original, m.moneda) : "")));
+    txt.append(el("strong", null, m.descripcion), el("small", null, c.nombre + (m.nota ? " · " + m.nota : "") + (otraMoneda && !ocultos ? " · " + Mon.formatoMonto(m.monto_original, m.moneda) : "")));
     var extra = el("div", "mov-extra");
     if (m.estado === "pendiente") extra.append(el("span", "chip pendiente", "Pendiente"));
     if (m.programado_id) extra.append(el("span", "chip", "🔁"));
@@ -1018,7 +1033,10 @@
     { id: "saldo-bajo", nombre: "Avisos de saldo bajo", inicio: true },
     { id: "avisos-limite", nombre: "Avisos de límites", inicio: true },
     { id: "resumen-mes", nombre: "Resumen del mes", inicio: true },
-    { id: "meta-sugerida", nombre: "Meta de ahorro sugerida" }
+    { id: "meta-sugerida", nombre: "Meta de ahorro sugerida" },
+    { id: "promedio-dia", nombre: "Gasto promedio por día", inicio: true },
+    { id: "regla503020", nombre: "Regla 50/30/20" },
+    { id: "gasto-inusual", nombre: "Gastos inusuales", inicio: true }
   ];
   function configWidgets() {
     var guardado = leerLocal("nova-widgets", null) || [];
@@ -1064,6 +1082,7 @@
       singasto: wSinGasto, lugares: wLugares, semanasmes: wSemanasMes, reduccion: wReduccion,
       mesvsprom: wMesVsPromedio, libertad: wLibertad, calorhora: wCalorHora,
       resumensemana: wResumenSemana, mayoresgastos: wMayoresGastos,
+      "promedio-dia": wPromedioDia, regla503020: wRegla503020, "gasto-inusual": wGastoInusual,
       "cortes-tarjeta": wCortesTarjeta, "saldo-bajo": wSaldoBajo, "avisos-limite": wAvisosLimite, "resumen-mes": wResumenMes, "meta-sugerida": wMetaSugerida
     }[id];
     render(art, movs, ciclo, ref, rango);
@@ -1072,6 +1091,43 @@
   document.querySelectorAll("[data-periodo-analisis]").forEach(function (b) {
     b.addEventListener("click", function () { desfaseAnalisis += Number(b.dataset.periodoAnalisis); pintarAnalisis(); });
   });
+
+  function wPromedioDia(art) {
+    titulo(art, "Gasto promedio por día");
+    var r = A.promedioDia(datos.movimientos, new Date());
+    var estado = {
+      verde: "Igual o por debajo del promedio",
+      amarillo: "Hasta un 15 % por encima del promedio",
+      rojo: "Más de un 15 % por encima del promedio"
+    };
+    art.append(el("p", null, "Este mes: " + dinero(r.actual) + " al día"));
+    art.append(el("p", "nota", "Tres meses anteriores: " + dinero(r.anterior) + " al día"));
+    art.append(el("p", "promedio-" + r.semaforo, estado[r.semaforo]));
+  }
+
+  function wRegla503020(art, movs, ciclo, ref, rango) {
+    titulo(art, "Regla 50/30/20");
+    var r = A.regla503020(movs, datos.categorias, rango);
+    if (r.ahorro === null) return art.append(el("p", "nota", "Aún no hay ingresos en este periodo."));
+    [["Necesidades", r.necesidades, 50], ["Deseos", r.deseos, 30], ["Ahorro", r.ahorro, 20]].forEach(function (fila) {
+      var texto = fila[0] + " · " + numeroCO.format(Math.round(fila[1] * 10) / 10) + " % · Meta " + fila[2] + " %";
+      var barra = el("progress", "regla-barra");
+      barra.max = 100;
+      barra.value = Math.min(fila[1], 100);
+      barra.setAttribute("aria-label", texto);
+      art.append(el("div", null, texto), barra);
+    });
+  }
+
+  function wGastoInusual(art) {
+    var alertas = A.gastosInusuales(datos.movimientos, new Date());
+    if (!alertas.length) return;
+    titulo(art, "Gastos inusuales");
+    alertas.forEach(function (a) {
+      art.append(el("p", null, "Gastaste " + numeroCO.format(Math.round(a.veces * 10) / 10) +
+        " veces más de lo normal en " + nombreCategoria(a.categoriaId) + "."));
+    });
+  }
 
   function wCortesTarjeta(art) {
     var dias = leerDiasTarjeta();
@@ -1709,11 +1765,11 @@
 
   // Sugerencias al escribir la descripción: lo que más has anotado.
   function pintarSugerencias() {
-    var cuenta = {};
-    datos.movimientos.slice(0, 600).forEach(function (m) { var d = String(m.descripcion || "").trim(); if (d) cuenta[d] = (cuenta[d] || 0) + 1; });
-    var lista = Object.keys(cuenta).sort(function (a, b) { return cuenta[b] - cuenta[a]; }).slice(0, 80), dl = $("lista-desc");
+    var dl = $("lista-desc");
     dl.replaceChildren();
-    lista.forEach(function (d) { var o = el("option"); o.value = d; dl.append(o); });
+    A.sugerirDescripciones(datos.movimientos, $("reg-desc").value, 8).forEach(function (d) {
+      var o = el("option"); o.value = d; dl.append(o);
+    });
   }
   function pintarSaludo() {
     var h = new Date().getHours(), nombre = (fuente && fuente.nombre ? String(fuente.nombre).split(" ")[0] : "");
@@ -3550,7 +3606,7 @@
       expr: m ? textoMonto((o.repetir ? monedaRepetida : usaMontoOriginal) ? num(m.monto_original) : num(m.monto)) : (o.expr || ""),
       categoriaId: categoriaId != null && (!o.repetir || categoria(categoriaId)) ? categoriaId : null,
       documentoId: o.documentoId || null,
-      etiquetas: o.movimiento ? (m.etiquetas || []).slice() : [],
+      etiquetas: o.movimiento || o.duplicar ? (m.etiquetas || []).slice() : [],
       moneda: m && m.moneda && (!o.repetir || monedaRepetida) ? m.moneda : monedaBase(),
       tasa: m && m.tasa ? Number(m.tasa) : null,
       tasaAuto: null, tasaFecha: "", tasaEditada: !!(m && m.tasa)
@@ -3563,20 +3619,21 @@
     var editado = reg.editar;
     $("reg-fecha").value = A.claveDia(editado ? editado.fecha : new Date());
     $("reg-desc").value = m ? m.descripcion : (o.desc || "");
-    $("reg-viajes").value = editado && m.viajes ? m.viajes : "";
-    $("reg-nota").value = editado && m.nota ? m.nota : "";
-    $("reg-estado").value = editado && m.estado ? m.estado : "pagado";
+    pintarSugerencias();
+    $("reg-viajes").value = (editado || o.duplicar) && m.viajes ? m.viajes : "";
+    $("reg-nota").value = (editado || o.duplicar) && m.nota ? m.nota : "";
+    $("reg-estado").value = (editado || o.duplicar) && m.estado ? m.estado : "pagado";
     $("reg-etiqueta").value = "";
     var freq = $("reg-frecuencia");
     freq.replaceChildren();
     Object.keys(A.FRECUENCIAS).forEach(function (f) { var op = el("option", null, A.FRECUENCIAS[f]); op.value = f; op.selected = f === "mensual"; freq.append(op); });
-    $("reg-bloque-estado").hidden = !(editado && m.estado === "pendiente");
-    $("reg-bloque-nota").hidden = !(editado && m.nota);
+    $("reg-bloque-estado").hidden = !((editado || o.duplicar) && m.estado === "pendiente");
+    $("reg-bloque-nota").hidden = !((editado || o.duplicar) && m.nota);
     $("reg-bloque-recurrente").hidden = !o.recurrente;
     $("reg-btn-recurrente").hidden = !!editado;
     $("reg-otro-fila").hidden = !!editado;
     if (o.repetir) $("reg-otro").checked = false;
-    $("reg-borrar").hidden = !editado;
+    $("reg-borrar").hidden = $("reg-duplicar").hidden = !editado;
     var sel = $("reg-cuenta");
     sel.replaceChildren();
     datos.cuentas.forEach(function (c) { var op = el("option", null, c.nombre); op.value = c.id; op.selected = m ? c.id === m.cuenta_id : false; sel.append(op); });
@@ -3826,6 +3883,7 @@
     $("reg-titulo").textContent = (reg.editar ? "Editar " : "Nuevo ") + (reg.tipo === "ingreso" ? "ingreso" : "gasto") + ($("reg-bloque-recurrente").hidden ? "" : " recurrente");
     document.querySelectorAll("#reg-tipo button").forEach(function (b) { b.setAttribute("aria-checked", String(b.dataset.tipo === reg.tipo)); });
     $("pantalla-registro").classList.toggle("es-ingreso", reg.tipo === "ingreso");
+    $("reg-montos-rapidos").hidden = !!reg.editar;
     $("reg-monto-texto").textContent = formatearExpr(reg.expr);
     var v = A.evaluar(reg.expr), ext = reg.moneda !== monedaBase(), mi = Mon.info(reg.moneda), mb = Mon.info(monedaBase());
     $("reg-resultado").textContent = /[+\-×÷−]/.test(reg.expr.replace(/^-/, "")) ? (isNaN(v) ? "…" : "= " + (ext ? Mon.formatoMonto(v, reg.moneda) : pesos.format(v))) : "";
@@ -3874,6 +3932,12 @@
   }
   document.querySelectorAll("#reg-tipo button").forEach(function (b) { b.addEventListener("click", function () { reg.tipo = b.dataset.tipo; pintarRegistro(); }); });
   $("reg-monto").addEventListener("click", function () { $("teclado").hidden = false; });
+  document.querySelectorAll("[data-monto-rapido]").forEach(function (b) {
+    b.addEventListener("click", function () {
+      reg.expr = A.sumarMontoRapido(reg.expr, Number(b.dataset.montoRapido));
+      pintarRegistro();
+    });
+  });
   document.querySelectorAll("#teclado button, #reg-borrar-digito").forEach(function (b) {
     b.addEventListener("click", function () {
       var t = b.dataset.tecla, e = reg.expr;
@@ -3904,6 +3968,7 @@
     if (b) { e.preventDefault(); b.click(); }
   });
   $("reg-desc").addEventListener("input", function () {
+    pintarSugerencias();
     if (!reg || reg.editar || (reg.categoriaId != null && !reg.catAuto)) return;
     var id = NovaConsejos.sugerirCategoria($("reg-desc").value, reg.tipo, datos.movimientos);
     if (id != null && categoria(id)) { reg.categoriaId = id; reg.catAuto = true; pintarRegistro(); }
@@ -3980,15 +4045,25 @@
       });
     }).then(function (r) {
       ordenarMovimientos();
-      if (!editar && r.m && r.m.tipo === "gasto") sumarAlcancia(num(r.m.monto));
+      var redondeo = !editar && r.m && r.m.tipo === "gasto" ? sumarAlcancia(num(r.m.monto)) : 0;
       if (docId) renovarDocumentoListo(docId);
+      var accion = !editar && r.m ? deshacerRegistro(r.m, redondeo) : null;
       var etiquetaDesc = r.m ? r.m.descripcion : r.programado.descripcion;
-      toast(editar ? "¡Cambios guardados!" : "¡Guardado!", etiquetaDesc + (ext ? " · " + Mon.formatoMonto(montoOriginal, reg.moneda) : "") + (r.m && r.m.viajes ? " · " + r.m.viajes + (r.m.viajes === 1 ? " viaje" : " viajes") : "") + (r.programado ? " · 🔁 " + A.FRECUENCIAS[r.programado.frecuencia].toLowerCase() : ""), pesos.format(monto));
+      var detalle = etiquetaDesc + (r.m && r.m.viajes ? " · " + r.m.viajes + (r.m.viajes === 1 ? " viaje" : " viajes") : "") +
+        (r.programado ? " · 🔁 " + A.FRECUENCIAS[r.programado.frecuencia].toLowerCase() : "");
+      var valor = dinero(monto) + (ext && !ocultos ? " · " + Mon.formatoMonto(montoOriginal, reg.moneda) : "");
+      toast(editar ? "¡Cambios guardados!" : "¡Guardado!", detalle, valor, accion);
       pintar();
-      if (!editar && r.m && r.m.tipo === "ingreso") proponerApartar(r.m);
-      if (!editar && r.m && r.m.tipo === "gasto") {
-        var hubo = alertaLimites(r.m.categoria_id), raro = NovaConsejos.gastoInusual(r.m, datos.movimientos);
-        if (raro) setTimeout(function () { toast("Gasto fuera de lo normal", r.m.descripcion, Math.round(raro.veces * 10) / 10 + "× lo habitual"); }, hubo ? 7000 : 3400);
+      if (accion) {
+        var origen = fuente, espacio = espacioId;
+        setTimeout(function () {
+          if (fuente !== origen || espacioId !== espacio || accion.borrando || datos.movimientos.indexOf(r.m) < 0) return;
+          if (r.m.tipo === "ingreso") proponerApartar(r.m);
+          else {
+            var hubo = alertaLimites(r.m.categoria_id), raro = NovaConsejos.gastoInusual(r.m, datos.movimientos);
+            if (raro) setTimeout(function () { toast("Gasto fuera de lo normal", r.m.descripcion, Math.round(raro.veces * 10) / 10 + "× lo habitual"); }, hubo ? 7000 : 0);
+          }
+        }, accion.duracion);
       }
       if (otro && !editar) {
         reg.expr = ""; reg.etiquetas = []; $("reg-desc").value = ""; $("reg-nota").value = ""; $("teclado").hidden = false;
@@ -3997,9 +4072,30 @@
     }).catch(function (err) { mensaje("reg-mensaje", "No se pudo guardar: " + err.message, true); })
       .finally(function () { btn.disabled = false; });
   });
+  function deshacerRegistro(m, redondeo) {
+    var origen = fuente, espacio = espacioId, clave = claveAlcancia();
+    var accion = { texto: "Deshacer", duracion: 5000, confirmar: function () {
+      return confirm("¿Deshacer el movimiento «" + m.descripcion + "»?");
+    }, fn: function () {
+      if (fuente !== origen || espacioId !== espacio || datos.movimientos.indexOf(m) < 0) return;
+      accion.borrando = true;
+      borrarMovimientos([m.id]).then(function () {
+        if (redondeo) guardarLocal(clave, Math.max(0, leerLocal(clave, 0) - redondeo));
+        toast("Movimiento deshecho");
+        pintar();
+      }).catch(function (err) { toast("No se pudo deshacer: " + err.message); });
+    } };
+    return accion;
+  }
+  function duplicarMovimiento(m) {
+    cerrarYLuego(function () { abrirRegistro({ repetir: m, duplicar: true }); });
+  }
+  $("reg-duplicar").addEventListener("click", function () {
+    if (reg && reg.editar) duplicarMovimiento(reg.editar);
+  });
   $("reg-borrar").addEventListener("click", function () {
     var m = reg && reg.editar;
-    if (!m || !confirm("¿Borrar «" + m.descripcion + "» de " + pesos.format(num(m.monto)) + "?")) return;
+    if (!m || !confirm("¿Borrar «" + m.descripcion + "» de " + dinero(num(m.monto)) + "?")) return;
     var guardado = aPapelera("movimientos", m);
     fuente.borrar("movimientos", m.id).then(function () {
       datos.movimientos = datos.movimientos.filter(function (x) { return x.id !== m.id; });
@@ -4032,7 +4128,7 @@
   }
   $("det-borrar").addEventListener("click", function () {
     var m = datos.movimientos.find(function (x) { return x.id === detalleId; });
-    if (!m || !confirm("¿Borrar «" + m.descripcion + "» de " + pesos.format(num(m.monto)) + "?")) return;
+    if (!m || !confirm("¿Borrar «" + m.descripcion + "» de " + dinero(num(m.monto)) + "?")) return;
     var guardado = aPapelera("movimientos", m);
     fuente.borrar("movimientos", m.id).then(function () {
       datos.movimientos = datos.movimientos.filter(function (x) { return x.id !== m.id; });
@@ -5241,10 +5337,14 @@
       repetir.disabled = true;
       var fila = { cuenta_id: m.cuenta_id, categoria_id: m.categoria_id, tipo: m.tipo, monto: m.monto, descripcion: m.descripcion, etiquetas: m.etiquetas || [], fecha: new Date().toISOString() };
       ["moneda", "monto_original", "tasa"].forEach(function (k) { if (m[k] != null) fila[k] = m[k]; });
-      fuente.crear("movimientos", fila).then(function (n) { datos.movimientos.push(n); ordenarMovimientos(); toast("¡Repetido!", n.descripcion, pesos.format(num(n.monto))); pintar(); })
+      fuente.crear("movimientos", fila).then(function (n) { datos.movimientos.push(n); ordenarMovimientos(); toast("¡Repetido!", n.descripcion, dinero(num(n.monto)), deshacerRegistro(n, 0)); pintar(); })
         .catch(function (err) { toast("No se pudo repetir: " + err.message); }).finally(function () { repetir.disabled = false; });
     });
-    cont.append(repetir);
+    var duplicar = el("button", "mini", "Duplicar"); duplicar.type = "button";
+    duplicar.addEventListener("click", function () { duplicarMovimiento(m); });
+    var acciones = el("div", "det-acciones");
+    acciones.append(repetir, duplicar);
+    cont.append(acciones);
 
     // Etiquetas: se quitan con la x y se agregan escribiéndolas o tocando una sugerencia
     var tagCaja = el("article", "tarjeta det-etiquetas"), actuales = m.etiquetas || [];
@@ -7250,8 +7350,8 @@
     if (!peor) return false;
     var nombre = peor.l.categoria_id != null ? nombreCategoria(peor.l.categoria_id) : "tus gastos";
     setTimeout(function () {
-      if (peor.p >= 1) toast("¡Te pasaste del límite!", nombre, "+" + pesos.format(-peor.falta));
-      else toast("Ojo con el límite de " + nombre, "Llevas el " + Math.round(peor.p * 100) + " %", "Faltan " + pesos.format(peor.falta));
+      if (peor.p >= 1) toast("¡Te pasaste del límite!", nombre, "+" + dinero(-peor.falta));
+      else toast("Ojo con el límite de " + nombre, "Llevas el " + Math.round(peor.p * 100) + " %", "Faltan " + dinero(peor.falta));
     }, 3400);
     return true;
   }
