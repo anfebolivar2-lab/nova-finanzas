@@ -199,17 +199,128 @@
     return { normal: normal, avanzada: avanzada, porcentajeNormal: porcentaje(normal, normal + avanzada),
       porcentajeAvanzada: porcentaje(avanzada, normal + avanzada) };
   }
+  function sumarDias(serie, desde, hasta) {
+    var total = 0;
+    for (var dia = desde; dia <= hasta; dia++) {
+      var valor = cantidad(serie[fecha(dia)]);
+      if (valor == null) return null;
+      total += valor;
+    }
+    return total;
+  }
+  function serieDiaria(dias, campo) {
+    var serie = Object.create(null);
+    lista(dias).forEach(function (fila) { serie[fila.dia] = fila[campo]; });
+    return serie;
+  }
+  function comparativoMensual(datos, ahora) {
+    var tiempo = instante(ahora), hoy = Math.floor(tiempo / DIA);
+    var movimientos = serieDiaria(datos.dias, "movimientos");
+    var chats = datos.chatsPorDia, errores = datos.errores || {};
+    var resumen = datos.resumen || {};
+    var cuentas = Array.isArray(datos.personas) ? lista(datos.personas).filter(function (p) { return p.prueba !== true; }) : null;
+    var registros = cuentas && cuentas.map(function (p) {
+      return instante(p.registro) <= tiempo ? Math.floor(instante(p.registro) / DIA) : NaN;
+    });
+    // El historial por persona ya viene agrupado por fecha de Colombia.
+    var usos = cuentas && cuentas.every(function (p) { return Array.isArray(p.dias); }) &&
+      cuentas.map(function (p) { return Array.from(actividad(p, ahora)); });
+
+    function sumarMapa(mapa, desde, hasta) {
+      var total = 0;
+      for (var dia = desde; dia <= hasta; dia++) {
+        var clave = fecha(dia);
+        if (!Object.prototype.hasOwnProperty.call(mapa, clave)) continue;
+        var valor = cantidad(mapa[clave]);
+        if (valor == null) return null;
+        total += valor;
+      }
+      return total;
+    }
+    function periodo(desde, hasta) {
+      return [
+        registros && registros.every(Number.isFinite) ? registros.filter(function (dia) { return dia >= desde && dia <= hasta; }).length : null,
+        usos ? usos.filter(function (dias) {
+          return dias.some(function (dia) { return dia >= desde && dia <= hasta; });
+        }).length : null,
+        sumarDias(movimientos, desde, hasta),
+        chats && (Object.keys(chats).length || resumen.chats === 0) ? sumarMapa(chats, desde, hasta) : null,
+        // La consulta de errores abarca 30 × 24 horas y devuelve hasta 500 filas.
+        // Un mapa vacío también es la respuesta ante un fallo de esa consulta.
+        errores.porDia && Object.keys(errores.porDia).length && errores.total30 < 500 &&
+          desde >= Math.ceil(tiempo / DIA - 30) ? sumarMapa(errores.porDia, desde, hasta) : null
+      ];
+    }
+
+    var inicio = Math.floor(Date.parse(fecha(hoy).slice(0, 7) + "-01") / DIA);
+    var anterior = Math.floor(Date.parse(fecha(inicio - 1).slice(0, 7) + "-01") / DIA);
+    var esteMes = periodo(inicio, hoy), mesPasado = periodo(anterior, inicio - 1);
+    var nombres = ["Registros nuevos", "Personas activas", "Movimientos anotados", "Chats con la IA", "Errores"];
+    return {
+      mes: fecha(inicio).slice(0, 7), mesAnterior: fecha(anterior).slice(0, 7),
+      filas: nombres.map(function (nombre, i) {
+        var actual = esteMes[i], previo = mesPasado[i];
+        return { nombre: nombre, actual: actual, anterior: previo,
+          cambio: actual != null && previo > 0 ? porcentaje(actual - previo, previo) : null };
+      })
+    };
+  }
+  function proyeccionUsuarios(total, nuevos30) {
+    if (cantidad(total) == null || cantidad(nuevos30) == null || nuevos30 > total) return null;
+    return [3, 6].map(function (meses) { return { meses: meses, usuarios: total + meses * nuevos30 }; });
+  }
+  function hitosUsuarios(total) {
+    if (cantidad(total) == null) return null;
+    var hitos = [10, 25, 50, 100, 250, 500, 1000].map(function (meta) {
+      return { meta: meta, logrado: total >= meta };
+    });
+    var siguiente = hitos.find(function (hito) { return !hito.logrado; });
+    return { hitos: hitos, siguiente: siguiente ? siguiente.meta : null,
+      faltan: siguiente ? siguiente.meta - total : 0, avance: siguiente ? porcentaje(total, siguiente.meta) : 100 };
+  }
+  function costosNegocio(valores, activos30) {
+    var costos = valores.map(function (valor) {
+      if (valor == null || valor === "") return null;
+      if (typeof valor !== "number" && (typeof valor !== "string" || !valor.trim())) return NaN;
+      var numero = Number(valor);
+      return Number.isFinite(numero) && numero >= 0 ? numero : NaN;
+    });
+    var total = costos.reduce(function (suma, valor) { return suma + valor; }, 0);
+    var valido = Number.isFinite(total);
+    if (!valido || costos.every(function (valor) { return valor == null; })) total = null;
+    return { valido: valido, valores: costos, total: total,
+      porActivo: total != null && cantidad(activos30) > 0 ? total / activos30 : null };
+  }
   var camposCsv = ["correo", "registro", "ultimoUso", "plataforma", "version", "movimientos", "chats", "metas", "espacios"];
-  function usuariosACsv(personas) {
+  function usuariosACsv(personas, negocio) {
     function celda(valor) {
       var texto = valor == null ? "" : String(valor);
-      if (/^[\t\r\n]|^\s*[=+@-]/.test(texto)) texto = "'" + texto;
+      if (typeof valor !== "number" && /^[\t\r\n]|^\s*[=+@-]/.test(texto)) texto = "'" + texto;
       return '"' + texto.replace(/"/g, '""') + '"';
     }
     var filas = [["Correo", "Registro", "Último uso", "Plataforma", "Versión", "Movimientos", "Chats", "Metas", "Espacios"]];
     lista(personas).forEach(function (p) {
       filas.push(camposCsv.map(function (campo) { return p[campo]; }));
     });
+    if (negocio) {
+      var comparativo = negocio.comparativo;
+      filas.push([], ["Comparativo mensual", comparativo.mes, comparativo.mesAnterior, "Cambio (%)"]);
+      comparativo.filas.forEach(function (fila) {
+        filas.push([fila.nombre, fila.actual == null ? "sin dato" : fila.actual,
+          fila.anterior == null ? "sin dato" : fila.anterior, fila.cambio]);
+      });
+      filas.push([], ["Proyección estimada", "Usuarios"]);
+      (negocio.proyeccion || []).forEach(function (fila) {
+        filas.push([fila.meses + " meses", fila.usuarios]);
+      });
+      if (!negocio.proyeccion) filas.push(["sin dato"]);
+      filas.push([], ["Hitos (usuarios)", "Estado", "Usuarios que faltan para el siguiente"]);
+      if (negocio.hitos) negocio.hitos.hitos.forEach(function (hito) {
+        filas.push([hito.meta, hito.logrado ? "Logrado" : "Pendiente",
+          hito.meta === negocio.hitos.siguiente ? negocio.hitos.faltan : null]);
+      });
+      else filas.push(["sin dato"]);
+    }
     return "\uFEFF" + filas.map(function (fila) { return fila.map(celda).join(","); }).join("\r\n") + "\r\n";
   }
   function fichaUsuario(persona, ahora) {
@@ -232,7 +343,9 @@
     retencion: retencion, cohortes: cohortes, segmentos: segmentos, etiquetasSemana: etiquetasSemana,
     picoDe: picoDe, embudo: embudo, adopcion: adopcion, porcentajeUltimaVersion: porcentajeUltimaVersion,
     repartoApk: repartoApk, usuariosACsv: usuariosACsv, fichaUsuario: fichaUsuario,
-    versionesDe: versionesDe, correosSegmento: correosSegmento
+    versionesDe: versionesDe, correosSegmento: correosSegmento,
+    comparativoMensual: comparativoMensual, proyeccionUsuarios: proyeccionUsuarios,
+    hitosUsuarios: hitosUsuarios, costosNegocio: costosNegocio
   };
   if (typeof module === "object" && module.exports) module.exports = api;
   else raiz.NovaAnalitica = api;

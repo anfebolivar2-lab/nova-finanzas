@@ -6892,6 +6892,109 @@
     barrasDueno(cont, filas, "total", { marcas: marcas, resumen: pico < 0 ? "Sin anotaciones" :
       "Mayor uso en " + etiquetas[pico] + " · " + pl(valores[pico], "anotación", "anotaciones") });
   }
+  var negocioDueno;
+  var activosNegocioDueno;
+  var claveCostosDueno = "nova-dueno-costos-negocio";
+  var formCostosDueno = $("dueno-costos");
+  var camposCostosDueno = Array.from(formCostosDueno.querySelectorAll("input"));
+  var monedaNegocioDueno = new Intl.NumberFormat("es-CO", { style: "currency", currency: "COP", maximumFractionDigits: 2 });
+  var costosCargadosDueno = false;
+
+  function contenidoNegocioDueno(negocio, nivelTitulo) {
+    var contenido = document.createDocumentFragment();
+    var comparativo = negocio.comparativo;
+    var tabla = el("table", "dueno-negocio-tabla"), cab = el("tr"), cuerpo = el("tbody");
+    ["Indicador", comparativo.mes, comparativo.mesAnterior, "Cambio"].forEach(function (texto) {
+      var th = el("th", null, texto);
+      th.scope = "col";
+      cab.append(th);
+    });
+    var encabezado = el("thead");
+    encabezado.append(cab);
+    tabla.append(encabezado, cuerpo);
+    comparativo.filas.forEach(function (fila) {
+      var tr = el("tr"), th = el("th", null, fila.nombre);
+      th.scope = "row";
+      tr.append(th);
+      [fila.actual, fila.anterior].forEach(function (valor) {
+        tr.append(el("td", null, valor == null ? "sin dato" : numDueno.format(valor)));
+      });
+      tr.append(el("td", null, fila.cambio == null ? "—" :
+        (fila.cambio > 0 ? "+" : "") + textoPorcentajeDueno(fila.cambio)));
+      cuerpo.append(tr);
+    });
+    contenido.append(el(nivelTitulo, null, "Este mes contra el mes pasado"), tabla,
+      el("p", "nota", "Este mes lleva lo registrado hasta la fecha. El cambio se muestra cuando el mes anterior tiene un valor mayor que cero."),
+      el("p", "nota", "La actividad usa los días con movimientos y el último uso (hora de Colombia). Los demás indicadores de la tabla usan fechas UTC. Los chats se cuentan por su última actualización."));
+
+    contenido.append(el(nivelTitulo, null, "Proyección de usuarios a 3 y 6 meses"));
+    if (negocio.proyeccion) {
+      var proyeccion = el("ul", "dueno-hitos");
+      negocio.proyeccion.forEach(function (fila) {
+        proyeccion.append(el("li", null, "A " + fila.meses + " meses · " + pl(fila.usuarios, "usuario", "usuarios")));
+      });
+      contenido.append(proyeccion, el("p", "nota", "Estimación lineal al ritmo de registros de los últimos 30 días, sin cuentas de prueba."));
+    } else contenido.append(el("p", "nota", "Faltan datos de usuarios o de registros de los últimos 30 días para estimar."));
+
+    contenido.append(el(nivelTitulo, null, "Hitos"));
+    var hitos = negocio.hitos;
+    if (!hitos) contenido.append(el("p", "nota", "Sin dato de personas registradas."));
+    else {
+      var lista = el("ul", "dueno-hitos");
+      hitos.hitos.forEach(function (hito) {
+        lista.append(el("li", null, pl(hito.meta, "usuario", "usuarios") + " · " + (hito.logrado ? "Logrado" : "Pendiente")));
+      });
+      var texto = hitos.siguiente ? "Faltan " + pl(hitos.faltan, "usuario", "usuarios") +
+        " para llegar a " + numDueno.format(hitos.siguiente) + "." : "Todos los hitos logrados.";
+      var barra = el("progress", "dueno-hitos-barra");
+      barra.max = 100;
+      barra.value = hitos.avance;
+      barra.setAttribute("aria-label", texto);
+      contenido.append(lista, el("p", "nota", texto), barra);
+    }
+    return contenido;
+  }
+
+  function costosActualesDueno() {
+    return Analitica.costosNegocio(camposCostosDueno.map(function (campo) {
+      return campo.validity.valid ? campo.value : NaN;
+    }), activosNegocioDueno);
+  }
+  function textoCostosDueno(costos) {
+    return "Total mensual · " + (costos.total == null ? "sin dato" : monedaNegocioDueno.format(costos.total)) +
+      " · Por usuario activo (30 días) · " + (costos.porActivo == null ? "sin dato" : monedaNegocioDueno.format(costos.porActivo));
+  }
+  function pintarCostosDueno(guardar) {
+    if (!costosCargadosDueno) {
+      var valores = leerLocal(claveCostosDueno, []);
+      if (Array.isArray(valores)) camposCostosDueno.forEach(function (campo, i) {
+        if (Number.isFinite(valores[i]) && valores[i] >= 0) campo.value = valores[i];
+      });
+      costosCargadosDueno = true;
+    }
+    var costos = costosActualesDueno();
+    $("dueno-costos-total").textContent = textoCostosDueno(costos);
+    if (!costos.valido) mensaje("dueno-costos-mensaje", "Ingresa valores no negativos con hasta dos decimales.", true);
+    else if (guardar) {
+      var guardado = guardarLocal(claveCostosDueno, costos.valores);
+      mensaje("dueno-costos-mensaje", guardado ? "" : "El navegador impidió guardar los costos.", !guardado);
+    }
+  }
+  formCostosDueno.addEventListener("submit", function (e) { e.preventDefault(); });
+  formCostosDueno.addEventListener("input", function () {
+    if (soyDueno() && negocioDueno) pintarCostosDueno(true);
+  });
+  $("dueno-informe-abrir").addEventListener("click", function () {
+    if (!soyDueno() || !negocioDueno) return;
+    $("informe-dueno-datos").replaceChildren(contenidoNegocioDueno(negocioDueno, "h2"),
+      el("h2", null, "Costos de operación"), el("p", null, textoCostosDueno(costosActualesDueno())));
+    abrirCapa("pantalla-informe-dueno");
+    $("pantalla-informe-dueno").scrollTop = 0;
+  });
+  $("informe-dueno-imprimir").addEventListener("click", function () {
+    if (soyDueno()) window.print();
+  });
+
   function pintarAnaliticaDueno(d, ahora) {
     var todas = Dueno.personasVisibles(d.personas, false);
     var personas = Dueno.personasVisibles(todas, ocultarPruebaDueno.checked);
@@ -6900,6 +7003,18 @@
     personasDueno = personas;
     if (ocultarPruebaDueno.checked && vistaDueno.filtro === "prueba") vistaDueno.filtro = "todos";
     $("dueno-exportar").disabled = !Array.isArray(d.personas);
+
+    var resumen = d.resumen || {};
+    var fechaDatos = Date.parse(d.generado);
+    negocioDueno = {
+      comparativo: Analitica.comparativoMensual(d, Number.isFinite(fechaDatos) ? fechaDatos : ahora),
+      proyeccion: Analitica.proyeccionUsuarios(resumen.registrados, resumen.nuevos30),
+      hitos: Analitica.hitosUsuarios(resumen.registrados)
+    };
+    activosNegocioDueno = resumen.activos30;
+    $("dueno-negocio-datos").replaceChildren(contenidoNegocioDueno(negocioDueno, "h3"));
+    $("dueno-informe-abrir").disabled = false;
+    pintarCostosDueno(false);
 
     var nuevos = Analitica.nuevosPor(personas, ahora);
     kpisAnaliticaDueno("dueno-nuevos", [["Hoy", nuevos.dia], ["Esta semana", nuevos.semana], ["Este mes", nuevos.mes]]);
@@ -6992,7 +7107,7 @@
   });
   $("dueno-exportar").addEventListener("click", function () {
     if (!soyDueno() || !personasDueno) return;
-    var url = URL.createObjectURL(new Blob([Analitica.usuariosACsv(personasDueno)], { type: "text/csv;charset=utf-8" }));
+    var url = URL.createObjectURL(new Blob([Analitica.usuariosACsv(personasDueno, negocioDueno)], { type: "text/csv;charset=utf-8" }));
     var enlace = el("a");
     enlace.href = url;
     enlace.download = "nova-usuarios.csv";

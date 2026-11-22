@@ -1300,6 +1300,23 @@
     <p id="dueno-config-mensaje" class="mensaje" role="status"></p>
   </article>
   <details class="tarjeta dueno-seccion" open>
+    <summary>Negocio</summary>
+    <div id="dueno-negocio-datos"></div>
+    <h3>Costo mensual y por usuario activo</h3>
+    <form id="dueno-costos" class="formulario">
+      <p class="nota">Costos en pesos colombianos (COP). Los campos vacíos cuentan como cero al ingresar algún costo. Se guardan en este navegador.</p>
+      <div class="dueno-costos-campos">
+        <label>Supabase <input type="number" min="0" step="0.01" name="supabase"></label>
+        <label>Vercel <input type="number" min="0" step="0.01" name="vercel"></label>
+        <label>IA <input type="number" min="0" step="0.01" name="ia"></label>
+      </div>
+      <p id="dueno-costos-mensaje" class="mensaje" role="status"></p>
+      <p id="dueno-costos-total" aria-live="polite"></p>
+    </form>
+    <h3>Informe mensual para compartir</h3>
+    <button type="button" class="mini" id="dueno-informe-abrir" disabled>Imprimir / guardar PDF</button>
+  </details>
+  <details class="tarjeta dueno-seccion" open>
     <summary>Crecimiento</summary>
     <div id="dueno-nuevos" class="dueno-kpis"></div>
     <h3>Personas registradas · últimos 30 días</h3>
@@ -1395,7 +1412,7 @@
     <ul id="dueno-accesos" class="lista-banco"></ul>
   </article>
   <h2 class="seccion-cabecera">Personas</h2>
-  <button type="button" class="mini" id="dueno-exportar" disabled>Descargar usuarios para Excel (CSV)</button>
+  <button type="button" class="mini" id="dueno-exportar" disabled>Descargar usuarios y estadísticas (CSV)</button>
   <dialog id="dueno-ficha" class="tarjeta dueno-ficha" aria-labelledby="dueno-ficha-correo">
     <h2 id="dueno-ficha-correo" class="titulo-tarjeta"></h2>
     <dl id="dueno-ficha-datos"></dl>
@@ -1554,7 +1571,16 @@
   </div>
 </div>
 
-<section id="pantalla-estado-financiero" class="capa estado-financiero" aria-labelledby="estado-financiero-titulo" hidden>
+<section id="pantalla-informe-dueno" class="capa estado-financiero informe-imprimible" aria-labelledby="informe-dueno-titulo" hidden>
+  <div class="sub-cabecera">
+    <button type="button" class="icono-btn" data-cerrar aria-label="Volver"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button>
+    <h1 id="informe-dueno-titulo">Informe mensual de NOVA</h1>
+  </div>
+  <div id="informe-dueno-datos"></div>
+  <button type="button" id="informe-dueno-imprimir" class="primario">Imprimir / guardar PDF</button>
+</section>
+
+<section id="pantalla-estado-financiero" class="capa estado-financiero informe-imprimible" aria-labelledby="estado-financiero-titulo" hidden>
   <div class="sub-cabecera">
     <button type="button" class="icono-btn" data-cerrar aria-label="Volver"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button>
     <h1 id="estado-financiero-titulo">Estado financiero del mes</h1>
