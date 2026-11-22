@@ -947,3 +947,105 @@ test("pruebas gratis: de hoy a tres días por fecha local, en orden y sin modifi
   assert.ok(Number.isFinite(A.diaDePrueba("2028-02-29")));
   assert.strictEqual(A.pruebasPorVencer([{ fecha: "2026-03-09" }], new Date(2026, 2, 7, 23, 50))[0].dias, 2);
 });
+
+test("avisoDiaPago cubre el día de pago y el siguiente, incluso al cambiar de mes", () => {
+  const hoy = (mes, dia) => new Date(2026, mes - 1, dia, 12);
+  assert.equal(A.avisoDiaPago(15, [], hoy(6, 14)), false);
+  assert.equal(A.avisoDiaPago("15", [], hoy(6, 15)), true);
+  assert.equal(A.avisoDiaPago(15, [], hoy(6, 16)), true);
+  assert.equal(A.avisoDiaPago(15, [], hoy(6, 17)), false);
+  assert.equal(A.avisoDiaPago(31, [], hoy(2, 28)), true);
+  assert.equal(A.avisoDiaPago(31, [], hoy(3, 1)), true);
+  assert.equal(A.avisoDiaPago(31, [], hoy(3, 2)), false);
+  for (const dia of ["", null, 0, 15.5, 32]) assert.equal(A.avisoDiaPago(dia, [], hoy(6, 15)), false);
+});
+
+test("avisoDiaPago se oculta al anotar un ingreso durante la ventana de pago", () => {
+  const ahora = new Date(2026, 5, 16, 12);
+  const ingreso = { tipo: "ingreso", fecha: "2026-06-15T08:00:00" };
+  assert.equal(A.avisoDiaPago(15, [ingreso], ahora), false);
+  assert.equal(A.avisoDiaPago(15, [{ ...ingreso, fecha: "2026-06-16T08:00:00" }], ahora), false);
+  assert.equal(A.avisoDiaPago(15, [{ ...ingreso, fecha: "2026-06-14T08:00:00" }], ahora), true);
+  assert.equal(A.avisoDiaPago(15, [{ ...ingreso, fecha: "2026-06-17T08:00:00" }], ahora), true);
+  assert.equal(A.avisoDiaPago(15, [{ ...ingreso, transferencia: "1" }, { ...ingreso, tipo: "gasto" }], ahora), true);
+});
+
+test("comprasParaCalificar aplica el mínimo, la mediana y los 30 días de calendario", () => {
+  const ahora = new Date(2026, 10, 22, 8);
+  const compra = (id, monto, fecha = "2026-10-23T20:00:00") => ({ id, monto, fecha, tipo: "gasto" });
+  const movs = [
+    compra(1, 100000), compra(2, 99999), compra(3, 120000, "2026-10-24T08:00:00"),
+    compra(4, 110000, "2026-10-01T20:00:00"), compra(5, 110000),
+    ...Array.from({ length: 6 }, (_, i) => compra(i + 6, 25000)),
+    { ...compra(12, 9000000), transferencia: "1" }, { ...compra(13, 9000000), tipo: "ingreso" },
+    compra(14, 9000000, "2026-11-23T08:00:00")
+  ];
+  assert.deepEqual(A.comprasParaCalificar(movs, { 5: "regular" }, ahora).map(m => m.id), [4, 1]);
+  assert.deepEqual(A.comprasParaCalificar([], {}, ahora), []);
+  const umbralMediana = [compra(1, 80000), compra(2, 140000), compra(3, 220000), compra(4, 80000)];
+  assert.deepEqual(A.comprasParaCalificar(umbralMediana, {}, ahora).map(m => m.id), [3]);
+});
+
+test("resumenCalificaciones cuenta las tres respuestas y lista las compras calificadas con No", () => {
+  const movs = [1, 2, 3, 4, 5].map(id => ({ id, tipo: "gasto", fecha: "2026-10-0" + id + "T12:00:00" }));
+  const r = A.resumenCalificaciones(movs, { 1: "no", 2: "regular", 3: "si", 4: "no", 6: "no" });
+  assert.equal(r.total, 4);
+  assert.deepEqual(r.noValieron.map(m => m.id), [4, 1]);
+  assert.deepEqual(A.resumenCalificaciones(movs, {}), { total: 0, noValieron: [] });
+});
+
+test("sugerenciasAhorro ordena las tres categorías principales del mes y estima un 10 %", () => {
+  const gasto = (categoria_id, monto, fecha = "2026-11-02T12:00:00") => ({ tipo: "gasto", categoria_id, monto, fecha });
+  const ahora = new Date(2026, 10, 22);
+  const movs = [
+    gasto(1, 90000), gasto(1, 80000), gasto(2, 120000), gasto(3, 60000), gasto(4, 40000),
+    gasto(4, 900000, "2026-10-31T23:59:59"), gasto(4, 900000, "2026-12-01T00:00:00"),
+    { ...gasto(4, 900000), transferencia: "1" }, { ...gasto(4, 900000), tipo: "ingreso" }
+  ];
+  const catalogo = [{ id: 1, nombre: "Comida" }, { id: 2, nombre: "Bus", grupo: "Transporte" }, { id: 3, nombre: "Otra" }];
+  const r = A.sugerenciasAhorro(movs, ahora, catalogo);
+  assert.deepEqual(r.map(c => [c.categoriaId, c.ahorro]), [[1, 17000], [2, 12000], [3, 6000]]);
+  assert.match(r[0].consejo, /domicilio/);
+  assert.match(r[1].consejo, /viaje/);
+  assert.match(r[2].consejo, /evitar repetir/);
+  assert.deepEqual(A.sugerenciasAhorro([], ahora), []);
+});
+
+test("filtrarMovimientos combina fechas inclusivas, monto, categoría, cuenta y filtros anteriores", () => {
+  const base = { fecha: "2026-11-08T23:59:59", monto: "20000", categoria_id: 2, cuenta_id: 5,
+    tipo: "gasto", descripcion: "Café", estado: "pagado", etiquetas: ["trabajo"] };
+  const movs = [base, { ...base, fecha: "2026-11-07T00:00:00", monto: 10000 },
+    { ...base, fecha: "2026-11-06T23:59:59" }, { ...base, fecha: "2026-11-09T00:00:00" },
+    { ...base, monto: 9999 }, { ...base, monto: 20001 }, { ...base, cuenta_id: 6 },
+    { ...base, categoria_id: 3 }, { ...base, tipo: "ingreso" }, { ...base, descripcion: "Almuerzo" },
+    { ...base, etiquetas: [] }, { ...base, estado: "pendiente" }];
+  const filtros = { texto: "cafe", desde: "2026-11-07", hasta: "2026-11-08", categoriaId: 2,
+    cuentaId: "5", montoMin: "10000", montoMax: "20000", tipo: "gasto", etiqueta: "trabajo", estado: "pagado", orden: "menor" };
+  assert.deepEqual(A.filtrarMovimientos(movs, filtros), [movs[1], base]);
+  assert.deepEqual(A.filtrarMovimientos([{ ...base, monto: 0 }, base], { montoMax: "0" }).map(m => m.monto), [0]);
+  assert.deepEqual(A.filtrarMovimientos(movs, { montoMin: 20, montoMax: 10 }), []);
+  assert.equal(A.filtrarMovimientos(movs, {}).length, movs.length);
+  assert.equal(movs[0], base);
+});
+
+test("resumenAnio excluye otros años y traspasos y calcula el mes y la categoría con más gasto", () => {
+  const mov = (fecha, tipo, monto, categoria_id) => ({ fecha: fecha + "T12:00:00", tipo, monto, categoria_id });
+  const movs = [
+    mov("2026-01-01", "ingreso", 500, 6), mov("2026-01-02", "gasto", 100, 3),
+    mov("2026-03-01", "gasto", 90, 2), mov("2026-03-02", "gasto", 80, 2),
+    mov("2026-12-31", "gasto", 20, 3), mov("2027-01-01", "gasto", 1000, 3),
+    mov("2025-12-31", "ingreso", 1000, 6),
+    { ...mov("2026-04-01", "gasto", 1000, 3), transferencia: true },
+    { ...mov("2026-04-01", "ingreso", 1000, 6), transferencia: true }
+  ];
+  assert.deepEqual(A.resumenAnio(movs, 2026), {
+    ingresos: 500, gastos: 290, ahorro: 210, categoriaTop: { id: 2, total: 170 }, mesMasCaro: "Marzo"
+  });
+  assert.deepEqual(A.resumenAnio(movs, 2025), {
+    ingresos: 1000, gastos: 0, ahorro: 1000, categoriaTop: null, mesMasCaro: null
+  });
+  assert.deepEqual(A.resumenAnio([mov("2026-01-01", "gasto", 100, null)], 2026), {
+    ingresos: 0, gastos: 100, ahorro: -100, categoriaTop: { id: null, total: 100 }, mesMasCaro: "Enero"
+  });
+  assert.equal(A.resumenAnio(movs, 2024), null);
+});

@@ -307,14 +307,19 @@
   function sinTildes(t) { return String(t || "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, ""); }
 
   // Busca por descripción, nota, categoría o etiqueta, con filtros opcionales.
-  // f: { texto, tipo, categoriaId, etiqueta, estado, desde, hasta, orden }, nombreCategoria(id) -> texto
-  function buscar(movs, f, nombreCategoria) {
+  // El nombre de la categoría se puede resolver con el catálogo de la app.
+  function filtrarMovimientos(movs, f, nombreCategoria) {
+    f = f || {};
     var palabras = sinTildes(f.texto).replace(/#/g, "").split(/\s+/).filter(Boolean);
     var desde = f.desde ? new Date(f.desde + "T00:00:00") : null, hasta = f.hasta ? new Date(f.hasta + "T00:00:00") : null;
-    if (hasta) hasta = new Date(hasta.getTime() + DIA);
+    if (hasta) hasta.setDate(hasta.getDate() + 1);
+    var minimo = f.montoMin != null && f.montoMin !== "" ? Number(f.montoMin) : -Infinity;
+    var maximo = f.montoMax != null && f.montoMax !== "" ? Number(f.montoMax) : Infinity;
     var r = movs.filter(function (m) {
       if (f.tipo && m.tipo !== f.tipo) return false;
       if (f.categoriaId != null && m.categoria_id !== f.categoriaId) return false;
+      if (f.cuentaId != null && f.cuentaId !== "" && String(m.cuenta_id) !== String(f.cuentaId)) return false;
+      if (!(num(m.monto) >= minimo && num(m.monto) <= maximo)) return false;
       if (f.etiqueta && (m.etiquetas || []).indexOf(f.etiqueta) < 0) return false;
       if (f.estado && (m.estado || "pagado") !== f.estado) return false;
       var fecha = new Date(m.fecha);
@@ -1108,7 +1113,92 @@
     }).sort(function (a, b) { return a.dias - b.dias; });
   }
 
+  function avisoDiaPago(diaPago, movs, ahora) {
+    var dia = Number(diaPago);
+    if (!Number.isInteger(dia) || dia < 1 || dia > 31) return false;
+    var hoy = inicioDia(ahora);
+    var ayer = new Date(hoy);
+    ayer.setDate(ayer.getDate() - 1);
+    var fechaPago = [hoy, ayer].find(function (fecha) {
+      var ultimo = new Date(fecha.getFullYear(), fecha.getMonth() + 1, 0).getDate();
+      return fecha.getDate() === Math.min(dia, ultimo);
+    });
+    if (!fechaPago) return false;
+    var desde = claveDia(fechaPago), hasta = claveDia(hoy);
+    return !movs.some(function (m) {
+      if (m.tipo !== "ingreso" || m.transferencia) return false;
+      var fecha = claveDia(m.fecha);
+      return fecha >= desde && fecha <= hasta;
+    });
+  }
+
+  function comprasParaCalificar(movs, calificaciones, ahora) {
+    var hoy = diaDePrueba(claveDia(ahora));
+    var gastos = movs.filter(function (m) {
+      return esGasto(m) && num(m.monto) > 0 && diaDePrueba(claveDia(m.fecha)) <= hoy;
+    });
+    var minimo = Math.max(100000, 2 * mediana(gastos.map(function (m) { return num(m.monto); })));
+    return gastos.filter(function (m) {
+      return m.id != null && !Object.prototype.hasOwnProperty.call(calificaciones, m.id) &&
+        num(m.monto) >= minimo && hoy - diaDePrueba(claveDia(m.fecha)) >= 30;
+    }).sort(function (a, b) { return new Date(a.fecha) - new Date(b.fecha); });
+  }
+
+  function resumenCalificaciones(movs, calificaciones) {
+    var calificadas = movs.filter(function (m) {
+      return esGasto(m) && ["si", "regular", "no"].indexOf(calificaciones[m.id]) >= 0;
+    });
+    return {
+      total: calificadas.length,
+      noValieron: calificadas.filter(function (m) { return calificaciones[m.id] === "no"; })
+        .sort(function (a, b) { return new Date(b.fecha) - new Date(a.fecha); })
+    };
+  }
+
+  var CONSEJOS_AHORRO = {
+    comida: "Cambia un domicilio a la semana por una comida preparada en casa.",
+    mercado: "Haz una lista antes de ir al mercado y revisa qué tienes en casa.",
+    transporte: "Agrupa tus vueltas en un solo viaje para pagar menos trayectos.",
+    entretenimiento: "Cambia una salida paga por una actividad gratis.",
+    hogar: "Compara precios de los productos de aseo por litro o por kilo.",
+    servicios: "Revisa si puedes bajar de plan de internet o celular sin pagar una penalidad.",
+    suscripciones: "Revisa tus cobros y cancela las suscripciones que ya no usas.",
+    otros: "Revisa tus últimos gastos de esta categoría y elige uno que puedas evitar repetir."
+  };
+
+  function sugerenciasAhorro(movs, ahora, categorias) {
+    var catalogo = new Map((categorias || []).map(function (c) { return [Number(c.id), c]; }));
+    var mes = enRango(movs.filter(esGasto), Periodos.periodo("mensual", ahora));
+    return porCategoria(mes).filter(function (c) { return c.total > 0; }).slice(0, 3).map(function (c) {
+      var categoria = catalogo.get(c.id) || {};
+      var nombre = sinTildes(categoria.nombre);
+      var porGrupo = {
+        "Comida y Bebida": "comida", "Transporte": "transporte", "Trabajo con vehículo": "transporte"
+      };
+      var clave = Object.prototype.hasOwnProperty.call(CONSEJOS_AHORRO, nombre) ? nombre : porGrupo[grupoDe(categoria)];
+      return { categoriaId: c.id, ahorro: c.total / 10, consejo: CONSEJOS_AHORRO[clave] || CONSEJOS_AHORRO.otros };
+    });
+  }
+
+  function resumenAnio(movs, anio) {
+    var delAnio = enRango(movs, { desde: new Date(anio, 0, 1), hasta: new Date(anio + 1, 0, 1) })
+      .filter(function (m) { return !m.transferencia && (m.tipo === "ingreso" || m.tipo === "gasto"); });
+    if (!delAnio.length) return null;
+    var t = totales(delAnio);
+    var top = porCategoria(delAnio)[0];
+    var meses = Array(12).fill(0);
+    delAnio.filter(esGasto).forEach(function (m) { meses[new Date(m.fecha).getMonth()] += num(m.monto); });
+    var mayor = Math.max.apply(null, meses);
+    return {
+      ingresos: t.ingresos, gastos: t.gastos, ahorro: t.neto,
+      categoriaTop: top && top.total > 0 ? top : null,
+      mesMasCaro: mayor > 0 ? MESES[meses.indexOf(mayor)] : null
+    };
+  }
+
   var api = {
+    avisoDiaPago: avisoDiaPago, comprasParaCalificar: comprasParaCalificar, resumenCalificaciones: resumenCalificaciones,
+    sugerenciasAhorro: sugerenciasAhorro, resumenAnio: resumenAnio,
     temaPorHora: temaPorHora, esperaBloqueo: esperaBloqueo, totalLista: totalLista,
     diaDePrueba: diaDePrueba, pruebasPorVencer: pruebasPorVencer,
     ingresosGastos12: ingresosGastos12, tendenciaCategorias: tendenciaCategorias, rankingComercios: rankingComercios,
@@ -1122,7 +1212,7 @@
     calendarioMes: calendarioMes, suscripciones: suscripciones, alcanza: alcanza, mesVsPromedio: mesVsPromedio, numeroLibertad: numeroLibertad,
     desplazar: desplazar, nombrePeriodo: nombrePeriodo, nombreCorto: nombreCorto, enRango: enRango, totales: totales,
     porCategoria: porCategoria, porEtiqueta: porEtiqueta, vistaRapida: vistaRapida, serie: serie, proyeccion: proyeccion,
-    seguroParaGastar: seguroParaGastar, nombreDia: nombreDia, porDia: porDia, claveDia: claveDia, buscar: buscar,
+    seguroParaGastar: seguroParaGastar, nombreDia: nombreDia, porDia: porDia, claveDia: claveDia, buscar: filtrarMovimientos, filtrarMovimientos: filtrarMovimientos,
     sinTildes: sinTildes, evaluar: evaluar, FRECUENCIAS: FRECUENCIAS, siguienteFecha: siguienteFecha,
     fechasPendientes: fechasPendientes, GRUPOS: GRUPOS, grupoDe: grupoDe, csv: csv, MESES: MESES,
     GRUPO_APPS: GRUPO_APPS, GRUPO_TRABAJO: GRUPO_TRABAJO, CATEGORIAS_CONDUCTOR: CATEGORIAS_CONDUCTOR, DOCUMENTOS: DOCUMENTOS,
