@@ -250,3 +250,15 @@ test("consejo del día: 60 consejos distintos, fecha local y ciclo estable", () 
   }
   assert.strictEqual(C.consejoDelDia(new Date(NaN)), null);
 });
+
+test("los logros de embajador se desbloquean al compartir 1 y 5 veces", () => {
+  for (const [veces, esperado] of [
+    [undefined, [false, false]], [0, [false, false]], [1, [true, false]],
+    [4, [true, false]], [5, [true, true]], [6, [true, true]]
+  ]) {
+    assert.deepEqual(C.logrosEmbajador(veces).map((logro) => logro.hecho), esperado);
+  }
+  assert.deepEqual(C.logrosEmbajador(5).map((logro) => logro.titulo), [
+    "Embajador de NOVA", "Gran embajador"
+  ]);
+});

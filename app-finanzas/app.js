@@ -1861,6 +1861,7 @@
     titulo(art, "Logros");
     var deudasPagadas = resumenDeDeudas().lista.filter(function (x) { return x.estado === "pagada"; }).length;
     var lista = NovaConsejos.logros({ movimientos: datos.movimientos, racha: A.racha(datos.movimientos), metas: datos.metas, deudasPagadas: deudasPagadas, grupos: datos.grupos.length });
+    lista = lista.concat(NovaConsejos.logrosEmbajador(fuente.demo ? 0 : leerLocal(claveComodidad("veces-compartido"), 0)));
     var hechos = lista.filter(function (x) { return x.hecho; }).length;
     art.append(el("p", "nota", hechos + " de " + lista.length + " logros conseguidos"));
     var caja = el("div", "logros");
@@ -2680,19 +2681,35 @@
     window.open("https://wa.me/?text=" + encodeURIComponent(texto), "_blank", "noopener");
     return Promise.resolve();
   }
-  function compartirEnlace(titulo, texto, url) {
+  async function compartirEnlace(titulo, texto, url) {
     var P = (window.Capacitor && window.Capacitor.Plugins) || {};
-    if (enApp && P.Share) return P.Share.share({ title: titulo, text: texto, url: url, dialogTitle: titulo }).catch(function () { /* cancelado */ });
-    if (navigator.share) return navigator.share({ title: titulo, text: texto, url: url }).catch(function () { /* cancelado */ });
-    window.open("https://wa.me/?text=" + encodeURIComponent(texto + "\n" + url), "_blank", "noopener");
-    return Promise.resolve();
+    try {
+      if (enApp && P.Share) await P.Share.share({ title: titulo, text: texto, url: url, dialogTitle: titulo });
+      else if (navigator.share) await navigator.share({ title: titulo, text: texto, url: url });
+      else {
+        var ventana = window.open("about:blank", "_blank");
+        if (!ventana) return false;
+        ventana.opener = null;
+        ventana.location.replace("https://wa.me/?text=" + encodeURIComponent(texto + "\n" + url));
+      }
+      return true;
+    } catch (e) { return false; }
   }
-  $("btn-compartir-nova").addEventListener("click", function () {
-    compartirEnlace(
+  $("btn-compartir-nova").addEventListener("click", async function () {
+    var origen = fuente;
+    var clave = origen && !origen.demo ? claveComodidad("veces-compartido") : null;
+    var compartido = await compartirEnlace(
       "NOVA · Tus finanzas personales",
       "Te recomiendo NOVA para llevar tus finanzas: anota gastos con texto, voz o foto, gratis y sin anuncios.",
-      cfg.sitioUrl || "https://nova-finanzas.vercel.app"
+      (cfg.sitioUrl || "https://nova-finanzas.vercel.app").replace(/\/$/, "") + "/inicio.html"
     );
+    if (!compartido || !clave) return;
+    var antes = Number(leerLocal(clave, 0)) || 0;
+    if (!guardarLocal(clave, antes + 1) || fuente !== origen) return;
+    var anteriores = NovaConsejos.logrosEmbajador(antes);
+    NovaConsejos.logrosEmbajador(antes + 1).forEach(function (logro, i) {
+      if (logro.hecho && !anteriores[i].hecho) toast("¡Nuevo logro!", logro.titulo);
+    });
   });
   function titulo(art, texto) { art.append(el("h2", "titulo-widget", texto)); }
 
