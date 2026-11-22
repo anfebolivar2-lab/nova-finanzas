@@ -123,6 +123,13 @@
     return { gastos: gA, ingresos: suma(a.filter(function (m) { return m.tipo === "ingreso"; })), anterior: gB, cambio: gB > 0 ? Math.round(((gA - gB) / gB) * 100) : null, movimientos: a.length };
   }
 
+  function logrosEmbajador(veces) {
+    return [
+      { id: "embajador", icono: "📣", titulo: "Embajador de NOVA", texto: "Comparte NOVA por primera vez", hecho: veces >= 1 },
+      { id: "gran-embajador", icono: "🏆", titulo: "Gran embajador", texto: "Comparte NOVA 5 veces", hecho: veces >= 5 }
+    ];
+  }
+
   // Logros (insignias) según tu uso.
   function logros(ctx) {
     var movs = ctx.movimientos || [], l = [];
@@ -663,7 +670,7 @@
     return Number.isFinite(diaDelAnio) ? CONSEJOS_DIARIOS[diaDelAnio % CONSEJOS_DIARIOS.length] : null;
   }
 
-  var api = { consejoDelDia: consejoDelDia, consejos: consejos, gastoInusual: gastoInusual, semana: semana, logros: logros, cuotaCredito: cuotaCredito, ahorroFuturo: ahorroFuturo, regla503020: regla503020, calendario: calendario, plata: plata,
+  var api = { consejoDelDia: consejoDelDia, consejos: consejos, gastoInusual: gastoInusual, semana: semana, logros: logros, logrosEmbajador: logrosEmbajador, cuotaCredito: cuotaCredito, ahorroFuturo: ahorroFuturo, regla503020: regla503020, calendario: calendario, plata: plata,
     gastoMensualPromedio: gastoMensualPromedio, mejorPeorMes: mejorPeorMes, salud: salud, iva: iva, dividirCuenta: dividirCuenta, costoHabito: costoHabito,
     contadoVsCuotas: contadoVsCuotas, cdt: cdt, primaCesantias: primaCesantias, salirDeDeuda: salirDeDeuda, reto52: reto52,
     suscripciones: suscripciones, inflacionPersonal: inflacionPersonal, mesesConDatos: mesesConDatos, compararMeses: compararMeses, costoEvento: costoEvento, etiquetasUsadas: etiquetasUsadas, importarCSV: importarCSV,

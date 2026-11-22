@@ -423,7 +423,8 @@ body.con-capa { overflow: hidden; }
 .menu > * + * { border-top: 1px solid var(--line); }
 .menu > button span:nth-child(2), .menu-fila span:nth-child(2) { display: flex; flex-direction: column; flex: 1; min-width: 0; }
 .menu small, .menu-fila small { color: var(--muted); font-weight: 500; font-size: .8rem; }
-.menu > button::after { content: "›"; color: var(--muted); font-size: 1.3rem; }
+.menu > a.menu-fila { text-decoration: none; }
+.menu > button::after, .menu > a.menu-fila::after { content: "›"; color: var(--muted); font-size: 1.3rem; }
 .menu-icono { width: 36px; height: 36px; border-radius: 10px; display: grid; place-items: center; background: var(--surface-2); flex: none; font-size: 1.05rem; color: var(--accent); font-weight: 800; }
 .menu-fila { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; }
 .menu .menu-fila { border: 0; border-radius: 0; }
