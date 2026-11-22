@@ -87,9 +87,9 @@ Lista de ideas propuestas para revisar; ninguna está hecha todavía.
 
 - ⭐ Anotar con la voz el gasto completo: "gasté 15 mil en almuerzo con Nequi".
 - ✅ Repetir el último gasto con un toque (el mismo café de siempre).
-- Plantillas de gastos frecuentes por hora: a las 7 a. m. sugiere "bus".
+- ✅ Plantillas de gastos frecuentes por hora: a las 7 a. m. sugiere "bus".
 - ✅ Teclado numérico grande con botones de 1.000, 5.000, 10.000 y 50.000.
-- Anotar varios gastos seguidos sin cerrar la pantalla.
+- ✅ Anotar varios gastos seguidos sin cerrar la pantalla.
 - ✅ Deshacer el último movimiento con un aviso de 5 segundos.
 - Foto del recibo como adjunto opcional en cualquier gasto.
 - ✅ Autocompletar la descripción con lo que ya escribiste antes.
@@ -118,7 +118,7 @@ Lista de ideas propuestas para revisar; ninguna está hecha todavía.
 ## Para ahorrar más
 
 - ✅ Meta de ahorro automática: NOVA te sugiere cuánto guardar según lo que te sobró los últimos meses.
-- Retos de ahorro semanales con logros (sin domicilios, sin taxi…).
+- ✅ Retos de ahorro semanales con logros (sin domicilios, sin taxi…).
 - ✅ "Pagarte primero": recordatorio el día de pago para separar el ahorro.
 - ✅ Fondo de emergencia guiado (3 a 6 meses de gastos), con barra de progreso.
 - ✅ Metas con foto (la moto, el viaje) y cuenta regresiva.
@@ -133,11 +133,11 @@ Lista de ideas propuestas para revisar; ninguna está hecha todavía.
 ## Deudas y crédito
 
 - ✅ Recordatorio del corte y del pago de cada tarjeta de crédito.
-- Conectar el simulador de tarjeta con tus deudas reales (prellenar los datos).
+- ✅ Conectar el simulador de tarjeta con tus deudas reales (prellenar los datos).
 - ✅ Comparar créditos: cuota, tasa y costo total de 2 o 3 ofertas.
 - ✅ Calculadora de compra de cartera.
-- Historial de pagos de cada deuda, con gráfico de cómo baja.
-- Aviso cuando una tasa supera la tasa de usura vigente.
+- ✅ Historial de pagos de cada deuda, con gráfico de cómo baja.
+- ✅ Aviso cuando una tasa supera la tasa de usura vigente.
 - Préstamos a amigos con fecha y recordatorio por WhatsApp (ampliar lo que ya hay).
 - ✅ Calculadora de crédito de vivienda y leasing (cuota, seguros).
 
@@ -166,8 +166,8 @@ Lista de ideas propuestas para revisar; ninguna está hecha todavía.
 ## Notificaciones y hábitos
 
 - ✅ Aviso cuando te acercas al límite de una categoría (80 % y 100 %).
-- Recordatorio de pagos programados un día antes.
-- Racha de días anotando, con recompensas visuales.
+- ✅ Recordatorio de pagos programados un día antes.
+- ✅ Racha de días anotando, con recompensas visuales.
 - ✅ Aviso del día de pago: "¿anotamos tu sueldo?".
 - ✅ Resumen de fin de año compartible como imagen.
 - Notificación silenciosa de "gasto alto del día".
@@ -191,21 +191,21 @@ Lista de ideas propuestas para revisar; ninguna está hecha todavía.
 - ✅ Modo claro y oscuro automático según la hora.
 - Animaciones suaves al anotar (confirmación visual).
 - ✅ Buscar con filtros combinados (fecha, monto, categoría, cuenta).
-- Gestos: deslizar un movimiento para editarlo o borrarlo (borrar siempre con confirmación).
-- Íconos de categorías personalizables con emoji.
+- ✅ Gestos: deslizar un movimiento para editarlo o borrarlo (borrar siempre con confirmación).
+- ✅ Íconos de categorías personalizables con emoji.
 - ✅ Tamaño de letra ajustable dentro de la app.
 - Lector de pantalla revisado en todas las pantallas (accesibilidad).
-- Vista de calendario con el total de cada día.
+- ✅ Vista de calendario con el total de cada día.
 - Tutorial interactivo la primera vez, más corto y saltable.
 
 ## Seguridad y datos
 
 - ✅ Respaldo manual a un archivo cifrado con contraseña.
 - ✅ Bloqueo automático tras X minutos sin usar la app.
-- Historial de cambios: quién editó qué, en espacios compartidos.
-- Papelera de 30 días para movimientos borrados (nada se pierde de una vez).
-- Exportar todo a CSV o Excel con un toque, cuando quieras.
-- Cerrar sesión en los demás dispositivos desde Ajustes.
+- ✅ Historial de cambios: quién editó qué, en espacios compartidos.
+- ✅ Papelera de 30 días para movimientos borrados (nada se pierde de una vez).
+- ✅ Exportar todo a CSV o Excel con un toque, cuando quieras.
+- ✅ Cerrar sesión en los demás dispositivos desde Ajustes.
 
 ## La página web y el crecimiento de NOVA
 
@@ -213,7 +213,7 @@ Lista de ideas propuestas para revisar; ninguna está hecha todavía.
 - ✅ Preguntas frecuentes y guía de uso en la web.
 - ✅ Mejorar el SEO para búsquedas como "app de finanzas gratis Colombia".
 - Página de novedades (qué trae cada versión), que la app enlaza al actualizar.
-- Formulario de sugerencias dentro de la app, que llegue a tu correo o a GitHub.
+- ✅ Formulario de sugerencias dentro de la app, que llegue a tu correo o a GitHub.
 - ✅ Programa de "invita a un amigo" con un logro especial.
 
 # 100 funciones para el panel del dueño (noviembre 2026)
@@ -227,36 +227,36 @@ Ideas para el panel del dueño. El panel muestra cómo se usa la app, nunca los 
 - ⭐ Buscador de usuarios por correo. ✅ (en PR)
 - ⭐ Filtros: activos, inactivos, de prueba, sin confirmar, Android o web. ✅ (en PR)
 - Ordenar por último uso, por fecha de registro o por cantidad de movimientos. ✅ (en PR)
-- Total de usuarios nuevos por día, semana y mes.
-- Gráfico de crecimiento acumulado de usuarios.
-- Usuarios activos hoy, en los últimos 7 días y en los últimos 30 días (DAU/WAU/MAU).
-- Proporción DAU/MAU (qué tan "pegajosa" es la app).
-- Retención: cuántos siguen usando la app a los 1, 7 y 30 días de registrarse.
-- Tabla de retención por semana de registro (cohortes).
-- Usuarios que se registraron y nunca anotaron nada.
-- Usuarios en riesgo: dejaron de entrar hace más de 14 días.
-- Usuarios "fieles": entraron 20 días o más este mes.
-- Ficha de cada usuario con resumen de uso (sin mostrar sus montos de dinero).
-- Ocultar las cuentas de prueba de todas las estadísticas, con un botón.
-- Exportar la lista de usuarios a Excel.
+- ✅ Total de usuarios nuevos por día, semana y mes.
+- ✅ Gráfico de crecimiento acumulado de usuarios.
+- ✅ Usuarios activos hoy, en los últimos 7 días y en los últimos 30 días (DAU/WAU/MAU).
+- ✅ Proporción DAU/MAU (qué tan "pegajosa" es la app).
+- ✅ Retención: cuántos siguen usando la app a los 1, 7 y 30 días de registrarse.
+- ✅ Tabla de retención por semana de registro (cohortes).
+- ✅ Usuarios que se registraron y nunca anotaron nada.
+- ✅ Usuarios en riesgo: dejaron de entrar hace más de 14 días.
+- ✅ Usuarios "fieles": entraron 20 días o más este mes.
+- ✅ Ficha de cada usuario con resumen de uso (sin mostrar sus montos de dinero).
+- ✅ Ocultar las cuentas de prueba de todas las estadísticas, con un botón.
+- ✅ Exportar la lista de usuarios a Excel.
 
 ## Uso de la app
 
 - ⭐ Movimientos anotados por día (total de todos los usuarios).
 - Cómo anotan: escribiendo, por voz, con foto o con el mensaje del banco.
-- Funciones más usadas (análisis, metas, deudas, IA…).
-- Funciones que nadie usa, para decidir si se quitan o se mejoran.
-- Horas del día con más uso.
-- Días de la semana con más uso.
+- ✅ Funciones más usadas (análisis, metas, deudas, IA…).
+- ✅ Funciones que nadie usa, para decidir si se quitan o se mejoran.
+- ✅ Horas del día con más uso.
+- ✅ Días de la semana con más uso.
 - Duración promedio de una sesión.
 - Pantallas más visitadas.
 - Recuadros de Análisis más vistos y más ocultados.
-- Cuántos usan espacios, metas, deudas y gastos compartidos.
-- Cuántos usan otras monedas, y cuáles.
+- ✅ Cuántos usan espacios, metas, deudas y gastos compartidos.
+- ✅ Cuántos usan otras monedas, y cuáles.
 - Cuántos activaron el PIN o la huella.
 - Cuántos usan el modo oscuro y cuántos el claro.
-- Cuántos son conductores (modo trabajo).
-- Embudo: registro → primer movimiento → primera meta → 7 días de uso.
+- ✅ Cuántos son conductores (modo trabajo).
+- ✅ Embudo: registro → primer movimiento → primera meta → 7 días de uso.
 
 ## NOVA IA
 
@@ -274,7 +274,7 @@ Ideas para el panel del dueño. El panel muestra cómo se usa la app, nunca los 
 ## Versiones y APK
 
 - ⭐ Cuántos usuarios hay en cada versión (ya existe; agregar un gráfico).
-- Porcentaje que ya actualizó a la última versión.
+- ✅ Porcentaje que ya actualizó a la última versión.
 - Fecha de publicación de cada versión.
 - Enlace directo a la APK y a la última corrida de GitHub.
 - Estado de la última publicación de la APK (bien o con error).
@@ -282,12 +282,12 @@ Ideas para el panel del dueño. El panel muestra cómo se usa la app, nunca los 
 - Obligar a actualizar a quien use una versión muy vieja.
 - Notas de cada versión editables desde el panel.
 - Descargas de la APK por día.
-- Cuántos usan la APK "avanzada" y cuántos la normal.
+- ✅ Cuántos usan la APK "avanzada" y cuántos la normal.
 
 ## Salud técnica
 
 - ⭐ Errores de la app (los que se registran) por día.
-- Lista de los últimos errores, con versión y pantalla.
+- ✅ Lista de los últimos errores, con versión y pantalla.
 - Estado de Supabase (base de datos y funciones).
 - Estado de Vercel (la página web) y de la última publicación.
 - Tiempo de carga de la app.
@@ -300,9 +300,9 @@ Ideas para el panel del dueño. El panel muestra cómo se usa la app, nunca los 
 ## Comunicación con usuarios
 
 - ⭐ Enviar un aviso dentro de la app a todos o a un grupo.
-- Banner de novedades al abrir la app.
+- ✅ Banner de novedades al abrir la app.
 - Encuesta corta dentro de la app ("¿qué mejorarías?").
-- Bandeja de sugerencias y reportes de los usuarios.
+- ✅ Bandeja de sugerencias y reportes de los usuarios.
 - Responder una sugerencia desde el panel.
 - Correo de bienvenida y de "te extrañamos" (automáticos).
 - Plantillas de mensajes.
