@@ -4826,15 +4826,29 @@
       ul.append(li);
     });
   }
+  // Pide los datos del panel. Si el servidor dice que la sesión venció (401), la renueva y vuelve a intentar una vez.
+  function pedirDueno(reintento) {
+    return cliente.functions.invoke("nova-dueno", { body: {} }).then(function (res) {
+      var estado = res.error && res.error.context && res.error.context.status;
+      if (estado === 401 && !reintento) {
+        return cliente.auth.refreshSession().then(function () { return pedirDueno(true); });
+      }
+      if (estado === 401 || estado === 403) { var e = new Error("sesion"); e.estado = estado; throw e; }
+      if (res.error || !res.data || !res.data.resumen) throw new Error("sin datos");
+      return res.data;
+    });
+  }
   function cargarDueno() {
     mensaje("dueno-mensaje", "Cargando los datos…");
     $("dueno-recargar").disabled = true;
-    cliente.functions.invoke("nova-dueno", { body: {} }).then(function (res) {
-      if (res.error || !res.data || !res.data.resumen) throw new Error("sin datos");
+    pedirDueno(false).then(function (datosDueno) {
       mensaje("dueno-mensaje", "");
-      pintarDueno(res.data);
-    }).catch(function () { mensaje("dueno-mensaje", "No se pudieron cargar los datos. Revisa tu conexión e intenta otra vez.", true); })
-      .finally(function () { $("dueno-recargar").disabled = false; });
+      pintarDueno(datosDueno);
+    }).catch(function (e) {
+      if (e && e.estado === 401) mensaje("dueno-mensaje", "Tu sesión venció. Cierra sesión en Ajustes y vuelve a entrar con tu correo.", true);
+      else if (e && e.estado === 403) mensaje("dueno-mensaje", "Esta cuenta no es la del dueño.", true);
+      else mensaje("dueno-mensaje", "No se pudieron cargar los datos. Revisa tu conexión e intenta otra vez.", true);
+    }).finally(function () { $("dueno-recargar").disabled = false; });
   }
   $("dueno-apk-avanzada").href = (cfg.apkRespaldoUrl || "").replace(/NOVA\.apk$/, "NOVA-avanzada.apk");
   $("btn-dueno").addEventListener("click", function () { abrirCapa("pantalla-dueno"); cargarDueno(); });
