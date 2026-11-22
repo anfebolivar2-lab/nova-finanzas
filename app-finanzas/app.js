@@ -1001,7 +1001,13 @@
     pintarInicio();
     pintarAnalisis();
   }
-  setInterval(revisarHoraLocal, 30000);
+  function esperarMinutoLocal() {
+    setTimeout(function () {
+      revisarHoraLocal();
+      esperarMinutoLocal();
+    }, 60000 - Date.now() % 60000);
+  }
+  esperarMinutoLocal();
   document.addEventListener("visibilitychange", function () { if (!document.hidden) revisarHoraLocal(); });
 
   function pintarPlanes() {
@@ -7475,7 +7481,8 @@
 
   // ---------- Bloqueo con PIN (el PIN se guarda solo en este dispositivo, cifrado) ----------
   var PIN_CLAVE = "nova-pin", PIN2_CLAVE = "nova-pin2", pinModo = null, pinPrimero = "";
-  var minutosBloqueo = leerLocal("nova-bloqueo-minutos", 1), ultimaActividad = Date.now(), timerBloqueo;
+  var minutosBloqueo = leerLocal("nova-bloqueo-minutos", 5), ultimaActividad = Date.now(), timerBloqueo;
+  var contenidoBloqueado = document.querySelectorAll("#pantalla-app, .capa, .hoja-fondo, #tutorial, #novedades, #toast");
   $("bloqueo-minutos").value = String(minutosBloqueo);
   $("bloqueo-minutos").addEventListener("change", function () {
     minutosBloqueo = Number(this.value);
@@ -7516,7 +7523,7 @@
   function abrirBloqueo(modo) {
     pinModo = modo; pinPrimero = "";
     if (modo === "abrir") {
-      document.querySelectorAll("#pantalla-app, .capa, .hoja-fondo, #tutorial").forEach(function (c) { c.inert = true; });
+      contenidoBloqueado.forEach(function (c) { c.inert = true; });
     }
     var t = { crear: "Crea un PIN de 4 a 6 números", repetir: "Repite el PIN", abrir: "Escribe tu PIN", quitar: "Escribe tu PIN para quitarlo", crear2: "Crea tu PIN discreto (distinto al principal)", repetir2: "Repite el PIN discreto" };
     $("bloqueo-titulo").textContent = t[modo]; $("bloqueo-pin").value = ""; mensaje("bloqueo-mensaje", "");
@@ -7525,7 +7532,7 @@
   }
   function cerrarBloqueo() {
     if (pinModo === "abrir") {
-      document.querySelectorAll("#pantalla-app, .capa, .hoja-fondo, #tutorial").forEach(function (c) { c.inert = false; });
+      contenidoBloqueado.forEach(function (c) { c.inert = false; });
     }
     $("bloqueo").hidden = true; $("bloqueo-pin").value = ""; pinModo = null; pinPrimero = "";
     ultimaActividad = Date.now();
