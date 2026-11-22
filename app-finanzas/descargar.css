@@ -1,0 +1,18 @@
+.pagina-descarga { min-height: 100vh; background: radial-gradient(ellipse at top, #1b4a30 0, #0f2a1d 38%, #0a120f 75%); }
+.descarga { width: min(100% - 2rem, 34rem); margin-inline: auto; padding-block: 2rem 3rem; }
+.descarga-cabeza { text-align: center; }
+.descarga-cabeza img { display: block; margin: 0 auto .75rem; border-radius: 1.4rem; box-shadow: 0 10px 30px rgba(0, 0, 0, .45); }
+.descarga-marca { margin: 0; color: var(--verde); font-weight: 800; letter-spacing: .3em; }
+.descarga h1 { max-width: none; margin: .5rem 0 .6rem; font-size: clamp(1.8rem, 7vw, 2.4rem); }
+.descarga .entrada { margin: 0 auto; max-width: 30ch; font-size: 1.05rem; }
+.descarga-boton { display: block; margin-top: 1.5rem; padding: 1rem 1.2rem; font-size: 1.15rem; overflow-wrap: anywhere; }
+.descarga-nota { margin: .75rem 0 0; font-size: .92rem; text-align: center; overflow-wrap: anywhere; }
+.descarga-tarjeta { margin-top: 1.25rem; padding: 1.1rem; background: rgba(20, 35, 28, .85); border: 1px solid var(--borde); border-radius: 1rem; }
+.descarga-tarjeta h2 { margin: 0 0 .8rem; font-size: 1.2rem; }
+.descarga-datos { margin: 0; padding: 0; list-style: none; display: grid; gap: .85rem; }
+.descarga-datos li { display: grid; grid-template-columns: 2rem minmax(0, 1fr); gap: .6rem; align-items: start; }
+.descarga-datos li > span { font-size: 1.4rem; line-height: 1.3; }
+.descarga-datos strong { display: block; overflow-wrap: anywhere; }
+.descarga-datos small { display: block; color: var(--suave); line-height: 1.45; overflow-wrap: anywhere; }
+.descarga .pasos { color: var(--suave); overflow-wrap: anywhere; }
+.descarga-pie { margin-top: 1.5rem; text-align: center; font-size: .92rem; overflow-wrap: anywhere; }
