@@ -955,3 +955,9 @@ button.mini { padding: 6px 12px; border-radius: 999px; font-size: .8rem; }
 .dueno-avanzada ol b { color: var(--ink); }
 #banco-avanzado > .menu-fila + .menu-fila { border-top: 1px solid var(--line); }
 #banco-avanzado { border-bottom: 1px solid var(--line); }
+
+.barras-analisis { gap: 3px; height: 115px; }
+.barras-analisis .par-barras { gap: 2px; }
+.barras-analisis .par small { font-size: .65rem; text-align: center; }
+.linea.linea-mini { display: block; max-width: 310px; }
+.fila-analisis { overflow-wrap: anywhere; }

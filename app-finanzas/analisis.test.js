@@ -682,3 +682,122 @@ test("preguntas sugeridas: ignora lo pendiente, futuro o transferido", () => {
     m(1, 9, "ingreso", 6000, { transferencia: true })
   ], [], HOY), A.preguntasSugeridas([], [], HOY));
 });
+
+const eneroTanda6 = new Date(2027, 0, 5, 18);
+const movTanda6 = (anio, mes, dia, tipo, monto, extra) =>
+  Object.assign({ fecha: new Date(anio, mes, dia, 12).toISOString(), tipo, monto }, extra);
+
+test("ingresos y gastos: 12 meses con ceros, incluso al cruzar de año", () => {
+  const filas = A.ingresosGastos12([
+    movTanda6(2026, 0, 31, "gasto", 500),
+    movTanda6(2026, 1, 1, "ingreso", 90),
+    movTanda6(2026, 11, 31, "gasto", 35),
+    movTanda6(2027, 0, 1, "ingreso", 200, { transferencia: "t" }),
+    movTanda6(2027, 0, 3, "gasto", 0),
+    movTanda6(2027, 0, 6, "gasto", 100)
+  ], eneroTanda6);
+  assert.strictEqual(filas.length, 12);
+  assert.deepStrictEqual(filas[0].desde, new Date(2026, 1, 1));
+  assert.deepStrictEqual(filas.map(f => [f.ingresos, f.gastos]),
+    [[90, 0], ...Array.from({ length: 9 }, () => [0, 0]), [0, 35], [0, 0]]);
+  assert.strictEqual(filas[11].cantidad, 1);
+});
+
+test("tendencia por categoría: orden, límite, meses vacíos y cambio desde cero", () => {
+  const filas = [
+    movTanda6(2026, 11, 31, "gasto", 20, { categoria_id: 1 }),
+    movTanda6(2027, 0, 3, "gasto", 10, { categoria_id: 1 }),
+    movTanda6(2027, 0, 4, "gasto", 12, { categoria_id: 2 }),
+    movTanda6(2027, 0, 5, "gasto", 0),
+    movTanda6(2026, 6, 1, "gasto", 90, { categoria_id: 3 }),
+    movTanda6(2027, 0, 3, "gasto", 80, { categoria_id: 4, transferencia: "t" })
+  ];
+  const resultado = A.tendenciaCategorias(filas, eneroTanda6);
+  assert.deepStrictEqual(resultado.map(f => f.id), [1, 2, null]);
+  assert.deepStrictEqual(resultado[0].meses.map(f => f.total), [0, 0, 0, 0, 20, 10]);
+  assert.deepStrictEqual(resultado[0].meses[0].desde, new Date(2026, 7, 1));
+  assert.strictEqual(resultado[0].diferencia, -10);
+  assert.strictEqual(resultado[0].porcentaje, -50);
+  assert.strictEqual(resultado[1].porcentaje, null);
+  assert.strictEqual(resultado[2].diferencia, 0);
+  assert.strictEqual(A.tendenciaCategorias(filas, eneroTanda6, 1).length, 1);
+  assert.deepStrictEqual(A.tendenciaCategorias([], eneroTanda6), []);
+});
+
+test("ranking de comercios: normaliza nombres, cuenta compras y respeta los 90 días", () => {
+  const filas = [
+    movTanda6(2026, 9, 8, "gasto", 20, { descripcion: "Café 2 Norte #31" }),
+    movTanda6(2026, 9, 7, "gasto", 80, { descripcion: "Café 2 Norte #32" }),
+    movTanda6(2027, 0, 1, "gasto", 30, { descripcion: "  CAFÉ  2 Norte-14  " }),
+    movTanda6(2027, 0, 2, "gasto", 0, { descripcion: "Mercado" }),
+    movTanda6(2027, 0, 2, "ingreso", 99, { descripcion: "Mercado" }),
+    movTanda6(2027, 0, 2, "gasto", 99, { descripcion: "Mercado", transferencia: "t" })
+  ];
+  const esperado = [{ nombre: "cafe 2 norte", total: 50, compras: 2 }, { nombre: "mercado", total: 0, compras: 1 }];
+  assert.deepStrictEqual(A.rankingComercios(filas, eneroTanda6), esperado);
+  assert.deepStrictEqual(A.rankingComercios(filas, eneroTanda6, 1), esperado.slice(0, 1));
+  assert.deepStrictEqual(A.rankingComercios([], eneroTanda6), []);
+});
+
+test("comparar años: suma gastos del año anterior completo y del actual hasta hoy", () => {
+  const r = A.comparaAnios([
+    movTanda6(2025, 11, 31, "gasto", 300),
+    movTanda6(2026, 0, 1, "gasto", 10),
+    movTanda6(2026, 11, 31, "gasto", 30),
+    movTanda6(2027, 0, 2, "gasto", 50),
+    movTanda6(2027, 0, 3, "gasto", 90, { transferencia: "t" }),
+    movTanda6(2027, 0, 4, "gasto", 0),
+    movTanda6(2027, 1, 1, "gasto", 100)
+  ], eneroTanda6);
+  assert.deepStrictEqual([r.anio, r.anioAnterior, r.totalActual, r.totalAnterior, r.diferencia], [2027, 2026, 50, 40, 10]);
+  assert.strictEqual(r.meses.length, 12);
+  assert.deepStrictEqual(r.meses[0], { etiqueta: "ene", actual: 50, anterior: 10 });
+  assert.deepStrictEqual(r.meses[11], { etiqueta: "dic", actual: 0, anterior: 30 });
+  assert.strictEqual(A.comparaAnios([], eneroTanda6).diferencia, 0);
+});
+
+test("flujo semanal: 8 semanas, límites de lunes a domingo y neto", () => {
+  const filas = A.flujoSemanal([
+    movTanda6(2026, 11, 31, "ingreso", 40),
+    movTanda6(2027, 0, 3, "gasto", 50),
+    movTanda6(2027, 0, 4, "ingreso", 30),
+    movTanda6(2027, 0, 4, "gasto", 0),
+    movTanda6(2027, 0, 4, "gasto", 80, { transferencia: "t" }),
+    movTanda6(2027, 0, 5, "ingreso", 80, { estado: "pendiente" }),
+    movTanda6(2027, 0, 10, "gasto", 90)
+  ], eneroTanda6);
+  assert.strictEqual(filas.length, 8);
+  assert.deepStrictEqual(filas[6].desde, new Date(2026, 11, 28));
+  assert.deepStrictEqual(filas[6].hasta, new Date(2027, 0, 4));
+  assert.deepStrictEqual(filas.map(f => f.neto), [0, 0, 0, 0, 0, 0, -10, 30]);
+  assert.deepStrictEqual([filas[7].ingresos, filas[7].gastos, filas[7].cantidad], [30, 0, 2]);
+  assert.strictEqual(A.flujoSemanal([], eneroTanda6, 1).length, 1);
+});
+
+test("día más caro: suma el día, devuelve sus tres mayores gastos y admite un mes vacío", () => {
+  const filas = [
+    movTanda6(2027, 0, 1, "gasto", 50),
+    ...[30, 10, 20, 1].map(monto => movTanda6(2027, 0, 2, "gasto", monto)),
+    movTanda6(2027, 0, 3, "gasto", 100, { transferencia: "t" }),
+    movTanda6(2026, 11, 31, "gasto", 200),
+    movTanda6(2027, 0, 6, "gasto", 300)
+  ];
+  const r = A.diaMasCaro(filas, eneroTanda6);
+  assert.deepStrictEqual(r.fecha, new Date(2027, 0, 2));
+  assert.strictEqual(r.total, 61);
+  assert.deepStrictEqual(r.gastos.map(g => g.monto), [30, 20, 10]);
+  assert.strictEqual(A.diaMasCaro([], eneroTanda6), null);
+  assert.strictEqual(A.diaMasCaro([movTanda6(2027, 0, 2, "gasto", 0)], eneroTanda6), null);
+});
+
+test("patrimonio: saldos en cuentas, sobregiros y deudas pendientes después de abonos", () => {
+  const deudas = A.resumenDeudas([
+    { id: 1, tipo: "debo", monto: 100 },
+    { id: 2, tipo: "debo", monto: 50 },
+    { id: 3, tipo: "me_deben", monto: 25 }
+  ], [{ deuda_id: 1, monto: 40 }, { deuda_id: 2, monto: 50 }], eneroTanda6);
+  assert.deepStrictEqual(A.patrimonioNeto([{ id: 1 }, { id: 2 }, { id: 3 }],
+    { 1: 200, 2: -30, 3: 0, 4: 500 }, deudas), { activos: 200, pasivos: 90, neto: 110 });
+  assert.deepStrictEqual(A.patrimonioNeto([], {}, deudas), { activos: 0, pasivos: 60, neto: -60 });
+  assert.deepStrictEqual(A.patrimonioNeto([], {}, { debo: 0 }), { activos: 0, pasivos: 0, neto: 0 });
+});
