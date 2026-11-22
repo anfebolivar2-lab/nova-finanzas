@@ -988,6 +988,46 @@
     };
   }
 
+  function fondoEmergencia(movs, saldoDisponible, ahora) {
+    var gastoMensual = totales(gastosDeCuatroMeses(movs, ahora).anteriores).gastos / 3;
+    if (!(gastoMensual > 0)) return null;
+    var saldo = Math.max(0, num(saldoDisponible));
+    return { gastoMensual: gastoMensual, saldoDisponible: saldo, metas: [3, 6].map(function (meses) {
+      var monto = gastoMensual * meses;
+      return { meses: meses, monto: monto, falta: Math.max(0, monto - saldo), progreso: Math.min(1, saldo / monto) };
+    }) };
+  }
+
+  var SERVICIOS = [
+    { nombre: "Luz", palabras: /\b(luz|energia)\b/ },
+    { nombre: "Agua", palabras: /\b(agua|acueducto)\b/ },
+    { nombre: "Gas", palabras: /\bgas\b/ },
+    { nombre: "Internet y celular", palabras: /\b(internet|celular|plan\s+de\s+datos|telefono)\b/ }
+  ];
+
+  function serviciosPorMes(movs, ahora) {
+    var rangos = periodosRecientes("mensual", ahora, 4);
+    var filas = SERVICIOS.map(function (s) {
+      return { nombre: s.nombre, meses: rangos.map(function (r) { return { desde: r.desde, hasta: r.hasta, total: 0 }; }) };
+    });
+    function buscarServicio(texto) {
+      var normalizado = sinTildes(texto);
+      return SERVICIOS.findIndex(function (s) { return s.palabras.test(normalizado); });
+    }
+    movimientosHasta(movs, ahora).filter(esGasto).forEach(function (m) {
+      var fecha = new Date(m.fecha);
+      var mes = rangos.findIndex(function (r) { return fecha >= r.desde && fecha < r.hasta; });
+      if (mes < 0) return;
+      var servicio = buscarServicio(m.categoria);
+      if (servicio < 0) servicio = buscarServicio(m.descripcion);
+      if (servicio >= 0) filas[servicio].meses[mes].total += num(m.monto);
+    });
+    return filas.map(function (fila) {
+      fila.diferencia = fila.meses[3].total - fila.meses[2].total;
+      return fila;
+    });
+  }
+
   function promedioDia(movs, ahora) {
     var gastos = gastosDeCuatroMeses(movs, ahora);
     var actual = totales(gastos.actual).gastos / ahora.getDate();
@@ -1029,6 +1069,7 @@
     ingresosGastos12: ingresosGastos12, tendenciaCategorias: tendenciaCategorias, rankingComercios: rankingComercios,
     comparaAnios: comparaAnios, flujoSemanal: flujoSemanal, diaMasCaro: diaMasCaro, patrimonioNeto: patrimonioNeto,
     sumarMontoRapido: sumarMontoRapido, sugerirDescripciones: sugerirDescripciones,
+    fondoEmergencia: fondoEmergencia, serviciosPorMes: serviciosPorMes,
     promedioDia: promedioDia, regla503020: regla503020, gastosInusuales: gastosInusuales,
     proximosCortes: proximosCortes, preguntasSugeridas: preguntasSugeridas,
     cuentasBajas: cuentasBajas, avisosLimite: avisosLimite, resumenMes: resumenMes, metaSugerida: metaSugerida,

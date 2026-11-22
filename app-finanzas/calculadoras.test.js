@@ -153,3 +153,71 @@ test("regla del 4 % calcula 25 veces los gastos y valida los límites", () => {
   assert.equal(C.reglaCuatro(NaN), null);
   assert.equal(C.reglaCuatro(Number.MAX_VALUE), null);
 });
+
+test("horas de trabajo: precio, jornada de ocho horas y datos inválidos", () => {
+  assert.deepEqual(C.horasDeTrabajo(2400000, 192, 300000), { horas: 24, dias: 3 });
+  assert.deepEqual(C.horasDeTrabajo(2400000, 160, 0), { horas: 0, dias: 0 });
+  assert.deepEqual(C.horasDeTrabajo(2400000, 160, 15000), { horas: 1, dias: 0.125 });
+  for (const datos of [[0, 192, 1], [1, 0, 1], [1, 192, -1], [NaN, 192, 1], [1, Infinity, 1]]) {
+    assert.equal(C.horasDeTrabajo(...datos), null);
+  }
+});
+
+test("cuota fija con tasa EA equivalente, tasa cero y plazos válidos", () => {
+  const ea = (1.01 ** 12 - 1) * 100;
+  cerca(C.cuotaCredito(1200000, ea, 12), 106618.54641401);
+  cerca(C.cuotaCredito(100000, ea, 1), 101000);
+  cerca(C.cuotaCredito(1200000, 1e-14, 12), 100000);
+  assert.equal(C.cuotaCredito(1200000, 0, 12), 100000);
+  assert.equal(C.cuotaCredito(0, ea, 12), 0);
+  for (const datos of [[-1, 0, 12], [1, -1, 12], [1, Infinity, 12], [1, 0, 0], [1, 0, 1.5], [1, 0, Infinity]]) {
+    assert.equal(C.cuotaCredito(...datos), null);
+  }
+});
+
+test("comparación de dos o tres créditos, seguro, empate y ofertas incompletas", () => {
+  const base = { monto: 1200000, tasaEaPct: 0, meses: 12 };
+  const conSeguro = { ...base, seguroMensual: 10000 };
+  const conInteres = { ...base, tasaEaPct: (1.01 ** 12 - 1) * 100 };
+  const dos = C.compararCreditos([conSeguro, conInteres]);
+  assert.deepEqual(dos.ofertas[0], { cuotaBase: 100000, cuota: 110000, total: 1320000, intereses: 0 });
+  cerca(dos.ofertas[1].intereses, 79422.5569681);
+  assert.deepEqual(dos.masBaratas, [1]);
+  assert.deepEqual(C.compararCreditos([conSeguro, base, base]).masBaratas, [1, 2]);
+  assert.deepEqual(C.compararCreditos([base, { ...base, monto: 2400000 }]).masBaratas, [0]);
+  for (const ofertas of [null, [base], [base, base, base, base], [base, null],
+    [base, { ...base, seguroMensual: -1 }], [base, { ...base, monto: 0 }], [base, { monto: 1 }]]) {
+    assert.equal(C.compararCreditos(ofertas), null);
+  }
+});
+
+test("vivienda: inicial, seguros mensuales y total con la inicial incluida", () => {
+  assert.deepEqual(C.creditoVivienda(120000000, 20, 0, 10, 20000, 30000), {
+    monto: 96000000, cuotaBase: 800000, cuotaConSeguros: 850000, total: 126000000
+  });
+  const r = C.creditoVivienda(120000000, 0, 12, 1.5, 0, 0);
+  cerca(r.cuotaBase, C.cuotaCredito(120000000, 12, 18));
+  cerca(r.total, r.cuotaBase * 18);
+  for (const datos of [[0, 20, 12, 10, 0, 0], [1, 100, 12, 10, 0, 0], [1, -5, 12, 10, 0, 0],
+    [1, 20, 12, 0, 0, 0], [1, 20, 12, 1.1, 0, 0], [1, 20, 12, 1, -1, 0]]) {
+    assert.equal(C.creditoVivienda(...datos), null);
+  }
+});
+
+test("compra de cartera: ahorro, costos que eliminan el ahorro y empate", () => {
+  const ea = (1.01 ** 12 - 1) * 100;
+  const r = C.compraCartera(1000000, ea, 1, 0, 3000);
+  cerca(r.totalActual, 1010000);
+  assert.equal(r.totalNuevo, 1003000);
+  cerca(r.ahorro, 7000);
+  assert.equal(r.conviene, true);
+  assert.equal(C.compraCartera(1000000, ea, 1, 0, 10000).ahorro, 0);
+  const perdida = C.compraCartera(1000000, ea, 1, 0, 20000);
+  cerca(perdida.ahorro, -10000);
+  assert.equal(perdida.conviene, false);
+  assert.equal(C.compraCartera(1000000, ea, 12, ea, 0).conviene, false);
+  for (const datos of [[0, 5, 12, 1, 0], [1, 5, 12, 1, -1], [1, -1, 12, 1, 0],
+    [1, 5, 12, -1, 0], [1, 5, 0, 1, 0]]) {
+    assert.equal(C.compraCartera(...datos), null);
+  }
+});

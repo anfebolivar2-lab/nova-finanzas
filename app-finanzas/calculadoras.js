@@ -135,9 +135,70 @@
     return noNegativos([gastosAnuales, capital]) ? capital : null;
   }
 
+  function horasDeTrabajo(ingresoMensual, horasMensuales, precio) {
+    if (!noNegativos([ingresoMensual, horasMensuales, precio]) || ingresoMensual === 0 || horasMensuales === 0) return null;
+    var horas = precio / ingresoMensual * horasMensuales;
+    return Number.isFinite(horas) ? { horas: horas, dias: horas / 8 } : null;
+  }
+
+  function cuotaCredito(monto, tasaEaPct, meses) {
+    if (!noNegativos([monto, tasaEaPct]) || !Number.isSafeInteger(meses) || meses < 1) return null;
+    var tasa = Math.log1p(tasaEaPct / 100) / MESES_ANIO;
+    var cuota = tasa === 0 ? monto / meses : monto * (Math.expm1(tasa) / -Math.expm1(-meses * tasa));
+    return Number.isFinite(cuota) ? cuota : null;
+  }
+
+  function costoCredito(monto, tasaEaPct, meses, seguroMensual) {
+    var cuotaBase = cuotaCredito(monto, tasaEaPct, meses);
+    if (cuotaBase === null || !noNegativos([seguroMensual])) return null;
+    var cuota = cuotaBase + seguroMensual, total = cuota * meses;
+    if (!Number.isFinite(total)) return null;
+    return { cuotaBase: cuotaBase, cuota: cuota, total: total,
+      intereses: Math.max(0, cuotaBase * meses - monto) };
+  }
+
+  function compararCreditos(ofertas) {
+    if (!Array.isArray(ofertas) || ofertas.length < 2 || ofertas.length > 3) return null;
+    var resultados = [];
+    for (var i = 0; i < ofertas.length; i++) {
+      var o = ofertas[i];
+      if (!o || !(o.monto > 0)) return null;
+      var r = costoCredito(o.monto, o.tasaEaPct, o.meses, o.seguroMensual === undefined ? 0 : o.seguroMensual);
+      if (!r) return null;
+      resultados.push(r);
+    }
+    var menor = Math.min.apply(null, resultados.map(function (r) { return r.total; }));
+    var masBaratas = [];
+    resultados.forEach(function (r, i) {
+      if (r.total - menor <= Number.EPSILON * menor * 4) masBaratas.push(i);
+    });
+    return { ofertas: resultados, masBaratas: masBaratas };
+  }
+
+  function creditoVivienda(valor, inicialPct, tasaEaPct, anios, seguroVida, seguroBien) {
+    if (!noNegativos([valor, inicialPct, seguroVida, seguroBien]) || valor === 0 || inicialPct >= 100 ||
+        !Number.isFinite(anios)) return null;
+    var inicial = valor * (inicialPct / 100), monto = valor - inicial;
+    var r = costoCredito(monto, tasaEaPct, anios * MESES_ANIO, seguroVida + seguroBien);
+    if (!r || !Number.isFinite(inicial + r.total)) return null;
+    return { monto: monto, cuotaBase: r.cuotaBase, cuotaConSeguros: r.cuota, total: inicial + r.total };
+  }
+
+  function compraCartera(saldo, tasaActualEaPct, meses, tasaNuevaEaPct, costos) {
+    if (!noNegativos([saldo, costos]) || saldo === 0) return null;
+    var actual = costoCredito(saldo, tasaActualEaPct, meses, 0);
+    var nuevo = costoCredito(saldo, tasaNuevaEaPct, meses, 0);
+    if (!actual || !nuevo || !Number.isFinite(nuevo.total + costos)) return null;
+    var totalNuevo = nuevo.total + costos, ahorro = actual.total - totalNuevo;
+    if (Math.abs(ahorro) <= Number.EPSILON * Math.max(actual.total, totalNuevo) * 4) ahorro = 0;
+    return { totalActual: actual.total, totalNuevo: totalNuevo, ahorro: ahorro, conviene: ahorro > 0 };
+  }
+
   var api = { CONSTANTES: CONSTANTES, MAX_ANIOS: MAX_ANIOS, diasComerciales: diasComerciales, liquidacion: liquidacion,
     recargoFestivo: recargoFestivo, horasExtra: horasExtra, salarioNeto: salarioNeto, gmf: gmf,
-    gmfMovimientos: gmfMovimientos, interesCompuesto: interesCompuesto, reglaCuatro: reglaCuatro };
+    gmfMovimientos: gmfMovimientos, interesCompuesto: interesCompuesto, reglaCuatro: reglaCuatro,
+    horasDeTrabajo: horasDeTrabajo, cuotaCredito: cuotaCredito, compararCreditos: compararCreditos,
+    creditoVivienda: creditoVivienda, compraCartera: compraCartera };
   if (typeof module === "object" && module.exports) module.exports = api;
   else raiz.NovaCalculadoras = api;
 })(typeof window !== "undefined" ? window : this);

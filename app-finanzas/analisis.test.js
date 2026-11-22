@@ -862,3 +862,51 @@ test("gastos inusuales requieren historial y superar los dos umbrales", () => {
   assert.deepStrictEqual(A.gastosInusuales(movs, ahora), [{ categoriaId: 1, veces: 3 }]);
   assert.deepStrictEqual(A.gastosInusuales([], ahora), []);
 });
+
+test("fondo de emergencia: tres meses completos, metas, faltantes y barras", () => {
+  const ahora = new Date(2026, 0, 15, 15);
+  const gasto = (anio, mes, dia, monto, extra) => Object.assign({
+    tipo: "gasto", fecha: new Date(anio, mes, dia, 0).toISOString(), monto
+  }, extra);
+  const movs = [
+    gasto(2025, 8, 30, 2000), gasto(2025, 9, 1, 300), gasto(2025, 11, 31, "600"),
+    gasto(2026, 0, 1, 500), gasto(2025, 10, 1, 500, { estado: "pendiente" }),
+    gasto(2025, 10, 1, 500, { transferencia: true }), gasto(2025, 10, 1, 500, { tipo: "ingreso" })
+  ];
+  assert.deepStrictEqual(A.fondoEmergencia(movs, 450, ahora), {
+    gastoMensual: 300, saldoDisponible: 450, metas: [
+      { meses: 3, monto: 900, falta: 450, progreso: 0.5 },
+      { meses: 6, monto: 1800, falta: 1350, progreso: 0.25 }
+    ]
+  });
+  assert.deepStrictEqual(A.fondoEmergencia(movs, 2100, ahora).metas.map(x => [x.falta, x.progreso]), [[0, 1], [0, 1]]);
+  assert.deepStrictEqual(A.fondoEmergencia(movs, -5, ahora).metas.map(x => [x.falta, x.progreso]), [[900, 0], [1800, 0]]);
+  assert.strictEqual(A.fondoEmergencia([], 100, ahora), null);
+});
+
+test("servicios: cuatro meses, fechas límite, categorías, palabras completas y variación", () => {
+  const ahora = new Date(2026, 0, 15, 15);
+  const gasto = (anio, mes, dia, monto, descripcion, extra) => Object.assign({
+    tipo: "gasto", fecha: new Date(anio, mes, dia, 12).toISOString(), monto, descripcion
+  }, extra);
+  const movs = [
+    gasto(2025, 8, 30, 900, "luz"), gasto(2025, 9, 1, 20, "recibo", { categoria: "Energía" }),
+    gasto(2025, 10, 1, 10, "LUZ"), gasto(2025, 11, 1, 30, "luz"), gasto(2026, 0, 1, "40", "energía"),
+    gasto(2025, 11, 1, 15, "acueducto", { categoria: "Servicios" }), gasto(2026, 0, 15, 5, "agua"),
+    gasto(2025, 11, 1, 22, "Gas natural"), gasto(2026, 0, 1, 22, "factura", { categoria: "Gas" }),
+    gasto(2026, 0, 1, 900, "gasolina"), gasto(2026, 0, 1, 900, "paraguas"),
+    gasto(2025, 9, 1, 12, "Internet"), gasto(2025, 10, 1, 14, "celular"),
+    gasto(2025, 11, 1, 16, "plan de datos"), gasto(2026, 0, 1, 18, "teléfono"),
+    gasto(2026, 0, 16, 900, "luz"), gasto(2026, 0, 1, 900, "luz", { estado: "pendiente" }),
+    gasto(2026, 0, 1, 900, "agua", { transferencia: true }), gasto(2026, 0, 1, 900, "gas", { tipo: "ingreso" })
+  ];
+  const filas = A.serviciosPorMes(movs, ahora);
+  assert.deepStrictEqual(filas.map(f => [f.nombre, f.meses.map(x => x.total), f.diferencia]), [
+    ["Luz", [20, 10, 30, 40], 10], ["Agua", [0, 0, 15, 5], -10],
+    ["Gas", [0, 0, 22, 22], 0], ["Internet y celular", [12, 14, 16, 18], 2]
+  ]);
+  assert.deepStrictEqual(filas[0].meses.map(x => [x.desde.getFullYear(), x.desde.getMonth()]), [
+    [2025, 9], [2025, 10], [2025, 11], [2026, 0]
+  ]);
+  assert.ok(A.serviciosPorMes([], ahora).every(f => f.meses.every(mes => mes.total === 0)));
+});
