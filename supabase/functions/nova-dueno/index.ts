@@ -66,6 +66,76 @@ async function descargasApk() {
 
 const clave = (f: unknown) => String(f || "").slice(0, 10);
 
+// ---- v3: avisos, sugerencias, errores y accesos (todo con la llave de servicio, solo para el dueño) ----
+const rest = (ruta: string, init: RequestInit = {}) =>
+  fetch(`${URL_SB}/rest/v1/${ruta}`, { ...init, headers: { ...adm, "Content-Type": "application/json", ...(init.headers || {}) } });
+const texto = (v: unknown, max: number) => String(v ?? "").trim().slice(0, max);
+const AUDIENCIAS = ["todos", "android", "web"];
+
+async function accionDueno(accion: string, cuerpo: Record<string, unknown>, dueno: string): Promise<Response | null> {
+  if (accion === "aviso_crear") {
+    const titulo = texto(cuerpo.titulo, 80), mensaje = texto(cuerpo.mensaje, 500);
+    const audiencia = AUDIENCIAS.includes(String(cuerpo.audiencia)) ? String(cuerpo.audiencia) : "todos";
+    if (!titulo || !mensaje) return responder(400, { error: "Escribe un título y un mensaje." });
+    let hasta: string | null = null;
+    if (cuerpo.hasta) {
+      const t = Date.parse(String(cuerpo.hasta));
+      if (!Number.isFinite(t)) return responder(400, { error: "La fecha final no es válida." });
+      hasta = new Date(t).toISOString();
+    }
+    const r = await rest("fin_avisos", { method: "POST", headers: { Prefer: "return=representation" }, body: JSON.stringify({ titulo, mensaje, audiencia, hasta }) });
+    if (!r.ok) return responder(502, { error: "No se pudo crear el aviso." });
+    return responder(200, { ok: true, aviso: (await r.json())[0] });
+  }
+  if (accion === "aviso_apagar") {
+    const id = Number(cuerpo.id);
+    if (!Number.isInteger(id) || id < 1) return responder(400, { error: "Aviso no válido." });
+    const r = await rest(`fin_avisos?id=eq.${id}`, { method: "PATCH", body: JSON.stringify({ activo: false }) });
+    return r.ok ? responder(200, { ok: true }) : responder(502, { error: "No se pudo apagar el aviso." });
+  }
+  if (accion === "sugerencia_atender") {
+    const id = Number(cuerpo.id);
+    if (!Number.isInteger(id) || id < 1) return responder(400, { error: "Sugerencia no válida." });
+    const r = await rest(`fin_sugerencias?id=eq.${id}`, { method: "PATCH", body: JSON.stringify({ atendida: cuerpo.atendida !== false }) });
+    return r.ok ? responder(200, { ok: true }) : responder(502, { error: "No se pudo actualizar." });
+  }
+  return null;
+}
+
+// Datos extra del panel. Cada bloque falla por separado: si algo no responde, el panel sigue con lo demás.
+async function extrasPanel(correoDe: Record<string, string>, ahora: number) {
+  const desde30 = new Date(ahora - 30 * DIA).toISOString();
+  const extra: Record<string, unknown> = {};
+  try {
+    const conv = await filas("fin_conversaciones", "actualizado_en");
+    const porDia: Record<string, number> = {};
+    for (const c of conv) { const k = clave(c.actualizado_en); if (k) porDia[k] = (porDia[k] || 0) + 1; }
+    extra.chatsPorDia = porDia;
+  } catch (_e) { extra.chatsPorDia = {}; }
+  try {
+    const r = await rest(`fin_errores?select=id,mensaje,origen,version,plataforma,creado_en&creado_en=gte.${encodeURIComponent(desde30)}&order=creado_en.desc&limit=500`);
+    const lista: Record<string, unknown>[] = r.ok ? await r.json() : [];
+    const porDia: Record<string, number> = {};
+    for (const e of lista) { const k = clave(e.creado_en); if (k) porDia[k] = (porDia[k] || 0) + 1; }
+    extra.errores = { total30: lista.length, porDia, recientes: lista.slice(0, 15) };
+  } catch (_e) { extra.errores = { total30: 0, porDia: {}, recientes: [] }; }
+  try {
+    const r = await rest("fin_avisos?select=id,titulo,mensaje,audiencia,activo,desde,hasta,creado_en&order=creado_en.desc&limit=30");
+    extra.avisos = r.ok ? await r.json() : [];
+  } catch (_e) { extra.avisos = []; }
+  try {
+    const r = await rest("fin_sugerencias?select=id,user_id,mensaje,version,plataforma,atendida,creado_en&order=creado_en.desc&limit=50");
+    const lista: Record<string, unknown>[] = r.ok ? await r.json() : [];
+    extra.sugerencias = lista.map((s) => ({ id: s.id, correo: correoDe[String(s.user_id)] || "(sin correo)", mensaje: s.mensaje, version: s.version, plataforma: s.plataforma, atendida: s.atendida, creado_en: s.creado_en }));
+  } catch (_e) { extra.sugerencias = []; }
+  try {
+    const r = await rest("fin_dueno_accesos?select=user_id,creado_en&order=creado_en.desc&limit=15");
+    const lista: Record<string, unknown>[] = r.ok ? await r.json() : [];
+    extra.accesos = lista.map((a) => ({ correo: correoDe[String(a.user_id)] || "(sin correo)", creado_en: a.creado_en }));
+  } catch (_e) { extra.accesos = []; }
+  return extra;
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: CORS });
   if (req.method !== "POST") return responder(405, { error: "Usa POST" });
@@ -73,6 +143,18 @@ Deno.serve(async (req) => {
   if (!yo.ok) return responder(401, { error: "sin_sesion" });
   const quien = await yo.json();
   if (!DUENOS.includes(quien.id)) return responder(403, { error: "solo_dueno" });
+
+  const cuerpo = await req.json().catch(() => ({})) as Record<string, unknown>;
+  const accion = String(cuerpo.accion || "");
+  if (accion) {
+    try {
+      const respuesta = await accionDueno(accion, cuerpo, quien.id);
+      if (respuesta) return respuesta;
+    } catch (e) { console.error("nova-dueno accion", String(e)); return responder(502, { error: "No se pudo completar la acción." }); }
+    return responder(400, { error: "Acción desconocida." });
+  }
+  // Quién entró al panel (si falla, no se detiene nada).
+  await rest("fin_dueno_accesos", { method: "POST", body: JSON.stringify({ user_id: quien.id }) }).catch(() => {});
 
   try {
     const [lista, movs, chats, metas, espacios, perfiles, apk] = await Promise.all([
@@ -133,6 +215,7 @@ Deno.serve(async (req) => {
         pruebas: personas.length - reales.length,
       },
       versiones, dias, personas,
+      ...(await extrasPanel(Object.fromEntries(lista.map((u) => [u.id, u.email || ""])), ahora)),
     });
   } catch (e) {
     console.error("nova-dueno", String(e));
