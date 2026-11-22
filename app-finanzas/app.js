@@ -6236,14 +6236,155 @@
       });
     }).catch(function () { return null; /* sin conexión o APK armada sin número de versión */ });
   }
+  // Actualización automática.
+  var otaMetaCache = "nova-ota-meta", otaMetaUrl = "/__ota-meta__", otaMalosUrl = "/__ota-malos__";
+  var otaRevision = "nova-ota-revision", revisandoWeb = false;
+
+  async function leerJsonOta(cache, url) {
+    var respuesta = await cache.match(url);
+    return respuesta ? await respuesta.json() : null;
+  }
+
+  async function leerMetaWeb() {
+    try {
+      return await leerJsonOta(await caches.open(otaMetaCache), otaMetaUrl);
+    } catch (e) { return null; }
+  }
+
+  async function descargarWeb(plan, sha, ota) {
+    var control = new AbortController();
+    var limite = setTimeout(function () { control.abort(); }, 120000);
+    var siguiente = 0, descargados = [];
+    async function bajar() {
+      while (siguiente < plan.descargar.length && !control.signal.aborted) {
+        var archivo = plan.descargar[siguiente++];
+        var respuesta = await fetch(ota.urlArchivo(cfg.otaArchivosUrl, sha, archivo.ruta), { cache: "no-store", signal: control.signal });
+        if (!respuesta.ok) throw new Error("No se pudo bajar " + archivo.ruta);
+        var bytes = new Uint8Array(await respuesta.arrayBuffer());
+        if (bytes.length !== archivo.tam || await ota.hashHex(bytes) !== archivo.hash.toLowerCase()) {
+          throw new Error("Archivo dañado: " + archivo.ruta);
+        }
+        descargados.push({ ruta: archivo.ruta, bytes: bytes });
+      }
+    }
+    try {
+      await Promise.all([bajar(), bajar(), bajar()]);
+      if (control.signal.aborted) throw new Error("Se agotó el tiempo de descarga");
+      return descargados;
+    } finally {
+      clearTimeout(limite);
+      control.abort();
+    }
+  }
+
+  async function aplicarWeb(cacheMeta, meta, manifiesto, plan, descargados, ota) {
+    var actual = await leerJsonOta(cacheMeta, otaMetaUrl);
+    if ((actual && actual.sha) !== (meta && meta.sha)) return false;
+    var malos = await leerJsonOta(cacheMeta, otaMalosUrl);
+    if (Array.isArray(malos) && malos.indexOf(manifiesto.sha) !== -1) return false;
+    var nombre = "nova-ota-" + manifiesto.sha.slice(0, 12);
+    if (meta && nombre === meta.cache) return false;
+    var archivos = Object.create(null);
+    try {
+      var cache = await caches.open(nombre);
+      for (var archivo of descargados) {
+        await cache.put(location.origin + "/" + archivo.ruta, new Response(archivo.bytes, {
+          headers: { "Content-Type": ota.tipoMime(archivo.ruta) }
+        }));
+        archivos[archivo.ruta] = manifiesto.archivos[archivo.ruta].hash;
+      }
+      if (plan.mantener.length) {
+        var anterior = await caches.open(meta.cache);
+        for (var ruta of plan.mantener) {
+          var url = location.origin + "/" + ruta;
+          var respuesta = await anterior.match(url);
+          if (!respuesta) throw new Error("Falta el archivo guardado: " + ruta);
+          await cache.put(url, respuesta);
+          archivos[ruta] = manifiesto.archivos[ruta].hash;
+        }
+      }
+      var nueva = { sha: manifiesto.sha, generado: manifiesto.generado, cache: nombre, archivos: archivos, arranques: 0, ok: false };
+      await cacheMeta.put(otaMetaUrl, new Response(JSON.stringify(nueva), { headers: { "Content-Type": "application/json" } }));
+    } catch (e) {
+      await caches.delete(nombre);
+      throw e;
+    }
+    await caches.keys().then(function (nombres) {
+      return Promise.all(nombres.filter(function (otro) {
+        return otro.indexOf("nova-ota-") === 0 && otro !== otaMetaCache && otro !== nombre;
+      }).map(function (otro) { return caches.delete(otro); }));
+    }).catch(function () { /* La actualización ya quedó guardada. */ });
+    return true;
+  }
+
+  async function revisarWeb(forzar) {
+    if (revisandoWeb) return;
+    revisandoWeb = true;
+    try {
+      var chrome = /Chrome\/(\d+)/.exec(navigator.userAgent);
+      if (!enApp || !navigator.serviceWorker || !navigator.serviceWorker.controller || !enLinea() || !chrome || Number(chrome[1]) < 90) return;
+      var ota = window.NovaOta;
+      var http = window.Capacitor.Plugins && window.Capacitor.Plugins.CapacitorHttp;
+      if (!ota || !http || !cfg.otaManifestUrl || !cfg.otaArchivosUrl) return;
+      var ahora = Date.now();
+      if (!forzar && ahora - Number(localStorage.getItem(otaRevision)) < 30 * 60 * 1000) return;
+      localStorage.setItem(otaRevision, ahora);
+      var respuesta = await fetch("ota-base.json", { cache: "no-store" });
+      if (!respuesta.ok) return;
+      var base = await respuesta.json();
+      var cacheMeta = await caches.open(otaMetaCache);
+      var meta = await leerJsonOta(cacheMeta, otaMetaUrl);
+      var malos = await leerJsonOta(cacheMeta, otaMalosUrl);
+      var res = await http.get({ url: cfg.otaManifestUrl + "?t=" + Date.now(), responseType: "json" });
+      if (res.status < 200 || res.status >= 300) return;
+      var manifiesto = typeof res.data === "string" ? JSON.parse(res.data) : res.data;
+      if (!manifiesto || (Array.isArray(malos) && malos.indexOf(manifiesto.sha) !== -1)) return;
+      var plan = ota.planActualizacion({
+        manifiesto: manifiesto, base: base,
+        actual: meta ? { sha: meta.sha, generado: meta.generado, archivos: meta.archivos } : null,
+        apkVersion: Number(versionLocal && versionLocal.versionCode) || 0
+      });
+      if (plan.accion !== "descargar") return;
+      var descargados = await descargarWeb(plan, manifiesto.sha, ota);
+      function aplicar() { return aplicarWeb(cacheMeta, meta, manifiesto, plan, descargados, ota); }
+      var aplicada = await (navigator.locks ? navigator.locks.request(otaMetaCache, aplicar) : aplicar());
+      if (aplicada) {
+        pintarVersionLocal();
+        toast("NOVA se actualizó en segundo plano", "Verás lo nuevo al volver a abrirla");
+      }
+    } catch (e) { /* Si falla la revisión, sigue la versión que ya estaba. */ }
+    finally { revisandoWeb = false; }
+  }
+
+  window.addEventListener("load", function () {
+    if (enApp) setTimeout(function () { revisarWeb(false); }, 4000);
+    if (location.hostname !== "localhost" || !navigator.serviceWorker || !navigator.serviceWorker.controller) return;
+    // Lee el SHA antes de que la revisión pueda instalar otra versión.
+    var controlador = navigator.serviceWorker.controller;
+    var metaArranque = leerMetaWeb();
+    setTimeout(function () {
+      metaArranque.then(function (meta) {
+        if (meta) controlador.postMessage({ tipo: enApp ? "ota-ok" : "ota-descartar", sha: meta.sha });
+      }).catch(function () { /* La app puede seguir sin avisar al servicio. */ });
+    }, 5000);
+  });
+  if (enApp) document.addEventListener("visibilitychange", function () {
+    if (!document.hidden) revisarWeb(false);
+  });
+
   function pintarVersionLocal() {
     var v = versionLocal && versionLocal.versionName;
-    $("apk-app-version").textContent = v ? "Tienes la versión " + v + " de NOVA." : "";
+    var etiqueta = $("apk-app-version");
+    etiqueta.textContent = v ? "Tienes la versión " + v + " de NOVA." : "";
+    if (enApp) leerMetaWeb().then(function (meta) {
+      etiqueta.textContent = (v ? "Tienes la versión " + v + " de NOVA." : "") +
+        (meta && typeof meta.sha === "string" ? " Contenido web: " + meta.sha.slice(0, 7) + "." : "");
+    }).catch(function () { /* La versión de la APK ya aparece en Ajustes. */ });
     $("actualizar-estado").textContent = v ? "Tienes la versión " + v + ". Toca para ver si hay una nueva." : "Mira si hay una versión nueva de NOVA";
   }
   function accionBuscarActualizacion(boton) {
     boton.disabled = true; var texto = boton.textContent;
-    buscarActualizacion(true).then(function (r) {
+    revisarWeb(true).then(function () { return buscarActualizacion(true); }).then(function (r) {
       if (!r) toast("No se pudo revisar", "Revisa tu conexión e intenta otra vez");
       else if (r.error) toast("No se pudo revisar", "No pude leer la versión publicada");
       else if (r.hayNueva) toast("¡Hay una versión nueva!", "Versión " + r.remota.versionName, null, { texto: "Descargar", fn: function () { window.open(r.enlace, "_blank"); } });

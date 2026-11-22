@@ -1,0 +1,45 @@
+name: NOVA actualización automática (web)
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "app-finanzas/**"
+      - "!app-finanzas/descargas/**"
+      - "scripts/ota-manifest.mjs"
+      - ".github/workflows/ota-nova.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: ota-nova
+  cancel-in-progress: true
+
+jobs:
+  ota:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Probar la app
+        run: node --test app-finanzas/*.test.js
+
+      - name: Generar y comprobar el manifiesto
+        run: |
+          node scripts/ota-manifest.mjs app-finanzas --sha "$GITHUB_SHA" --requiere-apk "$(tr -d '[:space:]' < app-android-nova/ota-requiere-apk.txt)" > ota-manifest.json
+          node -e 'const { validarManifiesto } = require("./app-finanzas/ota.js"); if (!validarManifiesto(require("./ota-manifest.json"))) throw new Error("Manifiesto OTA inválido");'
+
+      - name: Publicar el manifiesto en nova-android
+        if: github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release view nova-android >/dev/null 2>&1 || gh release create nova-android --target "$GITHUB_SHA" --latest=false \
+            --title "NOVA para Android" --notes "La última APK de NOVA. Se reemplaza sola en cada versión nueva." || gh release view nova-android >/dev/null
+          gh release upload nova-android ota-manifest.json --clobber
