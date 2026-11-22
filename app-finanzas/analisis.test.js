@@ -520,3 +520,60 @@ test("número de libertad: 9 millones de ahorro cubren 4.5 meses a 2 millones po
   const movs = [3, 4, 5, 6, 7, 8].map((mes) => m(1, mes, "gasto", 2000000));
   assert.deepStrictEqual(A.numeroLibertad(movs, 9000000, HOY), { gastoMensual: 2000000, meses: 4.5, mesesConDatos: 6, ahorro: 9000000 });
 });
+
+test("saldo bajo: compara por cuenta, permite cero y avisa solo por debajo del mínimo", () => {
+  const cuentas = [{ id: 1 }, { id: 2 }, { id: 3 }, { id: 4 }, { id: 5 }, { id: 6 }];
+  assert.deepStrictEqual(A.cuentasBajas(cuentas, { 1: 9, 2: 10, 3: -50, 4: -1, 5: -1 }, {
+    1: 10, 2: 10, 4: 0, 5: null, 6: 100
+  }), [{ cuenta: cuentas[0], saldo: 9, minimo: 10 }, { cuenta: cuentas[3], saldo: -1, minimo: 0 }]);
+  assert.deepStrictEqual(A.cuentasBajas(cuentas, { 4: -100 }, { 4: -50 }), [
+    { cuenta: cuentas[3], saldo: -100, minimo: -50 }
+  ]);
+});
+
+test("avisos de límites: 80 % y 100 % se activan en el umbral exacto", () => {
+  const limites = [1, 2, 3, 4, 5, 6].map(id => ({ id, categoria_id: 1, monto: id === 5 ? 0 : 10000 }));
+  assert.deepStrictEqual(A.avisosLimite(limites, { 1: 7999, 2: 8000, 3: 10000, 4: 12000, 5: 5000 }), [
+    { limite: limites[1], gastado: 8000, nivel: 80 },
+    { limite: limites[2], gastado: 10000, nivel: 100 },
+    { limite: limites[3], gastado: 12000, nivel: 100 }
+  ]);
+});
+
+test("resumen del mes: cambia de diciembre a enero el día 25 sin incluir movimientos futuros", () => {
+  const movs = [
+    m(1, 11, "ingreso", 25000), m(30, 11, "gasto", 6000, { categoria_id: 7 }),
+    m(31, 11, "gasto", 3000, { categoria_id: 7 }), m(31, 11, "gasto", 8000),
+    m(31, 11, "gasto", 99999, { transferencia: "salida" }),
+    m(20, 11, "ingreso", 99999, { transferencia: "entrada" }),
+    m(31, 11, "gasto", 99999, { estado: "pendiente" }),
+    { fecha: new Date(2027, 0, 1), tipo: "ingreso", monto: 5000 },
+    { fecha: new Date(2027, 0, 25, 10), tipo: "gasto", monto: 6000 },
+    { fecha: new Date(2027, 0, 26), tipo: "ingreso", monto: 10000 }
+  ];
+  const anterior = A.resumenMes(movs, new Date(2027, 0, 24));
+  assert.deepStrictEqual(anterior, {
+    mes: "Diciembre 2026", enCurso: false, ingresos: 25000, gastos: 17000, ahorro: 8000,
+    categoriaTop: { id: 7, total: 9000 }, frase: "Te quedó plata para ahorrar."
+  });
+  const actual = A.resumenMes(movs, new Date(2027, 0, 25, 12));
+  assert.deepStrictEqual(actual, {
+    mes: "Enero 2027", enCurso: true, ingresos: 5000, gastos: 6000, ahorro: -1000,
+    categoriaTop: { id: null, total: 6000 }, frase: "Gastaste más de lo que ganaste."
+  });
+  assert.strictEqual(A.resumenMes([], HOY).frase, "Aún no hay movimientos en este mes.");
+});
+
+test("meta sugerida: promedia tres meses completos, incluso los vacíos o con déficit", () => {
+  const ahora = new Date(2027, 0, 28);
+  const movs = [
+    m(30, 8, "ingreso", 99999), m(1, 9, "ingreso", 24000),
+    m(30, 10, "gasto", 9900), m(20, 11, "gasto", 99999, { transferencia: "salida" }),
+    m(20, 11, "ingreso", 99999, { estado: "pendiente" }),
+    { fecha: new Date(2027, 0, 1), tipo: "ingreso", monto: 99999 }
+  ];
+  assert.deepStrictEqual(A.metaSugerida(movs, ahora), { monto: 2000, sobro: true });
+  assert.deepStrictEqual(A.metaSugerida([m(30, 10, "gasto", 9900)], ahora), { monto: null, sobro: false });
+  assert.deepStrictEqual(A.metaSugerida([], ahora), { monto: null, sobro: false });
+  assert.deepStrictEqual(A.metaSugerida([m(30, 10, "ingreso", 2000)], ahora), { monto: null, sobro: true });
+});
