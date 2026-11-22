@@ -233,3 +233,20 @@ test("mensaje del banco con una compra en otra moneda", () => {
   assert.strictEqual(C.mensajeBancoATexto("Pagaste EUR 1.250,50 en HOTEL PARIS con tarjeta"), "gasté 1250.5 EUR en HOTEL PARIS");
   assert.strictEqual(C.mensajeBancoATexto("Compraste $45.000 en EXITO con tu tarjeta Nu"), "gasté 45000 en EXITO"); // en pesos, igual que antes
 });
+
+test("consejo del día: 60 consejos distintos, fecha local y ciclo estable", () => {
+  const primero = C.consejoDelDia(new Date(2026, 0, 1, 0, 1));
+  assert.strictEqual(C.consejoDelDia(new Date(2026, 0, 1, 23, 59)), primero);
+  const consejos = Array.from({ length: 60 }, (_, i) => C.consejoDelDia(new Date(2026, 0, i + 1, 12)));
+  assert.strictEqual(new Set(consejos).size, 60);
+  for (const anio of [2024, 2026]) {
+    const dias = anio === 2024 ? 366 : 365;
+    for (let i = 0; i < dias; i++) {
+      const consejo = C.consejoDelDia(new Date(anio, 0, i + 1, 12));
+      assert.ok(typeof consejo === "string" && consejo.length > 0);
+      assert.strictEqual(consejo, consejos[i % 60]);
+    }
+    assert.notStrictEqual(C.consejoDelDia(new Date(anio, 11, 31, 23)), C.consejoDelDia(new Date(anio + 1, 0, 1)));
+  }
+  assert.strictEqual(C.consejoDelDia(new Date(NaN)), null);
+});
