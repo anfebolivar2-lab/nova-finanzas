@@ -716,6 +716,7 @@ test("tendencia por categoría: orden, límite, meses vacíos y cambio desde cer
   assert.deepStrictEqual(resultado.map(f => f.id), [1, 2, null]);
   assert.deepStrictEqual(resultado[0].meses.map(f => f.total), [0, 0, 0, 0, 20, 10]);
   assert.deepStrictEqual(resultado[0].meses[0].desde, new Date(2026, 7, 1));
+  assert.strictEqual(A.nombrePeriodo("mensual", resultado[0].meses[0]), "Agosto 2026");
   assert.strictEqual(resultado[0].diferencia, -10);
   assert.strictEqual(resultado[0].porcentaje, -50);
   assert.strictEqual(resultado[1].porcentaje, null);

@@ -833,7 +833,7 @@
       return new Map(porCategoria(enRango(gastos, mes)).map(function (fila) { return [fila.id, fila.total]; }));
     });
     return porCategoria(gastos).slice(0, n === undefined ? 5 : Math.max(0, n)).map(function (fila) {
-      var serie = meses.map(function (mes, i) { return { desde: mes.desde, total: porMes[i].get(fila.id) || 0 }; });
+      var serie = meses.map(function (mes, i) { return { desde: mes.desde, hasta: mes.hasta, total: porMes[i].get(fila.id) || 0 }; });
       var anterior = serie[4].total, diferencia = serie[5].total - anterior;
       return { id: fila.id, total: fila.total, meses: serie, diferencia: diferencia,
         porcentaje: anterior > 0 ? diferencia / anterior * 100 : null };

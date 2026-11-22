@@ -1259,7 +1259,7 @@
         (f.diferencia > 0 ? "Subió " : "Bajó ") + Math.round(Math.abs(f.porcentaje)) + "% frente al mes anterior";
       if (f.diferencia && !ocultos) cambio += " (" + dinero(Math.abs(f.diferencia)) + ")";
       var etiquetas = f.meses.map(function (mes) { return A.nombreCorto("mensual", mes); });
-      var svg = lineaSVG(f.meses.map(function (mes) { return mes.total; }), etiquetas, "gastos");
+      var svg = lineaSVG(f.meses.map(function (mes) { return mes.total; }), etiquetas, "gastos", 52);
       svg.classList.add("linea-mini");
       svg.setAttribute("role", "img");
       svg.setAttribute("aria-label", f.meses.map(function (mes) {
@@ -1977,8 +1977,8 @@
     art.append(g, ley);
   }
 
-  function lineaSVG(puntos, etiquetas, clase) {
-    var NS = "http://www.w3.org/2000/svg", W = 300, H = 120, P = 10;
+  function lineaSVG(puntos, etiquetas, clase, alto) {
+    var NS = "http://www.w3.org/2000/svg", W = 300, H = alto || 120, P = 10;
     var min = Math.min.apply(null, puntos), max = Math.max.apply(null, puntos);
     if (max === min) { max += 1; min -= 1; }
     var svg = document.createElementNS(NS, "svg");
