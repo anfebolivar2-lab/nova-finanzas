@@ -4,6 +4,7 @@
   var cfg = window.NOVA_CONFIG || {};
   var Parser = window.NovaParser;
   var A = window.NovaAnalisis;
+  var Inv = window.NovaInversiones;
   var Mon = window.NovaMonedas;
   var Periodos = window.NovaPeriodos;
   // ¿Corre dentro de la app de Android (Capacitor)?
@@ -213,7 +214,7 @@
     else if (c.id === "reg-tasa") formatearTasaEscrita(c);
   });
 
-  function guardarLocal(clave, valor) { try { localStorage.setItem(clave, JSON.stringify(valor)); } catch (e) { /* sin almacenamiento */ } }
+  function guardarLocal(clave, valor) { try { localStorage.setItem(clave, JSON.stringify(valor)); return true; } catch (e) { return false; } }
   function leerLocal(clave, defecto) { try { var v = localStorage.getItem(clave); return v ? JSON.parse(v) : defecto; } catch (e) { return defecto; } }
 
   // ---------- Color y tamaño de letra ----------
@@ -1010,7 +1011,113 @@
   esperarMinutoLocal();
   document.addEventListener("visibilitychange", function () { if (!document.hidden) revisarHoraLocal(); });
 
+  // Inversiones y bienes de este correo, guardados en el dispositivo.
+  function clavePatrimonio(tipo) { return "nova-" + tipo + ":" + fuente.email; }
+
+  function leerRegistroPatrimonio(tipo) {
+    return (fuente.demo ? fuente[tipo] : leerLocal(clavePatrimonio(tipo), [])) || [];
+  }
+
+  function registroEnMoneda(tipo) {
+    return leerRegistroPatrimonio(tipo).filter(function (item) { return item.moneda === monedaVista; });
+  }
+
+  function guardarRegistroPatrimonio(tipo, lista) {
+    if (fuente.demo) fuente[tipo] = lista;
+    else if (!guardarLocal(clavePatrimonio(tipo), lista)) throw new Error("Revisa el almacenamiento de este dispositivo.");
+  }
+
+  function estimarBien(bien, ahora) {
+    return Inv.valorDepreciado(bien.valorCompra, bien.fechaCompra, bien.pctAnual, ahora);
+  }
+
+  function pintarRegistroPatrimonio() {
+    var inversiones = Inv.resumenInversiones(registroEnMoneda("inversiones"));
+    var bienes = registroEnMoneda("bienes"), hoy = new Date();
+    $("inversiones-total").textContent = inversiones.inversiones.length ?
+      "Invertido " + dinero(inversiones.totalInvertido) + " · Valor actual " + dinero(inversiones.totalActual) : "";
+    pintarLista("inversiones", inversiones.inversiones, "Aún no tienes inversiones.", function (item) {
+      var balance = item.ganancia > 0 ? "Ganancia " : item.ganancia < 0 ? "Pérdida " : "Sin cambios ";
+      var fecha = item.fechaVencimiento ? " · Vence el " + fechaCorta.format(parteFechaLocal(item.fechaVencimiento)) : "";
+      return Inv.TIPOS[item.tipo] + fecha + " · Invertido " + dinero(item.valorInvertido) + " · Actual " + dinero(item.valorActual) +
+        " · " + (ocultos ? "••••" : balance + dinero(Math.abs(item.ganancia)) + " (" + item.gananciaPct.toLocaleString("es-CO", { maximumFractionDigits: 2 }) + " %)");
+    });
+    pintarLista("bienes", bienes, "Aún no tienes bienes.", function (item) {
+      return "Compra " + dinero(item.valorCompra) + " · Valor estimado hoy " + dinero(estimarBien(item, hoy));
+    });
+
+    function pintarLista(tipo, lista, textoVacio, detalle) {
+      var ul = $("lista-" + tipo);
+      ul.replaceChildren();
+      if (!lista.length) ul.append(el("li", "nota", textoVacio));
+      lista.forEach(function (item) {
+        var li = el("li"), texto = el("span", "mov-texto"), editar = el("button", "mini", "Editar");
+        texto.append(el("strong", null, item.nombre), el("small", null, detalle(item)));
+        editar.type = "button";
+        editar.setAttribute("aria-label", "Editar " + item.nombre);
+        editar.addEventListener("click", function () { abrirRegistroPatrimonio(tipo, item); });
+        li.append(texto, editar);
+        ul.append(li);
+      });
+    }
+  }
+
+  function abrirRegistroPatrimonio(tipo, item) {
+    if (ocultos) return mensaje(tipo + "-mensaje", "Muestra los montos para agregar o editar un registro.", true);
+    mensaje(tipo + "-mensaje", "");
+    var anterior = item || {}, moneda = monedaVista, cuenta = fuente;
+    var inversion = tipo === "inversiones", objeto = inversion ? "inversión" : "bien";
+    var campos = [{ clave: "nombre", etiqueta: "Nombre", tipo: "texto", valor: anterior.nombre, requerido: true, max: 60 }];
+    if (inversion) {
+      campos.push(
+        { clave: "tipo", etiqueta: "Tipo", tipo: "select", valor: anterior.tipo || "cdt", opciones: Object.entries(Inv.TIPOS) },
+        { clave: "valorInvertido", etiqueta: "Valor invertido (" + moneda + ")", tipo: "plata", valor: anterior.valorInvertido },
+        { clave: "valorActual", etiqueta: "Valor actual (" + moneda + ")", tipo: "plata", valor: anterior.valorActual, permiteCero: true, requerido: true },
+        { clave: "fechaVencimiento", etiqueta: "Fecha de vencimiento (opcional)", tipo: "fecha", valor: anterior.fechaVencimiento }
+      );
+    } else {
+      campos.push(
+        { clave: "valorCompra", etiqueta: "Valor de compra (" + moneda + ")", tipo: "plata", valor: anterior.valorCompra },
+        { clave: "fechaCompra", etiqueta: "Fecha de compra", tipo: "fecha", valor: anterior.fechaCompra, requerido: true },
+        { clave: "pctAnual", etiqueta: "Depreciación anual (%)", tipo: "decimal", valor: item ? item.pctAnual : 10, requerido: true }
+      );
+    }
+    abrirEditor({
+      titulo: (item ? "Editar " : "Agregar ") + objeto,
+      campos: campos,
+      protegerMontos: true,
+      guardar: async function (v) {
+        if (ocultos || fuente !== cuenta || monedaVista !== moneda) throw new Error("Vuelve a abrir el registro con los montos visibles.");
+        if (inversion && !Inv.validarInversion(v)) throw new Error("Revisa los valores y la fecha.");
+        var hoy = new Date();
+        if (!inversion && (estimarBien(v, hoy) === null || v.fechaCompra > A.claveDia(hoy))) {
+          throw new Error("Usa una fecha de compra hasta hoy y una depreciación del 0 al 100 %.");
+        }
+        var nuevo = Object.assign(v, { id: anterior.id || idLocal(), moneda: moneda });
+        var lista = leerRegistroPatrimonio(tipo);
+        if (item) {
+          if (!lista.some(function (x) { return x.id === item.id; })) throw new Error("El registro ya no está disponible.");
+          lista = lista.map(function (x) { return x.id === item.id ? nuevo : x; });
+        } else lista.push(nuevo);
+        guardarRegistroPatrimonio(tipo, lista);
+      },
+      borrar: item && async function () {
+        if (fuente !== cuenta || monedaVista !== moneda) throw new Error("Vuelve a abrir el registro.");
+        guardarRegistroPatrimonio(tipo, leerRegistroPatrimonio(tipo).filter(function (x) { return x.id !== item.id; }));
+      },
+      textoBorrar: "Quitar " + objeto,
+      confirmar: "¿Quitar «" + anterior.nombre + "»?",
+      avisoBorrado: "Registro quitado"
+    });
+  }
+
+  $("agregar-inversion").addEventListener("click", function () { abrirRegistroPatrimonio("inversiones"); });
+  $("agregar-bien").addEventListener("click", function () { abrirRegistroPatrimonio("bienes"); });
+
   function pintarPlanes() {
+    mensaje("inversiones-mensaje", "");
+    mensaje("bienes-mensaje", "");
+    pintarRegistroPatrimonio();
     pintarCompras();
     pintarSuscripciones();
     var ul = $("lista-limites");
@@ -1206,6 +1313,9 @@
     { id: "flujo-semanal", nombre: "Flujo de caja por semana" },
     { id: "dia-mas-caro", nombre: "Tu día más caro del mes" },
     { id: "patrimonio-neto", nombre: "Patrimonio neto" },
+    { id: "distribucion-patrimonio", nombre: "Distribución del patrimonio" },
+    { id: "vencimientos-cdt", nombre: "Vencimientos de inversiones", inicio: true },
+    { id: "calculadoras-inversion", nombre: "Calculadoras de inversión" },
     { id: "promedio-dia", nombre: "Gasto promedio por día", inicio: true },
     { id: "regla503020", nombre: "Regla 50/30/20" },
     { id: "gasto-inusual", nombre: "Gastos inusuales", inicio: true },
@@ -1263,6 +1373,8 @@
       "ingresos-gastos-12": wIngresosGastos12, "tendencia-categorias": wTendenciaCategorias,
       "ranking-comercios": wRankingComercios, "compara-anios": wComparaAnios, "flujo-semanal": wFlujoSemanal,
       "dia-mas-caro": wDiaMasCaro, "patrimonio-neto": wPatrimonioNeto,
+      "distribucion-patrimonio": wDistribucionPatrimonio, "vencimientos-cdt": wVencimientosCdt,
+      "calculadoras-inversion": wCalculadorasInversion,
       "fondo-emergencia": wFondoEmergencia, "servicios-por-mes": wServiciosPorMes, "consejo-dia": wConsejoDia, "pruebas-gratis": wPruebasGratis
     }[id];
     render(art, movs, ciclo, ref, rango);
@@ -1590,15 +1702,52 @@
     art.append(lista);
   }
 
-  function wPatrimonioNeto(art) {
-    titulo(art, "Patrimonio neto");
+  function patrimonioActual() {
     var saldos = Object.create(null);
     datos.cuentas.forEach(function (c) { saldos[c.id] = saldoCuenta(c); });
-    var r = A.patrimonioNeto(datos.cuentas, saldos, resumenDeDeudas());
-    var max = Math.max(r.activos, r.pasivos) || 1;
-    art.append(el("p", "calc-res", "Patrimonio neto " + dinero(r.neto)),
-      el("div", "nota", "Activos " + dinero(r.activos)), barraSimple(r.activos / max * 100, false),
-      el("div", "nota", "Pasivos " + dinero(r.pasivos)), barraSimple(r.pasivos / max * 100, true));
+    var base = A.patrimonioNeto(datos.cuentas, saldos, resumenDeDeudas());
+    var inversiones = Inv.resumenInversiones(registroEnMoneda("inversiones")).totalActual;
+    var hoy = new Date();
+    var bienes = registroEnMoneda("bienes").reduce(function (total, bien) { return total + estimarBien(bien, hoy); }, 0);
+    return { cuentas: base.activos, inversiones: inversiones, bienes: bienes, deudas: base.pasivos };
+  }
+
+  function wPatrimonioNeto(art) {
+    titulo(art, "Patrimonio neto");
+    var valores = patrimonioActual();
+    var r = Inv.distribucionPatrimonio(valores.cuentas, valores.inversiones, valores.bienes, valores.deudas);
+    var max = Math.max(r.activos, r.deudas) || 1;
+    art.append(el("p", "calc-res", "Patrimonio neto " + dinero(r.neto)), el("div", "nota", "Activos " + dinero(r.activos)));
+    if (!ocultos) art.append(barraSimple(r.activos / max * 100, false));
+    art.append(el("div", "nota", "Pasivos " + dinero(r.deudas)));
+    if (!ocultos) art.append(barraSimple(r.deudas / max * 100, true));
+  }
+
+  function wDistribucionPatrimonio(art) {
+    titulo(art, "Distribución del patrimonio");
+    var valores = patrimonioActual();
+    var r = Inv.distribucionPatrimonio(valores.cuentas, valores.inversiones, valores.bienes, valores.deudas);
+    [["cuentas", "Efectivo y cuentas"], ["inversiones", "Inversiones"], ["bienes", "Bienes"]].forEach(function (par) {
+      var pct = r.porcentajes[par[0]];
+      var detalle = ocultos ? dinero(0) : dinero(valores[par[0]]) + " · " + pct.toLocaleString("es-CO", { maximumFractionDigits: 1 }) + " %";
+      art.append(el("p", "nota", par[1] + " · " + detalle));
+      if (!ocultos) art.append(barraSimple(pct, false));
+    });
+    art.append(el("p", "calc-res", "Deudas " + dinero(r.deudas)));
+  }
+
+  function wVencimientosCdt(art) {
+    var proximos = Inv.vencimientosProximos(registroEnMoneda("inversiones"), new Date(), 15);
+    if (!proximos.length) return;
+    titulo(art, "Vencimientos de inversiones");
+    var lista = el("ul", "lista-simple");
+    proximos.forEach(function (item) {
+      var estado = item.dias < 0 ? "Vencida" : item.dias === 0 ? "Vence hoy" :
+        item.dias === 1 ? "Vence mañana" : "Vence en " + item.dias + " días";
+      lista.append(filaAnalisis(item.nombre, Inv.TIPOS[item.tipo] + " · " + estado + " · " +
+        fechaCorta.format(parteFechaLocal(item.fechaVencimiento))));
+    });
+    art.append(lista);
   }
 
   // ---------- Consejos, calendario, logros y calculadoras ----------
@@ -2067,7 +2216,7 @@
       try { resultado = calcular(v); } catch (e) { resultado = null; }
       var mensaje = opciones ? "Revisa los datos para calcular." : "Escribe los datos.";
       res.replaceChildren(typeof resultado === "string" || !resultado ? el("p", "calc-res", resultado || mensaje) : resultado);
-      if (resultado && opciones) res.append(el("p", "nota", opciones.aviso || AVISO_CALCULADORA));
+      if (opciones && (resultado || opciones.avisoSiempre)) res.append(el("p", "nota", opciones.aviso || AVISO_CALCULADORA));
     }
     Object.keys(entradas).forEach(function (k) { entradas[k].addEventListener("input", actualizar); });
     if (opciones) actualizar();
@@ -2256,6 +2405,55 @@
         " · " + (r.ahorro < 0 ? "Costo adicional " : "Ahorro total ") + dinero(Math.abs(r.ahorro)) +
         " · " + (r.conviene ? "Conviene por costo total." : r.ahorro === 0 ? "Pagas lo mismo." : "No conviene por costo total.") : null;
     }, { aviso: aviso, ayuda: "Compara cuotas fijas con el mismo plazo restante. Los costos del cambio se pagan aparte, al inicio." });
+  }
+
+  function wCalculadorasInversion(art) {
+    titulo(art, "Calculadoras de inversión");
+    var C = window.NovaCalculadoras, K = C.CONSTANTES;
+    var aviso = "Cálculo estimado. Verifica con tu banco o tu contador";
+    var campos = [];
+    [1, 2, 3].forEach(function (n) {
+      var cdt = "CDT " + n;
+      campos.push(
+        { id: "cdt-monto-" + n, etq: cdt + " · Monto (" + monedaVista + ")", plata: true, omitirVacio: n === 3 },
+        { id: "cdt-dias-" + n, etq: cdt + " · Plazo en días", omitirVacio: n === 3 },
+        { id: "cdt-tasa-" + n, etq: cdt + " · Tasa efectiva anual (%)", valor: 0 },
+        { id: "cdt-ret-" + n, etq: cdt + " · Retención (%)", valor: K.retencionCdt.valor }
+      );
+    });
+    calculadora(art, "Comparar CDT", campos, function (v) {
+      var ofertas = [1, 2, 3].map(function (n) {
+        return { monto: v["cdt-monto-" + n], dias: v["cdt-dias-" + n],
+          tasaEaPct: v["cdt-tasa-" + n], retencionPct: v["cdt-ret-" + n] };
+      });
+      var tercera = ofertas[2];
+      if (tercera.monto === undefined && tercera.dias === undefined) ofertas.pop();
+      var r = C.compararCdt(ofertas);
+      if (!r) return null;
+      var caja = el("div"), lista = el("ul", "lista-simple");
+      r.resultados.forEach(function (oferta, i) {
+        lista.append(filaAnalisis("CDT " + (i + 1), "Bruto " + dinero(oferta.bruto) +
+          " · Retención " + dinero(oferta.retencion) + " · Neto " + dinero(oferta.neto)));
+      });
+      var mejores = r.mejores.map(function (i) { return "CDT " + (i + 1); }).join(", ");
+      caja.append(lista, el("p", "calc-res", r.mejores.length === 1 ?
+        "Mayor rendimiento neto: " + mejores : "Empate en rendimiento neto: " + mejores));
+      return caja;
+    }, { aviso: aviso, avisoSiempre: true, ayuda: "Escribe el monto, el plazo y la tasa de cada oferta. Puedes dejar vacíos el monto y el plazo del tercer CDT. Se usa un año de 365 días." });
+
+    function cop(valor) { return dineroEn(valor, "COP"); }
+    calculadora(art, "Pensión voluntaria y AFC", [
+      { id: "afc-ingreso", etq: "Ingreso anual (COP)", plata: true },
+      { id: "afc-aporte", etq: "Aporte anual total a pensión voluntaria y AFC (COP)", plata: true },
+      { id: "afc-uvt", etq: "Valor de una UVT (COP, valor inicial de " + K.uvt.anio + ")", plata: true, valor: K.uvt.valor },
+      { id: "afc-tope-pct", etq: "Tope del ingreso anual (%)", valor: K.topeAportePct.valor },
+      { id: "afc-tope-uvt", etq: "Tope anual (UVT)", valor: K.topeAporteUvt.valor },
+      { id: "afc-tarifa", etq: "Tarifa marginal de renta (%)", valor: 0 }
+    ], function (v) {
+      var r = C.ahorroTributarioAporte(v["afc-ingreso"], v["afc-aporte"], v["afc-uvt"], v["afc-tarifa"], v["afc-tope-pct"], v["afc-tope-uvt"]);
+      return r ? "Tope de aportes " + cop(r.limite) + " · Puedes restar de la renta " + cop(r.montoExento) +
+        " · Ahorro de impuesto estimado " + cop(r.ahorro) : null;
+    }, { aviso: aviso, avisoSiempre: true, ayuda: "Los aportes comparten el menor de los dos topes. Escribe tu tarifa marginal para estimar el ahorro. " + K.topeAportePct.referencia + "." });
   }
 
   function wMasCalculadoras(art) {
@@ -3302,7 +3500,7 @@
 
 
   // ---------- Editor general: corregir números y textos, o borrar ----------
-  // cfg: { titulo, ayuda, campos: [{ clave, etiqueta, tipo: "texto" | "plata" | "fecha" | "select", valor, opciones, requerido, permiteCero, max }],
+  // cfg: { titulo, ayuda, campos: [{ clave, etiqueta, tipo: "texto" | "plata" | "fecha" | "select" | "decimal", valor, opciones, requerido, permiteCero, max }],
   //        guardar(valores) → promesa, borrar() → promesa (opcional), confirmar, avisoBorrado }
   var editorActual = null;
   function abrirEditor(cfg) {
@@ -3319,7 +3517,14 @@
         f.opciones.forEach(function (o) { var op = el("option", null, o[1]); op.value = o[0]; op.selected = String(o[0]) === String(f.valor); ent.append(op); });
       } else {
         ent = el("input");
-        if (f.tipo === "plata") { ent.className = "campo-plata"; ent.inputMode = "numeric"; ent.value = f.valor != null && f.valor !== "" ? numeroCO.format(f.valor) : ""; }
+        if (f.tipo === "plata") {
+          ent.className = "campo-plata";
+          ent.inputMode = "numeric";
+          if (f.valor != null && f.valor !== "") ent.value = cfg.protegerMontos ?
+            f.valor.toLocaleString("es-CO", { useGrouping: false, maximumFractionDigits: 2 }) : numeroCO.format(f.valor);
+          if (cfg.protegerMontos && ocultos) { ent.type = "password"; ent.disabled = true; }
+        }
+        else if (f.tipo === "decimal") { ent.inputMode = "decimal"; ent.value = f.valor == null ? "" : String(f.valor); }
         else if (f.tipo === "diaMes") {
           ent.type = "number"; ent.inputMode = "numeric"; ent.min = 1; ent.max = 31; ent.value = f.valor || "";
         }
@@ -3360,11 +3565,15 @@
         }
       } else if (f.tipo === "plata") {
         var negativo = f.permiteNegativo && /^[-−]/.test(t);
+        if (f.requerido && !t) return mensaje("editar-mensaje", "Falta «" + f.etiqueta + "».", true);
+        if (cfg.protegerMontos && /^[$\s]*[-−]/.test(t)) return mensaje("editar-mensaje", "Escribe un valor de cero en adelante.", true);
         if (t === "" && f.opcional) v = null;
         else {
           v = t === "" && f.permiteCero ? 0 : negativo ? -leerValor(t.slice(1)) : leerValor(t);
           if (!isFinite(v) || (v < 0 && !f.permiteNegativo) || (v === 0 && !f.permiteCero)) return mensaje("editar-mensaje", "No entendí «" + f.etiqueta + "». Escribe un valor, por ejemplo 500 mil.", true);
         }
+      } else if (f.tipo === "decimal") {
+        v = t ? Number(t.replace(",", ".")) : NaN;
       } else {
         v = t;
         if (f.requerido && !v) return mensaje("editar-mensaje", "Falta «" + f.etiqueta + "».", true);
@@ -4059,7 +4268,7 @@
     var hoyAnotado = !!datos.movimientos.length && datos.movimientos.some(function (m) { return A.claveDia(m.fecha) === A.claveDia(new Date()); });
     if (fuente && hoyAnotado !== hoyAnotadoAvisos) { var antes = hoyAnotadoAvisos; hoyAnotadoAvisos = hoyAnotado; if (antes !== null && leerLocal("nova-rec-noche", false)) programarAvisos(); }
     if (!fuente) return;
-    if (editorActual && editorActual.campos.some(function (f) { return f.clave === "minimo"; })) {
+    if (editorActual && (editorActual.protegerMontos || editorActual.campos.some(function (f) { return f.clave === "minimo"; }))) {
       editorActual.campos.forEach(function (f) {
         if (f.tipo !== "plata") return;
         f.entrada.type = ocultos ? "password" : "text";
