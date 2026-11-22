@@ -829,7 +829,40 @@
     return { monto: monto > 0 ? monto : null, sobro: promedio > 0 };
   }
 
+  function proximosCortes(tarjetas, ahora) {
+    var hoy = new Date(ahora), anio = hoy.getFullYear(), mes = hoy.getMonth(), dia = hoy.getDate();
+    var fechaHoy = Date.UTC(anio, mes, dia);
+    function faltan(diaDelMes) {
+      if (!Number.isInteger(diaDelMes) || diaDelMes < 1 || diaDelMes > 31) return null;
+      var diaEsteMes = Math.min(diaDelMes, new Date(anio, mes + 1, 0).getDate());
+      var fecha = diaEsteMes >= dia
+        ? Date.UTC(anio, mes, diaEsteMes)
+        : Date.UTC(anio, mes + 1, Math.min(diaDelMes, new Date(anio, mes + 2, 0).getDate()));
+      return (fecha - fechaHoy) / DIA;
+    }
+    return tarjetas.map(function (t) {
+      return { id: t.id, nombre: t.nombre, corte: faltan(t.diaCorte), pago: faltan(t.diaPago) };
+    }).filter(function (t) { return t.corte !== null || t.pago !== null; });
+  }
+
+  function preguntasSugeridas(movs, metas, ahora) {
+    var reales = movimientosReales(movs).filter(function (m) { return m.fecha && new Date(m.fecha) <= ahora; });
+    var mes = totales(enRango(reales, Periodos.periodo("mensual", ahora)));
+    var comparacion = mesVsPromedio(reales, ahora);
+    var preguntas = [];
+    if (comparacion && comparacion.totalActual > comparacion.totalEsperado) preguntas.push("¿Por qué gasté más este mes?");
+    if (reales.some(function (m) { return m.tipo === "gasto"; })) preguntas.push("¿En qué categoría gasto más?");
+    if (metas.length) preguntas.push("¿Cómo voy con mis metas?");
+    if (mes.neto > 0) preguntas.push("¿Cuánto puedo ahorrar al mes?");
+    return preguntas.concat([
+      "¿Cómo empiezo a organizar mi plata?",
+      "¿Cómo hago un presupuesto sencillo?",
+      "¿Qué puedo hacer para ahorrar más?"
+    ]).slice(0, 3);
+  }
+
   var api = {
+    proximosCortes: proximosCortes, preguntasSugeridas: preguntasSugeridas,
     cuentasBajas: cuentasBajas, avisosLimite: avisosLimite, resumenMes: resumenMes, metaSugerida: metaSugerida,
     calorHoraDia: calorHoraDia, mayoresGastos: mayoresGastos, resumenSemana: resumenSemana, ultimoGasto: ultimoGasto,
     calendarioMes: calendarioMes, suscripciones: suscripciones, alcanza: alcanza, mesVsPromedio: mesVsPromedio, numeroLibertad: numeroLibertad,

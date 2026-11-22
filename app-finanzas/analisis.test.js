@@ -629,3 +629,56 @@ test("último gasto: elige la fecha más reciente sin reordenar los movimientos"
   assert.strictEqual(A.ultimoGasto([ingreso, transferencia]), null);
   assert.strictEqual(A.ultimoGasto([]), null);
 });
+
+test("cortes y pagos: el día 31 se ajusta al último día de cada mes", () => {
+  const tarjeta = { id: 1, nombre: "Visa", diaCorte: 31, diaPago: 3 };
+  for (const [mes, ultimo] of [[1, 28], [3, 30], [6, 31]]) {
+    assert.deepStrictEqual(A.proximosCortes([tarjeta], new Date(2026, mes, ultimo, 18)), [
+      { id: 1, nombre: "Visa", corte: 0, pago: 3 }
+    ]);
+  }
+  assert.strictEqual(A.proximosCortes([tarjeta], new Date(2028, 1, 28))[0].corte, 1);
+});
+
+test("cortes y pagos: cruza el año y acepta fechas opcionales", () => {
+  assert.deepStrictEqual(A.proximosCortes([
+    { id: 1, nombre: "Visa", diaCorte: 31, diaPago: 2 },
+    { id: 2, nombre: "Otra", diaCorte: 30.5, diaPago: 1 },
+    { id: 3, nombre: "Sin fechas", diaCorte: 32 }
+  ], new Date(2026, 11, 30)), [
+    { id: 1, nombre: "Visa", corte: 1, pago: 3 },
+    { id: 2, nombre: "Otra", corte: null, pago: 2 }
+  ]);
+  assert.strictEqual(A.proximosCortes([{ diaCorte: 31 }], new Date(2026, 0, 31))[0].corte, 0);
+  assert.strictEqual(A.proximosCortes([{ diaCorte: 30 }], new Date(2026, 0, 31))[0].corte, 28);
+});
+
+test("preguntas sugeridas: ofrece tres preguntas generales sin datos", () => {
+  assert.deepStrictEqual(A.preguntasSugeridas([], [], HOY), [
+    "¿Cómo empiezo a organizar mi plata?",
+    "¿Cómo hago un presupuesto sencillo?",
+    "¿Qué puedo hacer para ahorrar más?"
+  ]);
+});
+
+test("preguntas sugeridas: compara el gasto de hoy con el promedio al mismo punto del mes", () => {
+  const previo = m(15, 8, "gasto", 3100);
+  assert.deepStrictEqual(A.preguntasSugeridas([previo, m(15, 9, "gasto", 3000), m(16, 9, "ingreso", 6000)], [{}], HOY), [
+    "¿Por qué gasté más este mes?",
+    "¿En qué categoría gasto más?",
+    "¿Cómo voy con mis metas?"
+  ]);
+  assert.deepStrictEqual(A.preguntasSugeridas([previo, m(15, 9, "gasto", 2000), m(16, 9, "ingreso", 6000)], [], HOY), [
+    "¿En qué categoría gasto más?",
+    "¿Cuánto puedo ahorrar al mes?",
+    "¿Cómo empiezo a organizar mi plata?"
+  ]);
+  assert(!A.preguntasSugeridas([m(15, 9, "gasto", 3000)], [], HOY).includes("¿Por qué gasté más este mes?"));
+});
+
+test("preguntas sugeridas: ignora lo pendiente, futuro o transferido", () => {
+  assert.deepStrictEqual(A.preguntasSugeridas([
+    m(30, 9, "gasto", 1500), m(15, 9, "gasto", 1500, { estado: "pendiente" }),
+    m(1, 9, "ingreso", 6000, { transferencia: true })
+  ], [], HOY), A.preguntasSugeridas([], [], HOY));
+});

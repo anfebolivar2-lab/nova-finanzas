@@ -235,6 +235,8 @@
     b.innerHTML = ocultos ? OJO_CERRADO : OJO_ABIERTO;
     b.setAttribute("aria-pressed", String(ocultos));
     b.setAttribute("aria-label", ocultos ? "Mostrar los valores" : "Ocultar los valores");
+    $("chat").hidden = ocultos;
+    $("chat-oculto").hidden = !ocultos;
     var d = $("det-ojo");
     d.innerHTML = b.innerHTML; d.setAttribute("aria-pressed", String(ocultos)); d.setAttribute("aria-label", b.getAttribute("aria-label"));
   }
@@ -1012,6 +1014,7 @@
     { id: "calorhora", nombre: "A qué hora y qué día gastas" },
     { id: "resumensemana", nombre: "Resumen semanal", inicio: true },
     { id: "mayoresgastos", nombre: "¿En qué se me fue la plata?", inicio: true },
+    { id: "cortes-tarjeta", nombre: "Cortes y pagos de tarjetas", inicio: true },
     { id: "saldo-bajo", nombre: "Avisos de saldo bajo", inicio: true },
     { id: "avisos-limite", nombre: "Avisos de límites", inicio: true },
     { id: "resumen-mes", nombre: "Resumen del mes", inicio: true },
@@ -1061,7 +1064,7 @@
       singasto: wSinGasto, lugares: wLugares, semanasmes: wSemanasMes, reduccion: wReduccion,
       mesvsprom: wMesVsPromedio, libertad: wLibertad, calorhora: wCalorHora,
       resumensemana: wResumenSemana, mayoresgastos: wMayoresGastos,
-      "saldo-bajo": wSaldoBajo, "avisos-limite": wAvisosLimite, "resumen-mes": wResumenMes, "meta-sugerida": wMetaSugerida
+      "cortes-tarjeta": wCortesTarjeta, "saldo-bajo": wSaldoBajo, "avisos-limite": wAvisosLimite, "resumen-mes": wResumenMes, "meta-sugerida": wMetaSugerida
     }[id];
     render(art, movs, ciclo, ref, rango);
     return art;
@@ -1069,6 +1072,27 @@
   document.querySelectorAll("[data-periodo-analisis]").forEach(function (b) {
     b.addEventListener("click", function () { desfaseAnalisis += Number(b.dataset.periodoAnalisis); pintarAnalisis(); });
   });
+
+  function wCortesTarjeta(art) {
+    var dias = leerDiasTarjeta();
+    var tarjetas = datos.cuentas.filter(function (c) { return c.tipo === "credito"; }).map(function (c) {
+      return Object.assign({ id: c.id, nombre: c.nombre }, dias[c.id]);
+    });
+    var proximos = A.proximosCortes(tarjetas, new Date());
+    if (!proximos.length) return;
+    titulo(art, "Cortes y pagos de tarjetas");
+    proximos.forEach(function (t) {
+      var fila = el("div");
+      fila.append(el("strong", null, t.nombre));
+      [["Corte", t.corte], ["Pago", t.pago]].forEach(function (evento) {
+        var faltan = evento[1];
+        if (faltan === null) return;
+        var plazo = faltan === 0 ? "hoy" : faltan === 1 ? "mañana (1 día)" : "en " + faltan + " días";
+        fila.append(el("p", faltan <= 3 ? "nota mal" : "nota", evento[0] + " " + plazo));
+      });
+      art.append(fila);
+    });
+  }
 
   function wSaldoBajo(art) {
     var minimos = leerMinimosCuenta(), saldos = {};
@@ -2335,6 +2359,16 @@
     else guardarLocal(claveMinimosCuenta(), minimos);
   }
 
+  function claveDiasTarjeta() { return "nova-dias-tarjeta:" + fuente.email; }
+  function leerDiasTarjeta() { return fuente.demo ? fuente.diasTarjeta || {} : leerLocal(claveDiasTarjeta(), {}) || {}; }
+  function guardarDiasTarjeta(id, corte, pago) {
+    var dias = leerDiasTarjeta();
+    if (corte === null && pago === null) delete dias[id];
+    else dias[id] = { diaCorte: corte, diaPago: pago };
+    if (fuente.demo) fuente.diasTarjeta = dias;
+    else guardarLocal(claveDiasTarjeta(), dias);
+  }
+
   function pintarCuentas() {
     var ul = $("lista-cuentas");
     ul.replaceChildren();
@@ -2354,6 +2388,11 @@
           { clave: "saldo_inicial", etiqueta: "Saldo con el que empezó", tipo: "plata", valor: num(c.saldo_inicial), permiteCero: true },
           { clave: "minimo", etiqueta: "Saldo mínimo para avisarte (opcional)", tipo: "plata", valor: leerMinimosCuenta()[c.id], opcional: true, permiteCero: true, permiteNegativo: true }
         );
+        var dias = leerDiasTarjeta()[c.id] || {};
+        campos.push(
+          { clave: "diaCorte", etiqueta: "Día de corte (opcional, 1 a 31)", tipo: "diaMes", valor: dias.diaCorte },
+          { clave: "diaPago", etiqueta: "Día de pago (opcional, 1 a 31)", tipo: "diaMes", valor: dias.diaPago }
+        );
         abrirEditor({
           titulo: "Editar cuenta",
           ayuda: puedeBorrar ? null : (datos.cuentas.length <= 1 ? "Es tu única cuenta: no se puede borrar." : "No se puede borrar porque tiene " + usos + (usos === 1 ? " movimiento." : " movimientos.") + " Si quieres, bórralos antes."),
@@ -2366,11 +2405,15 @@
             var guardado = Object.keys(cambios).length
               ? fuente.actualizar("cuentas", c.id, cambios).then(function (n) { Object.assign(c, n); })
               : Promise.resolve();
-            return guardado.then(function () { if (v.minimo !== undefined) guardarMinimoCuenta(c.id, v.minimo); });
+            return guardado.then(function () {
+              if (v.minimo !== undefined) guardarMinimoCuenta(c.id, v.minimo);
+              if (v.tipo === "credito") guardarDiasTarjeta(c.id, v.diaCorte, v.diaPago);
+            });
           },
           borrar: puedeBorrar ? function () { return fuente.borrar("cuentas", c.id).then(function () {
             datos.cuentas = datos.cuentas.filter(function (x) { return x.id !== c.id; });
             guardarMinimoCuenta(c.id, null);
+            guardarDiasTarjeta(c.id, null, null);
           }); } : null,
           textoBorrar: "🗑 Borrar esta cuenta", confirmar: "¿Borrar la cuenta «" + c.nombre + "»?", avisoBorrado: "Cuenta borrada"
         });
@@ -2663,12 +2706,26 @@
       } else {
         ent = el("input");
         if (f.tipo === "plata") { ent.className = "campo-plata"; ent.inputMode = "numeric"; ent.value = f.valor != null && f.valor !== "" ? numeroCO.format(f.valor) : ""; }
+        else if (f.tipo === "diaMes") {
+          ent.type = "number"; ent.inputMode = "numeric"; ent.min = 1; ent.max = 31; ent.value = f.valor || "";
+        }
         else if (f.tipo === "fecha") { ent.type = "date"; ent.value = f.valor ? String(f.valor).slice(0, 10) : ""; }
         else { ent.value = f.valor || ""; ent.maxLength = f.max || 100; }
       }
       ent.id = id; f.entrada = ent;
       caja.append(etq, ent);
     });
+    var dias = cfg.campos.filter(function (f) { return f.tipo === "diaMes"; });
+    if (dias.length) {
+      var tipo = cfg.campos.find(function (f) { return f.clave === "tipo"; }).entrada;
+      var mostrarDias = function () {
+        dias.forEach(function (f) {
+          f.entrada.previousElementSibling.hidden = f.entrada.hidden = f.entrada.disabled = tipo.value !== "credito";
+        });
+      };
+      tipo.addEventListener("change", mostrarDias);
+      mostrarDias();
+    }
     $("editar-borrar").hidden = !cfg.borrar;
     $("editar-borrar").textContent = cfg.textoBorrar || "🗑 Borrar";
     mensaje("editar-mensaje", "");
@@ -2681,7 +2738,13 @@
     var valores = {};
     for (var i = 0; i < cfg.campos.length; i++) {
       var f = cfg.campos[i], t = f.entrada.value.trim(), v;
-      if (f.tipo === "plata") {
+      if (f.entrada.disabled) continue;
+      if (f.tipo === "diaMes") {
+        v = t === "" ? null : Number(t);
+        if (v !== null && (!Number.isInteger(v) || v < 1 || v > 31)) {
+          return mensaje("editar-mensaje", "Escribe un día del 1 al 31.", true);
+        }
+      } else if (f.tipo === "plata") {
         var negativo = f.permiteNegativo && /^[-−]/.test(t);
         if (t === "" && f.opcional) v = null;
         else {
@@ -3187,6 +3250,11 @@
     avisoExp("Se descargó " + nombre + ".");
   }
   function hoyArchivo() { return A.claveDia(new Date()); }
+  function datosRespaldo() {
+    var copia = { app: "NOVA", creada_por: "OPITA-DIGITAL", exportado: new Date().toISOString(), perfil: datos.perfil };
+    TABLAS.forEach(function (t) { copia[t] = datos[t]; });
+    return copia;
+  }
   function exportarMovimientos(movs, nombre) {
     var cuenta = function (id) { var c = datos.cuentas.find(function (x) { return x.id === id; }); return c ? c.nombre : ""; };
     descargar((nombre || "nova-transacciones") + "-" + hoyArchivo() + ".csv", A.csv(movs, [
@@ -3230,9 +3298,7 @@
         ]), "text/csv;charset=utf-8");
       }
       if (que === "respaldo") {
-        var copia = { app: "NOVA", creada_por: "OPITA-DIGITAL", exportado: new Date().toISOString(), perfil: datos.perfil };
-        TABLAS.forEach(function (t) { copia[t] = datos[t]; });
-        return descargar("nova-respaldo-" + hoyArchivo() + ".json", JSON.stringify(copia, null, 2), "application/json");
+        return descargar("nova-respaldo-" + hoyArchivo() + ".json", JSON.stringify(datosRespaldo(), null, 2), "application/json");
       }
       if (que === "pdf" || que === "excel") return abrirInforme(que, "exportar");
     });
@@ -3435,6 +3501,7 @@
   function ocultarCapa() {
     var id = pilaCapas.pop();
     if (id) $(id).hidden = true;
+    if (id === "hoja-respaldo") limpiarClaveRespaldo();
     if (!pilaCapas.length) document.body.classList.remove("con-capa");
   }
   function cerrarCapa() { if (pilaCapas.length) history.back(); }
@@ -5448,22 +5515,6 @@
   $("chat-buscar").addEventListener("input", pintarIA);
   $("btn-chat-nuevo").addEventListener("click", function () { abrirChat(null); });
 
-  // Preguntas sugeridas con los datos de la persona (como las de la app de referencia).
-  function sugerenciasChat() {
-    var lista = conductor() ? ["¿Cuánto he ganado hoy con las apps?", "¿Cuál app me deja más por viaje?", "¿Cuánto me queda libre esta semana después de gasolina y gastos?"] : ["¿Cuál fue mi gasto más grande este período?"];
-    if (conductor() && documentosPorVencer().length) lista.push("¿Qué documentos de mi vehículo se me vencen pronto?");
-    var hace90 = new Date(Date.now() - 90 * 86400000);
-    var top = A.porCategoria(datos.movimientos.filter(function (m) { return new Date(m.fecha) >= hace90; }))[0];
-    lista.push(top && top.id != null ? "¿Cuánto he gastado en " + nombreCategoria(top.id) + " los últimos 3 meses?" : "¿En qué gasto más este mes?");
-    var b = presupuestoActual(), seguro = b.limite > 0 ? A.seguroParaGastar(b.limite, b.gastado, b.rango) : null;
-    lista.push(seguro && seguro.porDia >= 1000 ? "¿Puedo gastar " + pesos.format(Math.round(seguro.porDia / 1000) * 1000) + " hoy sin afectar mi presupuesto?" : "¿Cuánto me queda del presupuesto?");
-    if (!conductor()) lista.push("¿Qué puedo hacer para ahorrar más?");
-    if (datos.metas.length) lista.push("¿Cómo voy con mis metas?");
-    if (datos.programados.some(function (x) { return x.activo; })) lista.push("¿Qué pagos tengo programados?");
-    return lista;
-  }
-
-
   // ---------- Texto de NOVA IA: cuadros (tablas), fuentes y precio ----------
   // La IA puede responder con un cuadro (filas con | entre columnas), con las páginas de internet que usó
   // ([[FUENTE:título|enlace]]) y, si la pregunta es de una compra, con el precio que encontró ([[PRECIO:valor|producto]]).
@@ -5667,7 +5718,7 @@
     $("chat-borrar").hidden = !chatActual.id;
     var sug = $("chat-sugerencias");
     sug.replaceChildren();
-    sugerenciasChat().forEach(function (t) {
+    A.preguntasSugeridas(datos.movimientos, datos.metas, new Date()).forEach(function (t) {
       var b = el("button", "sugerencia", t); b.type = "button";
       b.addEventListener("click", function () { preguntarNova(t); });
       sug.append(b);
@@ -6835,33 +6886,142 @@
   });
   pintarEstadoPin();
 
-  // ---------- Restaurar respaldo: solo agrega lo que falta, nunca borra ----------
+  // ---------- Respaldos ----------
+  var solicitudRespaldo = null, restaurandoRespaldo = false;
   function claveMov(m) { return [String(m.fecha).slice(0, 16), num(m.monto), m.tipo, m.descripcion || ""].join("|"); }
-  $("btn-restaurar").addEventListener("click", function () { $("archivo-respaldo").click(); });
-  $("archivo-respaldo").addEventListener("change", function (e) {
-    var f = e.target.files && e.target.files[0]; e.target.value = "";
-    if (!f) return;
-    f.text().then(function (txt) {
-      var c; try { c = JSON.parse(txt); } catch (err) { return mensaje("respaldo-mensaje", "Ese archivo no es un respaldo de NOVA.", true); }
-      if (!c || c.app !== "NOVA" || !Array.isArray(c.movimientos)) return mensaje("respaldo-mensaje", "Ese archivo no es un respaldo de NOVA.", true);
-      var existentes = {}; datos.movimientos.forEach(function (m) { existentes[claveMov(m)] = true; });
-      var nuevos = c.movimientos.filter(function (m) { return m && m.monto != null && m.fecha && !existentes[claveMov(m)]; });
-      if (!nuevos.length) return mensaje("respaldo-mensaje", "No había nada nuevo: todos esos movimientos ya están en NOVA.");
-      if (!confirm("Se van a agregar " + nuevos.length + " movimientos que no tienes. No se borra nada. ¿Seguimos?")) return;
-      var cuentaDe = function (id) { var o = (c.cuentas || []).filter(function (x) { return x.id === id; })[0]; var d = o && datos.cuentas.filter(function (x) { return x.nombre === o.nombre; })[0]; return (d || datos.cuentas[0]).id; };
-      var catDe = function (id, tipo) { var o = (c.categorias || []).filter(function (x) { return x.id === id; })[0]; var d = o && datos.categorias.filter(function (x) { return x.nombre === o.nombre && x.tipo === tipo; })[0]; return (d || datos.categorias.filter(function (x) { return x.tipo === tipo; })[0] || datos.categorias[0]).id; };
-      mensaje("respaldo-mensaje", "Restaurando " + nuevos.length + " movimientos…");
-      var hechos = 0;
-      return nuevos.reduce(function (p, m) {
-        return p.then(function () {
-          var fila = { cuenta_id: cuentaDe(m.cuenta_id), categoria_id: catDe(m.categoria_id, m.tipo), tipo: m.tipo, monto: m.monto, descripcion: m.descripcion || null, fecha: m.fecha, etiquetas: m.etiquetas || [] };
-          if (m.nota) fila.nota = m.nota;
-          return fuente.crear("movimientos", fila).then(function (n) { datos.movimientos.push(n); hechos++; });
-        });
-      }, Promise.resolve()).then(function () {
-        ordenarMovimientos(); pintar(); mensaje("respaldo-mensaje", "Listo: se agregaron " + hechos + " movimientos."); toast("¡Respaldo restaurado!", hechos + " movimientos agregados");
+  function leerCopia(texto) {
+    var copia;
+    try { copia = JSON.parse(texto); } catch (e) { /* se valida abajo */ }
+    if (!copia || copia.app !== "NOVA" || !Array.isArray(copia.movimientos)) {
+      throw new Error("Ese archivo no es un respaldo de NOVA.");
+    }
+    return copia;
+  }
+  async function restaurarCopia(copia, idMensaje, cifrado) {
+    if (restaurandoRespaldo) return mensaje(idMensaje, "Ya se está restaurando un respaldo.", true);
+    var origen = fuente, activos = datos;
+    var existentes = new Set(activos.movimientos.map(claveMov));
+    var nuevos = copia.movimientos.filter(function (m) { return m && m.monto != null && m.fecha && !existentes.has(claveMov(m)); });
+    var resumen = "";
+    if (cifrado) {
+      var contenido = TABLAS.filter(function (t) { return Array.isArray(copia[t]) && copia[t].length; }).map(function (t) {
+        return copia[t].length + " " + t.replace(/_grupo$/, " de grupo");
       });
-    }).catch(function (err) { mensaje("respaldo-mensaje", "No se pudo restaurar: " + err.message, true); });
+      if (copia.perfil) contenido.push("datos del perfil");
+      resumen = (contenido.join(", ") || "El respaldo está vacío.") + "\n\n";
+    }
+    if (!nuevos.length && !cifrado) return mensaje(idMensaje, "No había nada nuevo: todos esos movimientos ya están en NOVA.");
+    var accion = nuevos.length === 1 ? "Solo se agregará 1 movimiento faltante"
+      : "Solo se agregarán " + nuevos.length + " movimientos faltantes";
+    if (!confirm(resumen + accion + " a tu espacio actual. ¿Continuar?")) return;
+    if (!nuevos.length) return mensaje(idMensaje, "El respaldo no trae movimientos nuevos.");
+    var cuentas = Array.isArray(copia.cuentas) ? copia.cuentas : [];
+    var categorias = Array.isArray(copia.categorias) ? copia.categorias : [];
+    var cuentaDe = function (id) {
+      var o = cuentas.find(function (x) { return x && x.id === id; });
+      var d = o && activos.cuentas.find(function (x) { return x.nombre === o.nombre; });
+      return (d || activos.cuentas[0]).id;
+    };
+    var catDe = function (id, tipo) {
+      var o = categorias.find(function (x) { return x && x.id === id; });
+      var d = o && activos.categorias.find(function (x) { return x.nombre === o.nombre && x.tipo === tipo; });
+      return (d || activos.categorias.find(function (x) { return x.tipo === tipo; }) || activos.categorias[0]).id;
+    };
+    restaurandoRespaldo = true;
+    mensaje(idMensaje, "Restaurando " + nuevos.length + " movimientos…");
+    var hechos = 0;
+    try {
+      for (var m of nuevos) {
+        if (fuente !== origen || datos !== activos) throw new Error("Cambió tu sesión o espacio.");
+        var fila = { cuenta_id: cuentaDe(m.cuenta_id), categoria_id: catDe(m.categoria_id, m.tipo), tipo: m.tipo, monto: m.monto, descripcion: m.descripcion || null, fecha: m.fecha, etiquetas: m.etiquetas || [] };
+        if (m.nota) fila.nota = m.nota;
+        activos.movimientos.push(await origen.crear("movimientos", fila));
+        hechos++;
+      }
+      mensaje(idMensaje, "Listo: se agregaron " + hechos + " movimientos.");
+      toast("¡Respaldo restaurado!", hechos + " movimientos agregados");
+    } catch (e) {
+      mensaje(idMensaje, "La restauración se interrumpió. Se agregaron " + hechos + " de " + nuevos.length + " movimientos.", true);
+    } finally {
+      restaurandoRespaldo = false;
+      if (hechos && fuente === origen && datos === activos) { ordenarMovimientos(); pintar(); }
+    }
+  }
+  $("btn-restaurar").addEventListener("click", function () { $("archivo-respaldo").click(); });
+  $("archivo-respaldo").addEventListener("change", async function () {
+    var archivo = this.files[0], origen = fuente, activos = datos;
+    this.value = "";
+    if (!archivo) return;
+    try {
+      var copia = leerCopia(await archivo.text());
+      if (fuente === origen && datos === activos) await restaurarCopia(copia, "respaldo-mensaje", false);
+    } catch (e) { mensaje("respaldo-mensaje", "No se pudo restaurar. Revisa que el archivo sea un respaldo de NOVA.", true); }
+  });
+
+  function limpiarClaveRespaldo() {
+    solicitudRespaldo = null;
+    $("form-respaldo").reset();
+    $("respaldo-continuar").disabled = false;
+  }
+  function abrirClaveRespaldo(archivo) {
+    limpiarClaveRespaldo();
+    solicitudRespaldo = { archivo: archivo, origen: fuente, activos: datos };
+    $("respaldo-titulo").textContent = archivo ? "Restaurar respaldo cifrado" : "Crear respaldo cifrado";
+    $("respaldo-clave").minLength = archivo ? 0 : 8;
+    $("respaldo-confirmacion").hidden = !!archivo;
+    $("respaldo-repetir").disabled = !!archivo;
+    mensaje("respaldo-clave-mensaje", archivo ? "" : "Usa al menos 8 caracteres. Necesitarás esta contraseña para restaurar la copia.");
+    mensaje("respaldo-cifrado-mensaje", "");
+    abrirCapa("hoja-respaldo");
+    $("respaldo-clave").focus();
+  }
+  $("btn-crear-cifrado").addEventListener("click", function () { abrirClaveRespaldo(null); });
+  $("btn-restaurar-cifrado").addEventListener("click", function () { $("archivo-cifrado").click(); });
+  $("archivo-cifrado").addEventListener("change", function () {
+    var archivo = this.files[0];
+    this.value = "";
+    if (archivo) abrirClaveRespaldo(archivo);
+  });
+  $("form-respaldo").addEventListener("submit", async function (e) {
+    e.preventDefault();
+    var solicitud = solicitudRespaldo, boton = $("respaldo-continuar"), clave = $("respaldo-clave").value;
+    if (!solicitud || boton.disabled) return;
+    if (!solicitud.archivo && (clave.length < 8 || clave !== $("respaldo-repetir").value)) {
+      return mensaje("respaldo-clave-mensaje", "Usa al menos 8 caracteres y repite la misma contraseña.", true);
+    }
+    this.reset();
+    boton.disabled = true;
+    mensaje("respaldo-clave-mensaje", solicitud.archivo ? "Abriendo el respaldo…" : "Cifrando el respaldo…");
+    function mismaSesion() { return fuente === solicitud.origen && datos === solicitud.activos; }
+    try {
+      if (!mismaSesion()) throw new Error("Cambió tu sesión o espacio. Vuelve a abrir esta opción.");
+      if (solicitud.archivo) {
+        var sobre;
+        try { sobre = JSON.parse(await solicitud.archivo.text()); }
+        catch (error) { throw new Error("Ese archivo no es un respaldo cifrado válido de NOVA."); }
+        if (solicitudRespaldo !== solicitud) return;
+        var descifrado = NovaRespaldo.descifrar(sobre, clave);
+        clave = "";
+        var copia = leerCopia(await descifrado);
+        if (solicitudRespaldo === solicitud) cerrarYLuego(function () {
+          if (mismaSesion()) restaurarCopia(copia, "respaldo-cifrado-mensaje", true).catch(function () {
+            mensaje("respaldo-cifrado-mensaje", "No se pudo restaurar el respaldo.", true);
+          });
+        });
+      } else {
+        var cifrado = NovaRespaldo.cifrar(JSON.stringify(datosRespaldo()), clave);
+        clave = "";
+        var archivo = await cifrado;
+        if (solicitudRespaldo === solicitud && mismaSesion()) {
+          descargar("nova-respaldo-" + hoyArchivo() + ".nova-respaldo", JSON.stringify(archivo), "application/json");
+          cerrarCapa();
+        }
+      }
+    } catch (error) {
+      if (solicitudRespaldo === solicitud) mensaje("respaldo-clave-mensaje", error.message, true);
+    } finally {
+      if (solicitudRespaldo === solicitud) boton.disabled = false;
+    }
   });
 
   // ---------- Papelera: lo borrado se guarda 30 días en este dispositivo ----------
