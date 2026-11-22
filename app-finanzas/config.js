@@ -18,6 +18,8 @@ window.NOVA_CONFIG = {
   apkVersionUrl: "https://nova-finanzas.vercel.app/descargas/version.json",
   // La versión que sale en GitHub en cuanto termina de armarse la APK (no hace falta volver a publicar la página).
   apkVersionUrlGithub: "https://github.com/anfebolivar2-lab/nova-finanzas/releases/download/nova-android/version.json",
+  otaManifestUrl: "https://github.com/anfebolivar2-lab/nova-finanzas/releases/download/nova-android/ota-manifest.json",
+  otaArchivosUrl: "https://raw.githubusercontent.com/anfebolivar2-lab/nova-finanzas/{sha}/app-finanzas/{ruta}",
   // Entrar con Google en la app instalada: Google se abre en el navegador del celular y vuelve a NOVA
   // por esta dirección (debe estar también en Supabase → Authentication → URL Configuration).
   appEsquema: "co.novafinanzas.app://login-callback",
