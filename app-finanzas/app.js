@@ -1291,7 +1291,7 @@
     var i = el("input"); i.id = id; i.inputMode = "decimal"; i.placeholder = ph; if (plata) i.className = "campo-plata";
     return [l, i];
   }
-  function wHerramientas(art, movs) {
+  function wHerramientas(art, movs, ciclo, ref, rango) {
     titulo(art, "Calculadoras");
     var ingresos = A.totales(movs).ingresos;
     // Crédito
@@ -1321,6 +1321,7 @@
     if (ingresos > 0) { var s = NovaConsejos.regla503020(ingresos); r.append(el("p", "calc-res", "Con tus ingresos de " + dinero(ingresos) + ": " + dinero(s.necesidades) + " para necesidades, " + dinero(s.gustos) + " para gustos y " + dinero(s.ahorro) + " para ahorrar.")); }
     else r.append(el("p", "calc-res", "Cuando tengas ingresos en este periodo te digo cómo repartirlos: 50 % necesidades, 30 % gustos, 20 % ahorro."));
     art.append(c, a, r);
+    calculadoraGmf(art, movs, ciclo, rango);
   }
   function leerTasa(t) { var v = parseFloat(String(t).replace(",", ".")); return isNaN(v) ? 0 : v; }
 
@@ -1688,22 +1689,151 @@
       art.append(bf);
     }
   }
-  // Calculadora genérica: campos [{ id, etq, ph, plata }], calcular(valores) -> texto o null.
-  function calculadora(art, tit, campos, calcular) {
+  function calculadora(art, tit, campos, calcular, opciones) {
     var c = el("div", "calc"); c.append(el("strong", null, tit));
-    var res = el("p", "calc-res", "Escribe los datos."), entradas = {};
-    campos.forEach(function (f) { var par = campoCalc(f.etq, f.id, f.ph, f.plata); c.append(par[0], par[1]); entradas[f.id] = { el: par[1], plata: f.plata }; });
+    var res = el("div"), entradas = {};
+    res.append(el("p", "calc-res", "Escribe los datos."));
+    if (opciones && opciones.ayuda) c.append(el("p", "nota", opciones.ayuda));
+    campos.forEach(function (f) {
+      var par = campoCalc(f.etq, f.id, f.ph || "", f.plata), input = par[1];
+      if (f.fecha) { input.type = "date"; input.removeAttribute("inputmode"); }
+      if (f.plata && opciones && ocultos) input.type = "password";
+      if (f.valor != null) input.value = f.plata ? numeroCO.format(f.valor) : String(f.valor);
+      c.append(par[0], input);
+      entradas[f.id] = input;
+    });
     c.append(res);
     function actualizar() {
-      var v = {}; Object.keys(entradas).forEach(function (k) { v[k] = entradas[k].plata ? leerValor(entradas[k].el.value) : leerTasa(entradas[k].el.value); });
-      var txt; try { txt = calcular(v); } catch (e) { txt = null; }
-      res.textContent = txt || "Escribe los datos.";
+      var v = {};
+      campos.forEach(function (f) {
+        var texto = entradas[f.id].value.trim();
+        if (f.fecha) v[f.id] = texto;
+        else if (f.plata) v[f.id] = !texto && f.opcional ? 0 : opciones && /^[$\s]*[-−]/.test(texto) ? NaN : leerValor(texto);
+        else if (opciones) v[f.id] = texto ? Number(texto.replace(",", ".")) : f.opcional ? 0 : NaN;
+        else v[f.id] = leerTasa(texto);
+      });
+      var resultado;
+      try { resultado = calcular(v); } catch (e) { resultado = null; }
+      var mensaje = opciones ? "Revisa los datos para calcular." : "Escribe los datos.";
+      res.replaceChildren(typeof resultado === "string" || !resultado ? el("p", "calc-res", resultado || mensaje) : resultado);
+      if (resultado && opciones) res.append(el("p", "nota", AVISO_CALCULADORA));
     }
-    Object.keys(entradas).forEach(function (k) { entradas[k].el.addEventListener("input", actualizar); });
+    Object.keys(entradas).forEach(function (k) { entradas[k].addEventListener("input", actualizar); });
+    if (opciones) actualizar();
     art.append(c);
   }
+
+  var AVISO_CALCULADORA = "Cálculo estimado. Verifica con tu contador o con la norma vigente";
+
+  function calculadoraGmf(art, movs, ciclo, rango) {
+    var C = window.NovaCalculadoras;
+    if (!C || !rango) return;
+    var formato = new Intl.NumberFormat("es-CO", { style: "currency", currency: "COP", maximumFractionDigits: 2 });
+    function dineroGmf(valor) { return ocultos ? dinero(valor) : formato.format(valor); }
+    var caja = el("div", "calc");
+    caja.append(el("strong", null, "4×1000 de tus movimientos"), el("p", "nota", A.nombrePeriodo(ciclo, rango)));
+    var r = monedaBase() === "COP" ? C.gmfMovimientos(movs) : null;
+    if (r) {
+      caja.append(el("p", "calc-res", "Egresos pagados " + dinero(r.egresos) + " · 4×1000 estimado " + dineroGmf(r.impuesto)),
+        el("p", "nota", AVISO_CALCULADORA), el("p", "nota", "Aplica el 4×1000 a todos los egresos registrados como pagados, sin descontar exenciones."));
+    } else {
+      caja.append(el("p", "nota", monedaBase() === "COP" ? "El total de egresos supera el valor que puede calcular NOVA." : "Elige un espacio en pesos colombianos para estimar el 4×1000 de tus movimientos."));
+    }
+    art.append(caja);
+    calculadora(art, "4×1000 de un monto", [
+      { id: "gmf-monto", etq: "Monto en pesos colombianos", plata: true, ph: "100 mil" }
+    ], function (v) {
+      var impuesto = C.gmf(v["gmf-monto"]);
+      return impuesto === null ? null : "4×1000 estimado " + dineroGmf(impuesto);
+    }, {});
+  }
+
+  function calculadorasTrabajoYAhorro(art) {
+    var C = window.NovaCalculadoras;
+    if (!C) return;
+    var K = C.CONSTANTES;
+    var auxilio = "Auxilio de transporte si te corresponde (" + K.auxilioTransporte.anio + ", COP)";
+    function cop(valor) { return dineroEn(valor, "COP"); }
+
+    calculadora(art, "Liquidación laboral", [
+      { id: "liq-sal", etq: "Salario mensual (COP)", plata: true, ph: "2 millones" },
+      { id: "liq-aux", etq: auxilio, plata: true, valor: K.auxilioTransporte.valor, opcional: true },
+      { id: "liq-inicio", etq: "Fecha de inicio", fecha: true },
+      { id: "liq-fin", etq: "Fecha de fin", fecha: true },
+      { id: "liq-vac", etq: "Días de vacaciones pendientes", valor: 0, opcional: true }
+    ], function (v) {
+      var r = C.liquidacion(v["liq-sal"], v["liq-aux"], v["liq-inicio"], v["liq-fin"], v["liq-vac"]);
+      return r ? r.dias + " días comerciales · Cesantías " + cop(r.cesantias) + " · Intereses " + cop(r.intereses) +
+        " · Prima proporcional " + cop(r.prima) + " · Vacaciones " + cop(r.vacaciones) + " · Total " + cop(r.total) : null;
+    }, { ayuda: "Base de 360 días con salario fijo. Escribe 0 si no recibes auxilio. Como fecha de inicio pon el día desde el que NO te han pagado: normalmente el 1 de enero del año en que termina el contrato (cesantías ya consignadas y prima del semestre anterior ya pagada). Si pones todo el contrato, el resultado sale más alto de lo que realmente te deben." });
+
+    calculadora(art, "Horas extra y recargos", [
+      { id: "ext-sal", etq: "Salario mensual (COP)", plata: true, ph: "2 millones" },
+      { id: "ext-div", etq: "Horas mensuales según tu jornada (divisor)", valor: K.horasMes.valor },
+      { id: "ext-dia", etq: "Horas extra diurnas", valor: 0, opcional: true },
+      { id: "ext-noche", etq: "Horas extra nocturnas", valor: 0, opcional: true },
+      { id: "ext-rec", etq: "Horas ordinarias con recargo nocturno", valor: 0, opcional: true },
+      { id: "ext-fest", etq: "Horas ordinarias diurnas en domingo o festivo", valor: 0, opcional: true },
+      { id: "ext-fest-pct", etq: "Recargo dominical o festivo (%)", valor: C.recargoFestivo(A.claveDia(new Date())) }
+    ], function (v) {
+      var r = C.horasExtra(v["ext-sal"], v["ext-div"], v["ext-dia"], v["ext-noche"], v["ext-rec"], v["ext-fest"], v["ext-fest-pct"]);
+      return r ? "Valor por hora " + cop(r.hora) + " · Extras diurnas " + cop(r.extraDiurna) + " · Extras nocturnas " + cop(r.extraNocturna) +
+        " · Recargo nocturno " + cop(r.recargoNocturno) + " · Recargo dominical o festivo " + cop(r.dominicalFestivo) + " · Total adicional " + cop(r.total) : null;
+    }, { ayuda: "Ajusta el divisor a tu jornada y el porcentaje al periodo trabajado. Las horas extra incluyen el valor de la hora. Para las horas ordinarias se suma solo el recargo." });
+
+    calculadora(art, "Salario neto", [
+      { id: "net-sal", etq: "Salario mensual (COP)", plata: true, ph: "2 millones" },
+      { id: "net-aux", etq: auxilio, plata: true, valor: K.auxilioTransporte.valor, opcional: true },
+      { id: "net-min", etq: "Salario mínimo (" + K.salarioMinimo.anio + ", COP)", plata: true, valor: K.salarioMinimo.valor }
+    ], function (v) {
+      var r = C.salarioNeto(v["net-sal"], v["net-aux"], v["net-min"]);
+      return r ? "Salud " + cop(r.salud) + " · Pensión " + cop(r.pension) + " · Fondo de solidaridad " + cop(r.solidaridad) + " · Neto " + cop(r.neto) : null;
+    }, { ayuda: "Escribe 0 si no recibes auxilio. Estimación con el aporte básico al fondo de solidaridad, antes de retención u otros descuentos." });
+
+    calculadora(art, "Interés compuesto", [
+      { id: "ic-aporte", etq: "Aporte mensual", plata: true, ph: "200 mil" },
+      { id: "ic-tasa", etq: "Tasa efectiva anual (%)", ph: "10" },
+      { id: "ic-anios", etq: "Años completos (hasta " + C.MAX_ANIOS + ")", ph: "5" }
+    ], function (v) {
+      var r = C.interesCompuesto(v["ic-aporte"], v["ic-tasa"], v["ic-anios"]);
+      if (!r) return null;
+      var resultado = el("div");
+      resultado.append(el("p", "calc-res", "Saldo final " + dinero(r.saldo) + " · Total aportado " + dinero(r.aportado) +
+        " · " + (!ocultos && r.ganancia < 0 ? "Pérdida " : "Ganancia ") + dinero(Math.abs(r.ganancia))));
+      if (r.tabla.length) resultado.append(tablaInteresCompuesto(r.tabla));
+      return resultado;
+    }, { ayuda: "El aporte se hace al final de cada mes." });
+
+    calculadora(art, "Regla del 4 %", [
+      { id: "r4-gastos", etq: "Gastos anuales que quieres cubrir", plata: true, ph: "36 millones" }
+    ], function (v) {
+      var capital = C.reglaCuatro(v["r4-gastos"]);
+      return capital === null ? null : "Capital estimado para vivir de tus ahorros " + dinero(capital);
+    }, {});
+  }
+
+  function tablaInteresCompuesto(filas) {
+    var detalle = el("details"), caja = el("div", "ia-tabla-caja calc-tabla-corta");
+    var tabla = el("table", "ia-tabla"), thead = el("thead"), cuerpo = el("tbody"), encabezado = el("tr");
+    ["Año", "Aportado", "Saldo"].forEach(function (nombre) {
+      var th = el("th", null, nombre); th.scope = "col"; encabezado.append(th);
+    });
+    thead.append(encabezado);
+    filas.forEach(function (r) {
+      var fila = el("tr");
+      fila.append(el("td", null, String(r.anio)), el("td", "num", dinero(r.aportado)), el("td", "num", dinero(r.saldo)));
+      cuerpo.append(fila);
+    });
+    tabla.append(thead, cuerpo); caja.append(tabla);
+    caja.tabIndex = 0;
+    caja.setAttribute("aria-label", "Proyección de ahorro por año");
+    detalle.append(el("summary", null, "Ver año por año"), caja);
+    return detalle;
+  }
+
   function wMasCalculadoras(art) {
     titulo(art, "Más calculadoras");
+    calculadorasTrabajoYAhorro(art);
     var N = NovaConsejos;
     calculadora(art, "🧾 IVA (19 %)", [{ id: "iva-valor", etq: "Valor", ph: "100 mil", plata: true }, { id: "iva-pct", etq: "IVA (%)", ph: "19" }, { id: "iva-modo", etq: "¿El valor ya incluye IVA? (1 = sí, 0 = no)", ph: "0" }], function (v) {
       var r = N.iva(v["iva-valor"], v["iva-pct"] || 19, v["iva-modo"] === 1 ? "menos" : "mas");

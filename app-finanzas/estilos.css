@@ -868,6 +868,8 @@ button.mini { padding: 6px 12px; border-radius: 999px; font-size: .8rem; }
 .ia-tabla { border-collapse: collapse; width: 100%; font-size: .88rem; white-space: normal; }
 .ia-tabla th, .ia-tabla td { padding: 6px 8px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }
 .ia-tabla th { font-weight: 800; background: var(--surface); }
+.calc-tabla-corta { max-height: 15rem; overflow: auto; }
+.calc-tabla-corta .ia-tabla :is(th, td):first-child { min-width: 0; }
 .ia-tabla .num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .ia-fuentes { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-top: 8px; white-space: normal; }
 .ia-fuentes small { color: var(--muted); width: 100%; }
