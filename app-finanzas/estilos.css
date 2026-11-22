@@ -1025,3 +1025,24 @@ button.mini { padding: 6px 12px; border-radius: 999px; font-size: .8rem; }
 .papelera-fila .mov-acciones { margin-left: auto; }
 .reto-logros { display: flex; flex-wrap: wrap; gap: 6px; }
 .reto-anterior summary { cursor: pointer; margin-block: 8px; }
+
+.dueno-interruptor { display: flex; align-items: center; gap: 8px; }
+.dueno-interruptor input { width: auto; accent-color: var(--accent); }
+.dueno-seccion { margin-block: 12px; }
+.dueno-seccion summary { cursor: pointer; font-weight: 700; }
+.dueno-seccion h3 { font-size: .95rem; margin: 16px 0 6px; }
+.dueno-barras i.dueno-pico { background: var(--ink); opacity: 1; }
+.dueno-marcas span { flex: 1; text-align: center; }
+.dueno-cohortes { width: 100%; table-layout: fixed; border-spacing: 2px; text-align: center; font-size: .73rem; }
+.dueno-cohortes caption { text-align: left; margin-block: 8px; }
+.dueno-cohortes th:first-child { width: 24%; }
+.dueno-cohortes th small { display: block; font-weight: 400; }
+.dueno-cohortes td { padding: 6px 1px; border-radius: 5px; background: var(--surface-2); }
+.dueno-cohortes td[style] { background: color-mix(in srgb, var(--surface) 75%, color-mix(in srgb, var(--accent) var(--retencion), var(--surface-2))); }
+.dueno-correos-segmento { margin-top: 8px; }
+.dueno-abrir-ficha { background: none; border: 0; padding: 0; text-align: left; color: var(--ink); cursor: pointer; }
+.dueno-correo { text-decoration: underline; }
+#pantalla-dueno .dueno-ficha { width: min(420px, calc(100% - 32px)); max-height: 85dvh; margin: auto; color: var(--ink); background: var(--surface); }
+.dueno-ficha::backdrop { background: #0008; }
+.dueno-ficha dl { display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); gap: 8px; }
+.dueno-ficha dd { margin: 0; text-align: right; }
