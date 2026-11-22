@@ -6465,7 +6465,7 @@
       else mensaje("dueno-mensaje", "No se pudieron cargar los datos. Revisa tu conexión e intenta otra vez.", true);
     }).finally(function () { if (carga === cargaDueno) $("dueno-recargar").disabled = false; });
   }
-  $("dueno-apk-avanzada").href = (cfg.apkRespaldoUrl || "").replace(/NOVA\.apk$/, "NOVA-avanzada.apk");
+  $("dueno-apk-avanzada").href = enlaceDescarga("NOVA-avanzada.apk");
   $("btn-dueno").addEventListener("click", function () { abrirCapa("pantalla-dueno"); cargarDueno(); });
   $("dueno-recargar").addEventListener("click", cargarDueno);
   if (filtrosDueno.some(function (filtro) { return filtro[0] === vistaDuenoGuardada.filtro; })) {
@@ -7983,13 +7983,18 @@
     $("btn-apk").hidden = $("perfil-apk").hidden = !si;
     document.querySelectorAll(".respaldo, .ayuda-instalar").forEach(function (e) { e.hidden = !si; });
   }
+  function enlaceDescarga(apk) {
+    var base = String(cfg.sitioUrl || "https://nova-finanzas.vercel.app").replace(/\/+$/, "");
+    return base + "/descargar.html" + (/NOVA-avanzada\.apk$/.test(String(apk || "")) ? "?v=avanzada" : "");
+  }
   // El botón se ve siempre en el inicio de sesión (y en Configuración): tocarlo baja de una vez la última APK.
   // En el navegador baja desde esta página; dentro de la app instalada, desde GitHub (allí queda lista apenas se arma).
   mostrarApk(true);
   (function ponerEnlaceApk() {
-    var enlace = enApp && cfg.apkRespaldoUrl ? cfg.apkRespaldoUrl : "descargas/NOVA.apk";
+    // Antes de bajar el archivo se abre una página de NOVA que explica qué se descarga (en vez de la pantalla en blanco de GitHub).
+    var enlace = enlaceDescarga("");
     $("btn-apk").href = $("perfil-apk").href = enlace;
-    $("btn-apk").setAttribute("download", "NOVA.apk"); $("perfil-apk").setAttribute("download", "NOVA.apk");
+    $("btn-apk").removeAttribute("download"); $("perfil-apk").removeAttribute("download");
     if (enApp) { $("btn-apk").target = $("perfil-apk").target = "_blank"; }
   })();
 
@@ -8019,9 +8024,9 @@
         var hayNueva = Number(mejor.d.versionCode) > Number(local.versionCode);
         var aviso = $("aviso-version");
         if (hayNueva) {
-          aviso.href = mejor.apk; aviso.target = "_blank";
+          aviso.href = enlaceDescarga(mejor.apk); aviso.target = "_blank";
           $("aviso-version-texto").textContent = "Versión " + mejor.d.versionName + " (tienes la " + local.versionName + "). Toca para descargarla y, al abrir el archivo, toca Actualizar.";
-          [$("btn-apk"), $("perfil-apk")].forEach(function (a) { a.href = mejor.apk; });
+          [$("btn-apk"), $("perfil-apk")].forEach(function (a) { a.href = enlaceDescarga(mejor.apk); });
         }
         [$("btn-apk"), $("perfil-apk")].forEach(function (a) {
           a.querySelector("strong").textContent = a.id === "btn-apk" ? "APK Android" + (hayNueva ? " · versión " + mejor.d.versionName : "") : hayNueva ? "Descargar la versión nueva (" + mejor.d.versionName + ")" : "Descargar la app para Android";
