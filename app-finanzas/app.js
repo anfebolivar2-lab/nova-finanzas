@@ -1322,7 +1322,11 @@
     { id: "fondo-emergencia", nombre: "Fondo de emergencia" },
     { id: "servicios-por-mes", nombre: "Servicios públicos mes a mes" },
     { id: "consejo-dia", nombre: "Consejo financiero del día", inicio: true },
-    { id: "pruebas-gratis", nombre: "Pruebas gratis por terminar", inicio: true }
+    { id: "pruebas-gratis", nombre: "Pruebas gratis por terminar", inicio: true },
+    { id: "aviso-pago", nombre: "Aviso del día de pago", inicio: true },
+    { id: "calificar-compra", nombre: "¿Valió la pena?", inicio: true },
+    { id: "resumen-compras", nombre: "Compras calificadas" },
+    { id: "sugerencias-ahorro", nombre: "Sugerencias para bajar gastos" }
   ];
   function configWidgets() {
     var guardado = leerLocal("nova-widgets", null) || [];
@@ -1351,12 +1355,12 @@
     cont.replaceChildren();
     configWidgets().forEach(function (w) {
       if (!w.visible || (inicio && !WIDGETS.find(function (x) { return x.id === w.id; }).inicio)) return;
-      var art = crearWidget(w.id, movs, ciclo, ref, rango);
+      var art = crearWidget(w.id, movs, ciclo, ref, rango, inicio);
       if (art.childNodes.length) cont.append(art);
     });
   }
 
-  function crearWidget(id, movs, ciclo, ref, rango) {
+  function crearWidget(id, movs, ciclo, ref, rango, inicio) {
     var art = el("article", "tarjeta widget");
     art.dataset.widget = id;
     var render = {
@@ -1375,14 +1379,92 @@
       "dia-mas-caro": wDiaMasCaro, "patrimonio-neto": wPatrimonioNeto,
       "distribucion-patrimonio": wDistribucionPatrimonio, "vencimientos-cdt": wVencimientosCdt,
       "calculadoras-inversion": wCalculadorasInversion,
-      "fondo-emergencia": wFondoEmergencia, "servicios-por-mes": wServiciosPorMes, "consejo-dia": wConsejoDia, "pruebas-gratis": wPruebasGratis
+      "fondo-emergencia": wFondoEmergencia, "servicios-por-mes": wServiciosPorMes, "consejo-dia": wConsejoDia, "pruebas-gratis": wPruebasGratis,
+      "aviso-pago": inicio ? wAvisoPago : null, "calificar-compra": inicio ? wCalificarCompra : null,
+      "resumen-compras": wResumenCompras, "sugerencias-ahorro": wSugerenciasAhorro
     }[id];
-    render(art, movs, ciclo, ref, rango);
+    if (render) render(art, movs, ciclo, ref, rango);
     return art;
   }
   document.querySelectorAll("[data-periodo-analisis]").forEach(function (b) {
     b.addEventListener("click", function () { desfaseAnalisis += Number(b.dataset.periodoAnalisis); pintarAnalisis(); });
   });
+
+  function botonHabito(texto, accion) {
+    var b = el("button", "mini", texto);
+    b.type = "button";
+    b.addEventListener("click", accion);
+    return b;
+  }
+
+  function wAvisoPago(art) {
+    if (!A.avisoDiaPago(leerLocal("nova-dia-pago", ""), datos.movimientos, new Date())) return;
+    var cfg = leerLocal("nova-apartar", null);
+    var pct = cfg && cfg.pct || 10;
+    titulo(art, "Hoy te pagan: ¿anotamos tu sueldo?");
+    art.append(botonHabito("Anotar ingreso", function () { abrirRegistro({ tipo: "ingreso" }); }),
+      el("p", "nota", "Págate primero. Puedes apartar el " + pct + " % para una meta cuando recibas tu sueldo."),
+      botonHabito("Ir a Apartar al cobrar", function () {
+        ir("ajustes");
+        $("apartar-activo").focus({ preventScroll: true });
+        $("apartar-activo").closest("article").scrollIntoView({ block: "center" });
+      }));
+  }
+
+  function calificacionesCompras() {
+    return fuente.demo ? fuente.calificacionesCompras || {} : leerLocal("nova-calificaciones-compras:" + fuente.email, {}) || {};
+  }
+
+  function nombreCompra(m) { return m.descripcion || nombreCategoria(m.categoria_id); }
+
+  function wCalificarCompra(art) {
+    var compra = A.comprasParaCalificar(datos.movimientos, calificacionesCompras(), new Date())[0];
+    if (!compra) return;
+    titulo(art, "¿Valió la pena?");
+    art.append(el("p", "nota habito-texto", nombreCompra(compra) + " · " + dinero(num(compra.monto))));
+    var acciones = el("div", "habito-acciones");
+    [["Sí", "si"], ["Más o menos", "regular"], ["No", "no"]].forEach(function (opcion) {
+      acciones.append(botonHabito(opcion[0], function () {
+        var calificaciones = calificacionesCompras();
+        calificaciones[compra.id] = opcion[1];
+        if (fuente.demo) fuente.calificacionesCompras = calificaciones;
+        else if (!guardarLocal("nova-calificaciones-compras:" + fuente.email, calificaciones)) {
+          return toast("No pude guardar la calificación en este dispositivo");
+        }
+        pintarInicio();
+        pintarAnalisis();
+        toast("Calificación guardada");
+      }));
+    });
+    art.append(acciones);
+  }
+
+  function wResumenCompras(art) {
+    var r = A.resumenCalificaciones(datos.movimientos, calificacionesCompras());
+    titulo(art, "Compras calificadas");
+    art.append(el("p", "nota", r.total + (r.total === 1 ? " compra calificada" : " compras calificadas")));
+    if (!r.noValieron.length) return;
+    art.append(el("strong", null, "Compras que no valieron la pena"));
+    var lista = el("ul", "lista-simple habito-texto");
+    r.noValieron.forEach(function (m) {
+      lista.append(el("li", "nota", nombreCompra(m) + " · " + A.nombreDia(m.fecha) + " · " + dinero(num(m.monto))));
+    });
+    art.append(lista);
+  }
+
+  function wSugerenciasAhorro(art) {
+    titulo(art, "Sugerencias para bajar gastos");
+    var propuestas = A.sugerenciasAhorro(datos.movimientos, new Date(), datos.categorias);
+    if (!propuestas.length) return art.append(el("p", "nota", "Cuando anotes gastos este mes, verás ideas para ahorrar."));
+    var lista = el("ul", "lista-simple");
+    propuestas.forEach(function (r) {
+      var li = el("li", "habito-texto");
+      li.append(el("strong", null, nombreCategoria(r.categoriaId)), el("p", "nota", r.consejo),
+        el("p", "nota", "Si bajas el gasto un 10 %, ahorrarías " + dinero(r.ahorro) + " al mes."));
+      lista.append(li);
+    });
+    art.append(lista);
+  }
 
   function wFondoEmergencia(art) {
     titulo(art, "Fondo de emergencia");
@@ -1981,7 +2063,19 @@
     var anio = new Date().getFullYear();
     titulo(art, "Tu año en NOVA " + anio);
     var r = NovaConsejos.tuAnio(datos.movimientos, anio);
-    if (!r) return art.append(el("p", "nota", "Cuando tengas movimientos este año, aquí ves tu resumen."));
+    if (!r) art.append(el("p", "nota", "Cuando tengas movimientos este año, aquí ves tu resumen."));
+    else pintarAnioTexto(art, r, anio);
+    var mes = new Date().getMonth();
+    if (mes !== 0 && mes < 10) return;
+    var anioImagen = mes === 0 ? anio - 1 : anio;
+    var resumen = A.resumenAnio(datos.movimientos, anioImagen);
+    if (resumen) {
+      art.append(el("p", "nota", "Comparte tu resumen de " + anioImagen + " como imagen."),
+        botonHabito("Compartir", function () { compartirImagenAnual(resumen, anioImagen); }));
+    }
+  }
+
+  function pintarAnioTexto(art, r, anio) {
     var ul = el("ul", "lista-simple");
     function fila(i, t, x) { var li = el("li", "consejo"); li.append(el("span", "consejo-icono", i)); var d = el("div"); d.append(el("strong", null, t), el("small", null, ocultos ? "••••" : x)); li.append(d); ul.append(li); }
     fila("🧾", "Movimientos anotados", r.movimientos + " en " + r.diasRegistrados + " días distintos");
@@ -1991,9 +2085,57 @@
     if (r.mayor) fila("🏆", "Tu mayor gasto", "«" + r.mayor.descripcion + "» por " + dinero(num(r.mayor.monto)));
     art.append(ul);
     var b = el("button", "mini", "📤 Compartir mi año"); b.type = "button";
-    b.addEventListener("click", function () { compartirTexto("Mi año en NOVA", "Mi año en NOVA " + anio + ": anoté " + r.movimientos + " movimientos, gasté " + pesos.format(r.gastos) + " e ingresé " + pesos.format(r.ingresos) + (r.mejorMes ? ". Mi mejor mes: " + r.mejorMes : "") + ". — NOVA · OPITA-DIGITAL"); });
+    b.addEventListener("click", function () { compartirTexto("Mi año en NOVA", "Mi año en NOVA " + anio + ": anoté " + r.movimientos + " movimientos, gasté " + dinero(r.gastos) + " e ingresé " + dinero(r.ingresos) + (r.mejorMes ? ". Mi mejor mes: " + r.mejorMes : "") + ". — NOVA · OPITA-DIGITAL"); });
     art.append(b);
   }
+  function dibujarResumenAnio(r, anio) {
+    var canvas = el("canvas");
+    canvas.width = 1080;
+    canvas.height = 1350;
+    var ctx = canvas.getContext("2d");
+    ctx.fillStyle = "#2ee06f";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.fillStyle = "#04140a";
+    ctx.font = "bold 92px sans-serif";
+    ctx.fillText("Tu año en NOVA", 84, 145, 912);
+    ctx.font = "bold 84px sans-serif";
+    ctx.fillText(String(anio), 84, 250, 912);
+    var filas = [
+      ["Ingresos", dinero(r.ingresos)], ["Gastos", dinero(r.gastos)], ["Ahorro", dinero(r.ahorro)],
+      ["Categoría con más gasto", r.categoriaTop ? nombreCategoria(r.categoriaTop.id) : "Sin gastos"],
+      ["Mes más caro", r.mesMasCaro || "Sin gastos"]
+    ];
+    filas.forEach(function (fila, i) {
+      var y = 335 + i * 190;
+      ctx.fillStyle = "#e3faeb";
+      ctx.fillRect(84, y, 912, 162);
+      ctx.fillStyle = "#04140a";
+      ctx.font = "34px sans-serif";
+      ctx.fillText(fila[0], 118, y + 50, 844);
+      ctx.font = "bold 52px sans-serif";
+      ctx.fillText(fila[1], 118, y + 120, 844);
+    });
+    return canvas;
+  }
+
+  async function compartirImagenAnual(resumen, anio) {
+    try {
+      var imagen = dibujarResumenAnio(resumen, anio).toDataURL("image/png");
+      var bytes = Uint8Array.from(atob(imagen.split(",")[1]), function (c) { return c.charCodeAt(0); });
+      var nombre = "nova-" + anio + ".png";
+      if (navigator.share && navigator.canShare && typeof File === "function") {
+        var datosShare = { files: [new File([bytes], nombre, { type: "image/png" })], title: "Tu año en NOVA " + anio };
+        if (navigator.canShare(datosShare)) {
+          try { await navigator.share(datosShare); return; }
+          catch (e) { if (e.name === "AbortError") return; }
+        }
+      }
+      descargar(nombre, bytes, "image/png");
+    } catch (e) {
+      toast("No pude preparar la imagen");
+    }
+  }
+
   function wBola(art) {
     titulo(art, "Plan para pagar tus deudas");
     var pend = resumenDeDeudas().lista.filter(function (x) { return x.deuda.tipo === "debo" && x.falta > 0; }).map(function (x) { return { persona: x.deuda.persona, falta: x.falta }; });
@@ -2735,8 +2877,19 @@
   $("btn-listo-widgets").addEventListener("click", function () { $("personalizar").hidden = true; });
 
   // ---------- Buscar ----------
-  var filtros = { texto: "", tipo: "", categoriaId: null, etiqueta: "", estado: "", desde: "", hasta: "", orden: "recientes" };
-  function resultadosBusqueda() { return A.buscar(datos.movimientos, filtros, nombreCategoria); }
+  var filtrosIniciales = { texto: "", tipo: "", categoriaId: null, cuentaId: "", etiqueta: "", estado: "",
+    desde: "", hasta: "", montoMin: "", montoMax: "", orden: "recientes" };
+  var filtros = Object.assign({}, filtrosIniciales);
+  var camposFiltros = {
+    etiqueta: "filtro-etiqueta", estado: "filtro-estado", desde: "filtro-desde", hasta: "filtro-hasta",
+    cuentaId: "filtro-cuenta", montoMin: "filtro-monto-min", montoMax: "filtro-monto-max"
+  };
+  function filtrosActivos() {
+    return ["categoriaId"].concat(Object.keys(camposFiltros)).filter(function (k) {
+      return filtros[k] !== "" && filtros[k] != null;
+    }).length;
+  }
+  function resultadosBusqueda() { return A.filtrarMovimientos(datos.movimientos, filtros, nombreCategoria); }
   function pintarBuscar() {
     document.querySelectorAll("#buscar-tipo button").forEach(function (b) { b.setAttribute("aria-checked", String(b.dataset.tipo === filtros.tipo)); });
     var selCat = $("filtro-categoria");
@@ -2749,10 +2902,20 @@
     selEt.replaceChildren(el("option", null, "Todas"));
     selEt.firstChild.value = "";
     etiquetasUsadas().forEach(function (e) { var o = el("option", null, "#" + e); o.value = e; o.selected = e === filtros.etiqueta; selEt.append(o); });
-    $("filtro-estado").value = filtros.estado;
-    $("filtro-desde").value = filtros.desde; $("filtro-hasta").value = filtros.hasta;
+    var selCuenta = $("filtro-cuenta");
+    selCuenta.replaceChildren(el("option", null, "Todas"));
+    selCuenta.firstChild.value = "";
+    datos.cuentas.forEach(function (c) {
+      var o = el("option", null, c.nombre);
+      o.value = c.id;
+      selCuenta.append(o);
+    });
+    $("filtros-montos").hidden = ocultos;
+    Object.keys(camposFiltros).forEach(function (k) {
+      $(camposFiltros[k]).value = ocultos && (k === "montoMin" || k === "montoMax") ? "" : filtros[k];
+    });
     $("buscar-orden").value = filtros.orden;
-    var activos = ["categoriaId", "etiqueta", "estado", "desde", "hasta"].filter(function (k) { return filtros[k] !== "" && filtros[k] != null; }).length;
+    var activos = filtrosActivos();
     $("btn-filtros").textContent = activos ? "Filtros (" + activos + ")" : "Filtros";
     var r = resultadosBusqueda(), t = A.totales(r);
     $("buscar-resumen").textContent = r.length + (r.length === 1 ? " movimiento" : " movimientos") + " · " + (ocultos ? "$ ••••" : (t.neto < 0 ? "−" : "+") + pesos.format(Math.abs(t.neto)));
@@ -2765,21 +2928,27 @@
     }
   }
   function abrirBusqueda(f) {
-    filtros = Object.assign({ texto: "", tipo: "", categoriaId: null, etiqueta: "", estado: "", desde: "", hasta: "", orden: "recientes" }, f || {});
+    filtros = Object.assign({}, filtrosIniciales, f || {});
     $("buscar-texto").value = filtros.texto;
-    $("filtros").hidden = !(f && (f.desde || f.categoriaId != null));
+    mostrarFiltros(filtrosActivos() > 0);
     ir("buscar");
   }
   $("buscar-texto").addEventListener("input", function (e) { filtros.texto = e.target.value; pintarBuscar(); });
   document.querySelectorAll("#buscar-tipo button").forEach(function (b) { b.addEventListener("click", function () { filtros.tipo = b.dataset.tipo; pintarBuscar(); }); });
-  $("btn-filtros").addEventListener("click", function () { var f = $("filtros"); f.hidden = !f.hidden; $("btn-filtros").setAttribute("aria-expanded", String(!f.hidden)); });
+  function mostrarFiltros(mostrar) {
+    $("filtros").hidden = !mostrar;
+    $("btn-filtros").setAttribute("aria-expanded", String(mostrar));
+  }
+  $("btn-filtros").addEventListener("click", function () { mostrarFiltros($("filtros").hidden); });
   $("filtro-categoria").addEventListener("change", function (e) { filtros.categoriaId = e.target.value ? Number(e.target.value) : null; pintarBuscar(); });
-  $("filtro-etiqueta").addEventListener("change", function (e) { filtros.etiqueta = e.target.value; pintarBuscar(); });
-  $("filtro-estado").addEventListener("change", function (e) { filtros.estado = e.target.value; pintarBuscar(); });
-  $("filtro-desde").addEventListener("change", function (e) { filtros.desde = e.target.value; pintarBuscar(); });
-  $("filtro-hasta").addEventListener("change", function (e) { filtros.hasta = e.target.value; pintarBuscar(); });
+  Object.keys(camposFiltros).forEach(function (k) {
+    $(camposFiltros[k]).addEventListener("change", function (e) { filtros[k] = e.target.value; pintarBuscar(); });
+  });
   $("buscar-orden").addEventListener("change", function (e) { filtros.orden = e.target.value; pintarBuscar(); });
-  $("btn-limpiar-filtros").addEventListener("click", function () { abrirBusqueda({ texto: filtros.texto, tipo: filtros.tipo }); $("filtros").hidden = false; });
+  $("btn-limpiar-filtros").addEventListener("click", function () {
+    filtros = Object.assign({}, filtrosIniciales, { texto: filtros.texto, orden: filtros.orden });
+    pintarBuscar();
+  });
   $("btn-exportar-busqueda").addEventListener("click", function () { exportarMovimientos(resultadosBusqueda(), "nova-busqueda"); });
 
   // ---------- Configuración ----------
