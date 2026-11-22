@@ -832,7 +832,7 @@
       </div>
       <article class="tarjeta"><strong>Datos en CSV y respaldo</strong><p class="nota">Los archivos CSV se pueden abrir en Excel, Google Sheets y otras hojas de cálculo. En la app de Android se abre el menú para guardarlos o enviarlos.</p></article>
       <div class="menu">
-        <button type="button" data-exportar="movimientos"><span class="menu-icono">📄</span><span><strong>Transacciones</strong><small id="exp-movimientos"></small></span></button>
+        <button type="button" data-exportar="movimientos"><span class="menu-icono">📄</span><span><strong>Exportar todos mis movimientos (CSV)</strong><small id="exp-movimientos"></small></span></button>
         <button type="button" data-exportar="categorias"><span class="menu-icono">🗂</span><span><strong>Categorías</strong><small id="exp-categorias"></small></span></button>
         <button type="button" data-exportar="limites"><span class="menu-icono">🎯</span><span><strong>Presupuestos y límites</strong><small id="exp-limites"></small></span></button>
         <button type="button" data-exportar="respaldo"><span class="menu-icono">💾</span><span><strong>Todo (respaldo)</strong><small>Un archivo con todos tus datos</small></span></button>
@@ -989,6 +989,8 @@
     </div>
     <div id="cat-panel-iconos" class="formulario">
       <input id="cat-icono-buscar" type="search" placeholder="Buscar ícono… (ej. moto, perro, regalo)">
+      <label for="cat-emoji">O pega un emoji (solo en este teléfono)</label>
+      <input id="cat-emoji" type="text" maxlength="40" placeholder="Ej. 🧋">
       <div id="cat-iconos" class="rejilla-iconos"></div>
     </div>
     <div id="cat-panel-colores" class="rejilla-colores" hidden></div>
@@ -1144,7 +1146,8 @@
 </section>
 <section id="pantalla-papelera" class="capa" hidden>
   <div class="sub-cabecera"><button type="button" class="icono-btn" data-cerrar aria-label="Volver"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button><h1>Papelera</h1></div>
-  <p class="nota">Lo que borras queda aquí 30 días en este dispositivo. Después se elimina para siempre.</p>
+  <p class="nota">La papelera vive solo en este teléfono. Aquí puedes restaurar lo que borraste en los últimos 30 días.</p>
+  <button type="button" id="papelera-vaciar" class="peligro">Vaciar papelera</button>
   <ul id="lista-papelera" class="lista-simple"></ul>
 </section>
 <section id="pantalla-historial" class="capa" hidden>

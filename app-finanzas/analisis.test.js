@@ -1149,3 +1149,118 @@ test("pagos programados: incluye hoy y mañana en hora local, ordena y omite ing
   assert.deepStrictEqual(A.programadosProximos(pagos, ahora, 2).map((p) => p.programado), [hoy, manana, despues]);
   assert.deepStrictEqual(A.programadosProximos([], ahora), []);
 });
+
+test("totales por día: usa la fecha local, suma gastos pagados y respeta el mes", () => {
+  const pendientes = m(12, 9, "gasto", 70000, { estado: "pendiente" });
+  const movimientos = [
+    m(3, 9, "gasto", "20000"), m(3, 9, "gasto", 25000),
+    m(3, 9, "ingreso", 500000), pendientes, m(1, 10, "gasto", 1000),
+    { tipo: "gasto", fecha: "2026-10-31", monto: 1234 }
+  ];
+  assert.deepStrictEqual(A.totalesPorDia(movimientos, "2026-10"), { "2026-10-03": 45000, "2026-10-31": 1234 });
+  assert.deepStrictEqual(A.totalesPorDia(movimientos, "2026-09"), {});
+  assert.deepStrictEqual(A.totalesPorDia([], "2026-10"), {});
+  const diaPendiente = A.calendarioMes(movimientos, 2026, 9, HOY).dias[11];
+  assert.strictEqual(diaPendiente.gastos, 0);
+  assert.deepStrictEqual(diaPendiente.movimientos, [pendientes]);
+});
+
+test("deslizar: la izquierda supera el umbral y predomina sobre el desplazamiento vertical", () => {
+  assert.ok(A.gestoDeslizar(-48, -20, 48));
+  assert.ok(A.gestoDeslizar(-80, 40, 60));
+  assert.ok(A.gestoDeslizar(-50, 0));
+  assert.strictEqual(A.gestoDeslizar(-10, 0, 48), false);
+  assert.strictEqual(A.gestoDeslizar(90, 0, 48), false);
+  assert.strictEqual(A.gestoDeslizar(-60, -70, 48), false);
+  assert.strictEqual(A.gestoDeslizar(-60, 60, 48), false);
+  assert.strictEqual(A.gestoDeslizar(0, 0, 48), false);
+});
+
+test("emoji pegado: admite un símbolo, una bandera, un tono o una secuencia unida", () => {
+  ["🧋", "🇨🇴", "👩🏽‍💻", "1️⃣", "❤️"].forEach((emoji) => assert.strictEqual(A.emojiPegado(" " + emoji + " "), emoji));
+  ["", "manzana 🍎", "🍎 🍐", "🍎🍐", "12", "🇨", "🏽", "<b>"].forEach((entrada) => assert.strictEqual(A.emojiPegado(entrada), ""));
+});
+
+test("CSV de movimientos: BOM, campos con comas, comillas, saltos de línea y tildes", () => {
+  const encabezado = "\ufeffFecha,Tipo,Descripción,Categoría,Cuenta,Monto,Nota";
+  const filas = [
+    { fecha: "2025-01-01", tipo: "gasto", descripcion: 'Café, "tamaño grande"', categoria_id: 1, cuenta_id: 4, monto: 12.5, nota: "Primera línea\nSegunda línea" },
+    { fecha: "2026-10-29", tipo: "ingreso", descripcion: "  =2+2", cuenta_id: 70, monto: 75000 }
+  ];
+  const categorias = [{ id: 1, nombre: "Alimentación" }];
+  const cuentas = [{ id: 4, nombre: "Tarjeta, crédito" }];
+  assert.strictEqual(A.movimientosACsv(filas, categorias, cuentas), encabezado +
+    '\r\n2025-01-01,Gasto,"Café, ""tamaño grande""",Alimentación,"Tarjeta, crédito",-12.5,"Primera línea\nSegunda línea"' +
+    "\r\n2026-10-29,Ingreso,'  =2+2,Sin categoría,,75000,");
+  assert.strictEqual(A.movimientosACsv([], [], []), encabezado);
+});
+
+test("papelera: conserva 30 días, copia todos los datos y reemplaza la copia anterior del mismo movimiento", () => {
+  const ahora = Date.UTC(2026, 10, 1);
+  const fila = { id: 11, descripcion: "Pan", espacio_id: 3, categoria_id: null, etiquetas: ["casa"], foto_ruta: "recibo.jpg" };
+  const limite = { id: "límite", tabla: "movimientos", fila: { id: 10 }, borrado: "2026-10-02T00:00:00Z" };
+  const anterior = { id: "anterior", tabla: "movimientos", fila, borrado: "2026-10-31T00:00:00Z" };
+  const vieja = { id: "vieja", tabla: "movimientos", fila: { id: 9 }, borrado: "2026-10-01T23:59:59.999Z" };
+  const meta = { id: "meta", tabla: "metas", fila: { id: 11 }, borrado: "2026-10-31T00:00:00Z" };
+  const papelera = Object.freeze([meta, vieja, anterior, limite]);
+  assert.deepStrictEqual(A.limpiarPapelera(papelera, ahora), [meta, anterior, limite]);
+  const nueva = A.agregarAPapelera(papelera, "movimientos", fila, ahora, "nueva");
+  assert.deepStrictEqual(nueva.map((e) => e.id), ["nueva", "meta", "límite"]);
+  assert.deepStrictEqual(nueva[0], { id: "nueva", tabla: "movimientos", fila, borrado: "2026-11-01T00:00:00.000Z" });
+  fila.etiquetas.push("otra");
+  assert.deepStrictEqual(nueva[0].fila.etiquetas, ["casa"]);
+  assert.deepStrictEqual(A.limpiarPapelera([null, { borrado: "inválida" }], ahora), []);
+});
+
+test("reto semanal: lunes a domingo con rotación estable entre años y categorías disponibles", () => {
+  const semana = A.semanaDe("2026-01-01");
+  assert.deepStrictEqual(semana, A.semanaDe("2026-01-04"));
+  assert.deepStrictEqual([semana.desde, semana.hasta], ["2025-12-29", "2026-01-05"]);
+  assert.strictEqual(A.semanaDe("2026-01-05").indice, semana.indice + 1);
+  const categorias = [
+    { id: 1, nombre: "Domicilios", tipo: "gasto" },
+    { id: 2, nombre: "Taxi y Uber", tipo: "gasto" },
+    { id: 3, nombre: "Didi", tipo: "gasto" },
+    { id: 4, nombre: "Taxi", tipo: "ingreso" },
+    { id: 5, nombre: "Salud", tipo: "gasto" }
+  ];
+  assert.strictEqual(A.retoDeLaSemana(0).titulo, "Sin domicilios");
+  assert.deepStrictEqual(A.retoDeLaSemana(1, categorias), { titulo: "Sin taxi ni Uber", categorias: [2, 3], nombre: "Taxi y Uber, Didi" });
+  assert.deepStrictEqual(A.retoDeLaSemana(2, categorias).categorias, [1]);
+  assert.strictEqual(A.retoDeLaSemana(0, categorias.slice(3)), null);
+});
+
+test("logros semanales: cuenta gastos desde el lunes, cierra semanas pasadas y concede insignias a 1, 3 y 5", () => {
+  const reto = { categorias: [4, 5] };
+  const gasto = (fecha, id = 4) => ({ fecha, categoria_id: id, tipo: "gasto" });
+  const fuera = [gasto("2025-12-28"), gasto("2026-01-05"), gasto("2025-12-29", 9),
+    { fecha: "2026-01-03", tipo: "ingreso", categoria_id: 4 }];
+  assert.ok(A.cumplioReto(reto, fuera, "2025-12-29"));
+  assert.strictEqual(A.cumplioReto(reto, fuera.concat(gasto("2025-12-29")), "2025-12-29"), false);
+  assert.strictEqual(A.cumplioReto(reto, fuera.concat(gasto("2026-01-04", 5)), "2025-12-29"), false);
+  assert.strictEqual(A.cumplioReto(null, [], "2025-12-29"), false);
+  const historial = Object.freeze([{ desde: "2025-12-22", reto }, { desde: "2025-12-29", reto }, { desde: "2026-01-05", reto }]);
+  const actualizado = A.actualizarRetos(historial, fuera, A.semanaDe("2026-01-05"));
+  assert.deepStrictEqual(actualizado.map((r) => r.cumplido), [false, true, undefined]);
+  assert.strictEqual(historial[1].cumplido, undefined);
+  assert.strictEqual(A.actualizarRetos(actualizado, [], A.semanaDe("2026-01-05"))[0], actualizado[0]);
+  [0, 1, 2, 3, 4, 5, 6].forEach((total) => {
+    const lista = Array(total).fill({ cumplido: true }).concat({ cumplido: false }, {});
+    assert.deepStrictEqual(A.insigniasReto(lista), { total, insignias: [1, 3, 5].filter((n) => n <= total) });
+  });
+});
+
+test("papelera y retos: mantienen las referencias al sincronizar categorías y cuentas creadas sin internet", () => {
+  const movimiento = { tabla: "movimientos", fila: { id: -2, cuenta_id: -3, categoria_id: -5, nota: "almuerzo" } };
+  const meta = { tabla: "metas", fila: { id: 2 } };
+  const historial = [{ desde: "2026-01-05", reto: { categorias: [-5, 6] } }, { desde: "2025-12-29", reto: { categorias: [2] }, cumplido: true }];
+  const papelera = A.remapearPapelera([movimiento, meta], { "-3": 15, "-5": 20 }, "categorias");
+  assert.deepStrictEqual(papelera[0].fila, { id: -2, cuenta_id: 15, categoria_id: 20, nota: "almuerzo" });
+  assert.strictEqual(papelera[1], meta);
+  assert.strictEqual(movimiento.fila.cuenta_id, -3);
+  assert.strictEqual(A.remapearPapelera(papelera, { "-2": 8 }, "movimientos")[0].fila.id, 8);
+  const retos = A.remapearRetos(historial, { "-5": 20 });
+  assert.deepStrictEqual(retos[0].reto.categorias, [20, 6]);
+  assert.deepStrictEqual(historial[0].reto.categorias, [-5, 6]);
+  assert.strictEqual(retos[1], historial[1]);
+});
