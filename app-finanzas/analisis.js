@@ -138,6 +138,49 @@
       .sort(function (a, b) { return b.total - a.total; });
   }
 
+  function esGasto(m) { return m.tipo === "gasto" && !m.transferencia; }
+
+  function mayoresGastos(movs, ahora, n) {
+    var gastos = enRango(movs.filter(esGasto), Periodos.periodo("mensual", ahora));
+    var total = totales(gastos).gastos;
+    return gastos.sort(function (a, b) { return num(b.monto) - num(a.monto); })
+      .slice(0, n === undefined ? 5 : Math.max(0, n))
+      .map(function (m) {
+        var monto = num(m.monto);
+        return { descripcion: m.descripcion, categoria_id: m.categoria_id, fecha: m.fecha,
+          monto: monto, porcentaje: total > 0 ? monto / total * 100 : 0 };
+      });
+  }
+
+  function resumenSemana(movs, ahora) {
+    var hoy = inicioDia(ahora || new Date()), manana = new Date(hoy);
+    manana.setDate(hoy.getDate() + 1);
+    var semana = Periodos.periodo("semanal", hoy), anterior = desplazar("semanal", hoy, -1);
+    var gastos = movs.filter(esGasto);
+    var actuales = enRango(gastos, { desde: semana.desde, hasta: manana });
+    var totalActual = totales(actuales).gastos, totalAnterior = totales(enRango(gastos, anterior)).gastos;
+    var diferencia = totalActual - totalAnterior;
+    var frase;
+    if (!totalActual && !totalAnterior) frase = "No hay gastos en estas dos semanas.";
+    else if (!totalAnterior) frase = "La semana pasada no anotaste gastos.";
+    else if (diferencia > 0) frase = "Llevas más gasto que la semana pasada.";
+    else if (diferencia < 0) frase = "Llevas menos gasto que la semana pasada.";
+    else frase = "Llevas el mismo gasto que la semana pasada.";
+    return { totalActual: totalActual, totalAnterior: totalAnterior, diferencia: diferencia,
+      porcentaje: totalAnterior > 0 ? diferencia / totalAnterior * 100 : null,
+      categoriaTop: porCategoria(actuales)[0] || null, frase: frase };
+  }
+
+  function ultimoGasto(movs) {
+    var ultimo = null, fechaUltimo = -Infinity;
+    movs.forEach(function (m) {
+      if (!esGasto(m) || !m.fecha) return;
+      var fecha = new Date(m.fecha).getTime();
+      if (fecha > fechaUltimo) { ultimo = m; fechaUltimo = fecha; }
+    });
+    return ultimo;
+  }
+
   function mesVsPromedio(movs, ahora, esFijoCategoria) {
     ahora = new Date(ahora === undefined ? new Date() : ahora);
     var anio = ahora.getFullYear(), mes = ahora.getMonth(), dia = ahora.getDate();
@@ -788,7 +831,7 @@
 
   var api = {
     cuentasBajas: cuentasBajas, avisosLimite: avisosLimite, resumenMes: resumenMes, metaSugerida: metaSugerida,
-    calorHoraDia: calorHoraDia,
+    calorHoraDia: calorHoraDia, mayoresGastos: mayoresGastos, resumenSemana: resumenSemana, ultimoGasto: ultimoGasto,
     calendarioMes: calendarioMes, suscripciones: suscripciones, alcanza: alcanza, mesVsPromedio: mesVsPromedio, numeroLibertad: numeroLibertad,
     desplazar: desplazar, nombrePeriodo: nombrePeriodo, nombreCorto: nombreCorto, enRango: enRango, totales: totales,
     porCategoria: porCategoria, porEtiqueta: porEtiqueta, vistaRapida: vistaRapida, serie: serie, proyeccion: proyeccion,

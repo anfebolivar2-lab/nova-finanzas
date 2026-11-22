@@ -647,7 +647,8 @@
     $("tarjeta-deficit").hidden = t.neto >= 0;
     $("deficit-valor").textContent = ocultos ? "$ ••••" : "−" + pesos.format(Math.abs(t.neto));
 
-    pintarSeguro(); pintarPresupuesto(); pintarFrecuentes(); pintarMiniTarjetas(); pintarProyeccionYRacha(movs, rango); pintarSemanaYSaludo(); pintarSugerencias(); pintarProximoPago(); pintarApartar(); actualizarWidget();
+    pintarSeguro(); pintarPresupuesto(); pintarFrecuentes(); pintarMiniTarjetas(); pintarProyeccionYRacha(movs, rango); pintarSaludo(); pintarSugerencias(); pintarProximoPago(); pintarApartar(); actualizarWidget();
+    $("btn-repetir-ultimo").hidden = !A.ultimoGasto(datos.movimientos);
     pintarWidgets($("widgets-inicio"), true);
     listaPorDia($("lista-inicio"), movs, desfaseInicio === 0 ? "Aún no hay movimientos en este periodo. Toca + para agregar el primero." : "No hubo movimientos en este periodo.", 60);
   }
@@ -1009,6 +1010,8 @@
     { id: "mesvsprom", nombre: "Tu mes vs. tu promedio" },
     { id: "libertad", nombre: "Tu número de libertad" },
     { id: "calorhora", nombre: "A qué hora y qué día gastas" },
+    { id: "resumensemana", nombre: "Resumen semanal", inicio: true },
+    { id: "mayoresgastos", nombre: "¿En qué se me fue la plata?", inicio: true },
     { id: "saldo-bajo", nombre: "Avisos de saldo bajo", inicio: true },
     { id: "avisos-limite", nombre: "Avisos de límites", inicio: true },
     { id: "resumen-mes", nombre: "Resumen del mes", inicio: true },
@@ -1057,6 +1060,7 @@
       pronostico: wPronostico, anio: wAnio, bola: wBola, alcancia: wAlcancia, sobres: wSobres, plan: wPlan,
       singasto: wSinGasto, lugares: wLugares, semanasmes: wSemanasMes, reduccion: wReduccion,
       mesvsprom: wMesVsPromedio, libertad: wLibertad, calorhora: wCalorHora,
+      resumensemana: wResumenSemana, mayoresgastos: wMayoresGastos,
       "saldo-bajo": wSaldoBajo, "avisos-limite": wAvisosLimite, "resumen-mes": wResumenMes, "meta-sugerida": wMetaSugerida
     }[id];
     render(art, movs, ciclo, ref, rango);
@@ -1274,6 +1278,49 @@
     }
     selA.addEventListener("change", pintarComp); selB.addEventListener("change", pintarComp); pintarComp();
   }
+  function wMayoresGastos(art) {
+    titulo(art, "¿En qué se me fue la plata?");
+    var gastos = A.mayoresGastos(datos.movimientos, new Date(), 5);
+    if (!gastos.length) return art.append(el("p", "nota", "Todavía no has anotado gastos este mes."));
+
+    art.append(el("p", "nota", "Las compras más grandes de este mes"));
+    var lista = el("ul", "lista-simple");
+    gastos.forEach(function (g) {
+      var li = el("li", "consejo"), detalle = el("div");
+      detalle.append(el("strong", null, g.descripcion || "Gasto"),
+        el("small", null, nombreCategoria(g.categoria_id) + " · " + fechaCorta.format(new Date(g.fecha))));
+      detalle.append(el("small", null, ocultos ? "••••" : dinero(g.monto) + " · " + numeroCO.format(g.porcentaje) + " % del gasto del mes"));
+      li.append(detalle);
+      lista.append(li);
+    });
+    art.append(lista);
+  }
+
+  function wResumenSemana(art) {
+    titulo(art, "Resumen semanal");
+    var r = A.resumenSemana(datos.movimientos, new Date());
+    art.append(el("p", "calc-res", "Esta semana, hasta hoy: " + dinero(r.totalActual)),
+      el("p", "nota", "Semana pasada completa: " + dinero(r.totalAnterior)));
+    if (!ocultos) {
+      art.append(el("p", "nota", r.frase));
+      if (r.totalActual || r.totalAnterior) {
+        var signo = r.diferencia > 0 ? "+" : r.diferencia < 0 ? "−" : "";
+        art.append(el("p", "nota", "Diferencia: " + signo + dinero(Math.abs(r.diferencia)) +
+          (r.porcentaje == null ? "" : " (" + signo + numeroCO.format(Math.abs(r.porcentaje)) + " %)")));
+      }
+    }
+    if (r.categoriaTop) art.append(el("p", "nota", "Donde más gastaste: " + nombreCategoria(r.categoriaTop.id)));
+    if (r.totalActual || r.totalAnterior) {
+      var compartir = el("button", "mini", "📤 Compartir resumen");
+      compartir.type = "button";
+      compartir.addEventListener("click", function () {
+        compartirTexto("Mi semana en NOVA", "Esta semana llevo " + pesos.format(r.totalActual) +
+          " en gastos. La semana pasada gasté " + pesos.format(r.totalAnterior) + ". — NOVA · OPITA-DIGITAL");
+      });
+      art.append(compartir);
+    }
+  }
+
   function wMesVsPromedio(art) {
     titulo(art, "📊 Tu mes vs. tu promedio");
     var r = A.mesVsPromedio(datos.movimientos, new Date(), function (id) { return A.esFijo(categoria(id)); });
@@ -1644,14 +1691,9 @@
     dl.replaceChildren();
     lista.forEach(function (d) { var o = el("option"); o.value = d; dl.append(o); });
   }
-  function pintarSemanaYSaludo() {
+  function pintarSaludo() {
     var h = new Date().getHours(), nombre = (fuente && fuente.nombre ? String(fuente.nombre).split(" ")[0] : "");
     $("saludo").textContent = (h < 12 ? "Buenos días" : h < 19 ? "Buenas tardes" : "Buenas noches") + (nombre ? ", " + nombre : "") + " 👋";
-    var s = NovaConsejos.semana(datos.movimientos);
-    $("tarjeta-semana").hidden = !s.movimientos;
-    if (!s.movimientos) return;
-    $("semana-valor").textContent = ocultos ? "$ ••••" : "Gastaste " + pesos.format(s.gastos);
-    $("semana-nota").textContent = ocultos ? "" : (s.cambio == null ? "Esta semana llevas " + s.movimientos + " movimientos." : "Eso es " + Math.abs(s.cambio) + " % " + (s.cambio > 0 ? "más" : "menos") + " que la semana pasada.") + (s.ingresos ? " Ingresaste " + pesos.format(s.ingresos) + "." : "");
   }
   function compartirTexto(titulo, texto) {
     var P = (window.Capacitor && window.Capacitor.Plugins) || {};
@@ -1674,11 +1716,6 @@
       cfg.sitioUrl || "https://nova-finanzas.vercel.app"
     );
   });
-  $("semana-compartir").addEventListener("click", function () {
-    var s = NovaConsejos.semana(datos.movimientos);
-    compartirTexto("Mi semana en NOVA", "Mi semana en NOVA: gasté " + dinero(s.gastos) + (s.ingresos ? " e ingresé " + dinero(s.ingresos) : "") + (s.cambio != null ? " (" + Math.abs(s.cambio) + " % " + (s.cambio > 0 ? "más" : "menos") + " que la semana pasada)" : "") + ". — NOVA · OPITA-DIGITAL");
-  });
-
   function titulo(art, texto) { art.append(el("h2", "titulo-widget", texto)); }
 
   function wRapida(art, movs, ciclo, ref) {
@@ -3429,36 +3466,50 @@
   });
 
   // ---------- Nuevo / editar movimiento ----------
+  $("btn-repetir-ultimo").addEventListener("click", function () {
+    var ultimo = A.ultimoGasto(datos.movimientos);
+    if (ultimo) abrirRegistro({ repetir: ultimo });
+  });
   var reg = null;
   function abrirRegistro(o) {
     o = o || {};
-    var m = o.movimiento;
+    var m = o.movimiento || o.repetir;
+    var categoriaId = m ? m.categoria_id : o.categoriaId;
+    var usaMontoOriginal = m && m.moneda && m.moneda !== monedaBase() && num(m.monto_original) > 0;
+    var monedaRepetida = o.repetir && usaMontoOriginal && num(m.tasa) > 0;
     reg = {
-      editar: m || null,
+      editar: o.movimiento || null,
       tipo: m ? m.tipo : o.tipo || "gasto",
-      expr: m ? textoMonto(m.moneda && m.moneda !== monedaBase() && num(m.monto_original) > 0 ? num(m.monto_original) : num(m.monto)) : (o.expr || ""),
-      categoriaId: m ? m.categoria_id : (o.categoriaId != null ? o.categoriaId : null),
+      expr: m ? textoMonto((o.repetir ? monedaRepetida : usaMontoOriginal) ? num(m.monto_original) : num(m.monto)) : (o.expr || ""),
+      categoriaId: categoriaId != null && (!o.repetir || categoria(categoriaId)) ? categoriaId : null,
       documentoId: o.documentoId || null,
-      etiquetas: m ? (m.etiquetas || []).slice() : [],
-      moneda: m && m.moneda ? m.moneda : monedaBase(),
+      etiquetas: o.movimiento ? (m.etiquetas || []).slice() : [],
+      moneda: m && m.moneda && (!o.repetir || monedaRepetida) ? m.moneda : monedaBase(),
       tasa: m && m.tasa ? Number(m.tasa) : null,
       tasaAuto: null, tasaFecha: "", tasaEditada: !!(m && m.tasa)
     };
-    $("reg-fecha").value = A.claveDia(m ? m.fecha : new Date());
+    if (monedaRepetida) {
+      reg.copManual = num(m.monto);
+      reg.copExpr = reg.expr;
+      reg.copTasa = reg.tasa;
+    }
+    var editado = reg.editar;
+    $("reg-fecha").value = A.claveDia(editado ? editado.fecha : new Date());
     $("reg-desc").value = m ? m.descripcion : (o.desc || "");
-    $("reg-viajes").value = m && m.viajes ? m.viajes : "";
-    $("reg-nota").value = m && m.nota ? m.nota : "";
-    $("reg-estado").value = m && m.estado ? m.estado : "pagado";
+    $("reg-viajes").value = editado && m.viajes ? m.viajes : "";
+    $("reg-nota").value = editado && m.nota ? m.nota : "";
+    $("reg-estado").value = editado && m.estado ? m.estado : "pagado";
     $("reg-etiqueta").value = "";
     var freq = $("reg-frecuencia");
     freq.replaceChildren();
     Object.keys(A.FRECUENCIAS).forEach(function (f) { var op = el("option", null, A.FRECUENCIAS[f]); op.value = f; op.selected = f === "mensual"; freq.append(op); });
-    $("reg-bloque-estado").hidden = !(m && m.estado === "pendiente");
-    $("reg-bloque-nota").hidden = !(m && m.nota);
+    $("reg-bloque-estado").hidden = !(editado && m.estado === "pendiente");
+    $("reg-bloque-nota").hidden = !(editado && m.nota);
     $("reg-bloque-recurrente").hidden = !o.recurrente;
-    $("reg-btn-recurrente").hidden = !!m;
-    $("reg-otro-fila").hidden = !!m;
-    $("reg-borrar").hidden = !m;
+    $("reg-btn-recurrente").hidden = !!editado;
+    $("reg-otro-fila").hidden = !!editado;
+    if (o.repetir) $("reg-otro").checked = false;
+    $("reg-borrar").hidden = !editado;
     var sel = $("reg-cuenta");
     sel.replaceChildren();
     datos.cuentas.forEach(function (c) { var op = el("option", null, c.nombre); op.value = c.id; op.selected = m ? c.id === m.cuenta_id : false; sel.append(op); });

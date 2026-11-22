@@ -212,15 +212,6 @@
         <strong id="pago-valor"></strong>
         <span id="pago-nota" class="nota"></span>
       </article>
-      <article id="tarjeta-semana" class="tarjeta seguro" hidden>
-        <span class="etiqueta">🗓 Tu semana</span>
-        <strong id="semana-valor"></strong>
-        <span id="semana-nota" class="nota"></span>
-        <button type="button" id="semana-compartir" class="mini">📤 Compartir resumen</button>
-      </article>
-
-      <div id="widgets-inicio" class="widgets"></div>
-
       <div id="alertas-docs" class="alertas-docs"></div>
 
       <article id="tarjeta-jornada" class="tarjeta jornada" hidden>
@@ -276,6 +267,7 @@
         </div>
         <p id="rapido-mensaje" class="mensaje" role="status"></p>
         <button type="button" class="enlace enlace-manual" data-abrir="hoja-mas">+ Registrar a mano, con el asistente o chatear</button>
+        <button type="button" class="enlace enlace-manual" id="btn-repetir-ultimo" hidden>Repetir último gasto</button>
         <div id="frecuentes" class="frecuentes" aria-label="Registros comunes"></div>
       </form>
 
@@ -316,6 +308,8 @@
         <h2 class="titulo-tarjeta">Gastos de esta semana</h2>
         <div id="grafico-semana" class="grafico" role="img"></div>
       </article>
+
+      <div id="widgets-inicio" class="widgets"></div>
 
       <div class="seccion-cabecera">
         <h2>Movimientos</h2>

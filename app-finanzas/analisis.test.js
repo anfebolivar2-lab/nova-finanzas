@@ -577,3 +577,55 @@ test("meta sugerida: promedia tres meses completos, incluso los vacíos o con d�
   assert.deepStrictEqual(A.metaSugerida([], ahora), { monto: null, sobro: false });
   assert.deepStrictEqual(A.metaSugerida([m(30, 10, "ingreso", 2000)], ahora), { monto: null, sobro: true });
 });
+
+test("mayores gastos: ordena las compras del mes y calcula su parte del total", () => {
+  const chico = m(3, 9, "gasto", 20);
+  const mediano = m(10, 9, "gasto", 30, { descripcion: "Bus", categoria_id: 2 });
+  const mayor = m(1, 9, "gasto", "50", { descripcion: "Mercado", categoria_id: 1 });
+  const movs = [chico, mediano, mayor, m(30, 8, "gasto", 100), m(1, 10, "gasto", 100),
+    m(5, 9, "ingreso", 900), m(6, 9, "gasto", 800, { transferencia: "traslado" })];
+  assert.deepStrictEqual(A.mayoresGastos(movs, HOY, 2), [
+    { descripcion: "Mercado", categoria_id: 1, fecha: mayor.fecha, monto: 50, porcentaje: 50 },
+    { descripcion: "Bus", categoria_id: 2, fecha: mediano.fecha, monto: 30, porcentaje: 30 }
+  ]);
+  assert.strictEqual(movs[0], chico);
+  assert.deepStrictEqual(A.mayoresGastos(movs, HOY, 0), []);
+  assert.deepStrictEqual(A.mayoresGastos([], HOY), []);
+  assert.strictEqual(A.mayoresGastos(Array(6).fill(mayor), HOY).length, 5);
+});
+
+test("resumen semanal: lunes a hoy contra toda la semana anterior", () => {
+  const movs = [
+    m(18, 9, "gasto", 1000), m(19, 9, "gasto", 150), m(25, 9, "gasto", 50),
+    m(26, 9, "gasto", 50, { categoria_id: 5 }), m(29, 9, "gasto", 40, { categoria_id: 5, fecha: new Date(2026, 9, 29, 23).toISOString() }),
+    m(29, 9, "gasto", 60, { categoria_id: 2 }), m(30, 9, "gasto", 400),
+    m(28, 9, "ingreso", 500), m(28, 9, "gasto", 600, { transferencia: true })
+  ];
+  assert.deepStrictEqual(A.resumenSemana(movs, HOY), {
+    totalActual: 150, totalAnterior: 200, diferencia: -50, porcentaje: -25,
+    categoriaTop: { id: 5, total: 90 }, frase: "Llevas menos gasto que la semana pasada."
+  });
+});
+
+test("resumen semanal: semana sin gastos, base cero y empate", () => {
+  const anterior = m(25, 9, "gasto", 40);
+  const actual = m(26, 9, "gasto", 40);
+  const vacio = A.resumenSemana([], HOY);
+  assert.strictEqual(vacio.porcentaje, null);
+  assert.strictEqual(vacio.categoriaTop, null);
+  assert.strictEqual(A.resumenSemana([actual], HOY).porcentaje, null);
+  assert.strictEqual(A.resumenSemana([anterior], HOY).porcentaje, -100);
+  assert.strictEqual(A.resumenSemana([anterior, actual], HOY).porcentaje, 0);
+});
+
+test("último gasto: elige la fecha más reciente sin reordenar los movimientos", () => {
+  const antiguo = m(20, 9, "gasto", 100);
+  const ultimo = m(27, 9, "gasto", 15, { descripcion: "Café", categoria_id: 3, cuenta_id: 2 });
+  const ingreso = m(28, 9, "ingreso", 30);
+  const transferencia = m(29, 9, "gasto", 40, { transferencia: true });
+  const movs = [antiguo, ingreso, ultimo, transferencia, { tipo: "gasto", fecha: "inválida" }];
+  assert.strictEqual(A.ultimoGasto(movs), ultimo);
+  assert.strictEqual(movs[0], antiguo);
+  assert.strictEqual(A.ultimoGasto([ingreso, transferencia]), null);
+  assert.strictEqual(A.ultimoGasto([]), null);
+});
