@@ -127,3 +127,13 @@ test("detecta la moneda de una frase o de un mensaje del banco", () => {
   ];
   casos.forEach(([t, esperado]) => assert.strictEqual(M.detectar(t), esperado, t));
 });
+
+test("formatea la TRM guardada con dos decimales y su fecha de vigencia", () => {
+  assert.deepStrictEqual(M.formatoTRM({ valor: 3461.9, desde: "2026-11-21" }),
+    { texto: "Dólar hoy (TRM): $3.461,90", fecha: "21 nov 2026" });
+  assert.strictEqual(M.formatoTRM({ valor: 3999.999, desde: "2026-11-21" }).texto, "Dólar hoy (TRM): $4.000,00");
+  for (const trm of [null, {}, { valor: 0, desde: "2026-11-21" }, { valor: Infinity, desde: "2026-11-21" },
+    { valor: 3461.9, desde: "2026-02-30" }]) {
+    assert.strictEqual(M.formatoTRM(trm), null);
+  }
+});

@@ -105,7 +105,24 @@
     return r;
   }
 
-  var api = { periodo: periodo, categoriaNombrada: categoriaNombrada, serie: serie, tarjeta: tarjeta };
+  function preguntaGrafico(titulo, periodo, moneda, filas) {
+    function etiqueta(texto, limite) {
+      return String(texto || "").replace(/\s+/g, " ").trim().slice(0, limite);
+    }
+    var pregunta = "Explícame en palabras sencillas el gráfico «" + etiqueta(titulo, 100) +
+      "» (" + etiqueta(periodo, 100) + "). Cifras en " + etiqueta(moneda, 8) + ".";
+    var omitidas = "\nSe omitieron algunas filas para abreviar.";
+    for (var i = 0; i < filas.length; i++) {
+      var valores = filas[i].slice(1).filter(Number.isFinite);
+      if (!valores.length) continue;
+      var linea = "\n" + etiqueta(filas[i][0], 80) + ": " + valores.join(" / ");
+      if (pregunta.length + linea.length + omitidas.length > 1200) return pregunta + omitidas;
+      pregunta += linea;
+    }
+    return pregunta;
+  }
+
+  var api = { preguntaGrafico: preguntaGrafico, periodo: periodo, categoriaNombrada: categoriaNombrada, serie: serie, tarjeta: tarjeta };
   if (typeof module === "object" && module.exports) module.exports = api;
   else raiz.NovaRespuestas = api;
 })(typeof window !== "undefined" ? window : this);

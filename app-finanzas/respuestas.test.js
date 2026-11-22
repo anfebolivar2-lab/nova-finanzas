@@ -57,3 +57,21 @@ test("ingresos y preguntas que no son de números", () => {
   const vacia = R.tarjeta("¿cuánto gasté en transporte hoy?", { movimientos: movs, categorias }, HOY);
   assert.deepStrictEqual([vacia.total, vacia.acciones], [0, ["limite"]]);
 });
+
+test("arma la pregunta de un gráfico con el periodo, moneda y agregados válidos", () => {
+  const pregunta = R.preguntaGrafico("Gastos por categoría", "Octubre 2026", "COP", [
+    ["Total", 155], ["Comida", 155], ["Sin gasto", 0], ["Fila inválida", "Texto de una nota", NaN]
+  ]);
+  assert.strictEqual(pregunta, "Explícame en palabras sencillas el gráfico «Gastos por categoría» (Octubre 2026). Cifras en COP.\nTotal: 155\nComida: 155\nSin gasto: 0");
+});
+
+test("abrevia preguntas de gráficos largos sin cortar ninguna cifra", () => {
+  const filas = Array.from({ length: 100 }, (_, i) => ["Categoría " + i + " " + "x".repeat(150), i, i + 1]);
+  const pregunta = R.preguntaGrafico("Ingresos y gastos", "12 meses", "COP", filas);
+  assert.ok(pregunta.length <= 1200);
+  const lineas = pregunta.split("\n");
+  assert.match(lineas.shift(), /Ingresos y gastos.*12 meses/);
+  assert.strictEqual(lineas.pop(), "Se omitieron algunas filas para abreviar.");
+  assert.ok(lineas.length > 0 && lineas.length < filas.length);
+  lineas.forEach((linea, i) => assert.ok(linea.endsWith(": " + i + " / " + (i + 1))));
+});

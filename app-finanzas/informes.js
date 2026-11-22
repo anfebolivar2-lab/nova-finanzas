@@ -8,6 +8,31 @@
   var PALETA = ["#1f9d55", "#2a7de1", "#e67e22", "#8e44ad", "#d35400", "#16a085", "#c0392b", "#f1c40f", "#34495e", "#e84393", "#7f8c8d"];
   var MARCA = "NOVA · Creada por OPITA-DIGITAL · © 2026. Todos los derechos reservados.";
 
+  var A = typeof module === "object" && module.exports ? require("./analisis.js") : raiz.NovaAnalisis;
+
+  function estadoFinancieroMensual(movimientos, categorias, cuentasConSaldo, ahora) {
+    var mes = A.desplazar("mensual", ahora, 0), anterior = A.desplazar("mensual", ahora, -1);
+    var registrados = movimientos.filter(function (m) {
+      return !m.transferencia && m.estado !== "pendiente" && new Date(m.fecha) <= ahora;
+    });
+    var actuales = A.enRango(registrados, mes);
+    var totales = A.totales(actuales), previos = A.totales(A.enRango(registrados, anterior));
+    var nombres = new Map(categorias.map(function (c) { return [Number(c.id), c.nombre]; }));
+    return {
+      mes: A.nombrePeriodo("mensual", mes),
+      mesAnterior: A.nombrePeriodo("mensual", anterior),
+      resumen: [
+        { nombre: "Ingresos", actual: totales.ingresos, anterior: previos.ingresos, diferencia: totales.ingresos - previos.ingresos },
+        { nombre: "Gastos", actual: totales.gastos, anterior: previos.gastos, diferencia: totales.gastos - previos.gastos },
+        { nombre: "Ahorro", actual: totales.neto, anterior: previos.neto, diferencia: totales.neto - previos.neto }
+      ],
+      categorias: A.porCategoria(actuales).slice(0, 5).map(function (c) {
+        return { nombre: nombres.get(c.id) || "Sin categoría", total: c.total };
+      }),
+      cuentas: cuentasConSaldo.map(function (c) { return { nombre: c.nombre, saldo: c.saldo }; })
+    };
+  }
+
   // ---------- Utilidades ----------
   // Puntos de miles y coma decimal puestos a mano: salen igual en cualquier celular, tenga o no el idioma es-CO.
   function agrupar(texto) { return texto.replace(/\B(?=(\d{3})+(?!\d))/g, "."); }
@@ -709,5 +734,7 @@
     });
   }
 
-  raiz.NovaInformes = { pdf: generarPDF, excel: generarExcel, cop: cop, corto: corto };
+  var api = { pdf: generarPDF, excel: generarExcel, cop: cop, corto: corto, estadoFinancieroMensual: estadoFinancieroMensual };
+  if (typeof module === "object" && module.exports) module.exports = api;
+  else raiz.NovaInformes = api;
 })(typeof window !== "undefined" ? window : this);

@@ -93,6 +93,13 @@
     }).join("-");
     return fecha >= desde && fecha <= hasta ? { valor: valor, desde: desde, hasta: hasta } : null;
   }
+  function formatoTRM(trm) {
+    if (!trm || !Number.isFinite(trm.valor) || trm.valor <= 0 || !esFechaISO(trm.desde)) return null;
+    var partes = trm.valor.toFixed(2).split(".");
+    var monto = partes[0].replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+    return { texto: "Dólar hoy (TRM): $" + monto + "," + partes[1], fecha: fechaTasaTexto(trm.desde) };
+  }
+
   function aplicarTRM(rates, trm) {
     return trm ? Object.assign({}, rates, { COP: trm.valor }) : rates;
   }
@@ -191,7 +198,7 @@
   }
 
   var api = { detectar: detectar, MONEDAS: MONEDAS, BASE: BASE, info: info, buscar: buscar, tasaACOP: tasaACOP, aCOP: aCOP, formatoTasa: formatoTasa, leerTasa: leerTasa, formatoMonto: formatoMonto, convertir: convertir, formatoNumero: formatoNumero,
-    normalizarFawaz: normalizarFawaz, leerTRM: leerTRM, aplicarTRM: aplicarTRM, fechaTasaTexto: fechaTasaTexto };
+    normalizarFawaz: normalizarFawaz, leerTRM: leerTRM, formatoTRM: formatoTRM, aplicarTRM: aplicarTRM, fechaTasaTexto: fechaTasaTexto };
   if (typeof module === "object" && module.exports) module.exports = api;
   else raiz.NovaMonedas = api;
 })(typeof window !== "undefined" ? window : this);
