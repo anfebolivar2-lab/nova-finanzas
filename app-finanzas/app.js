@@ -4274,22 +4274,8 @@
   // ---------- Novedades ----------
   // Al actualizar NOVA sale una vez una pantalla con lo nuevo. Quien recién empieza ve el tutorial y no esto.
   // Para una próxima tanda de novedades: subir NOVEDADES_VERSION y cambiar las páginas.
-  var NOVEDADES_VERSION = 2;
-  var NOVEDADES = [
-    { iconos: ["🌐", "🧮", "📋", "🎯"], titulo: "NOVA IA busca en internet", texto: "Ahora puedes preguntarle precios y cosas de hoy: busca en internet y te responde con cuadros.",
-      puntos: [["🌐", "Precios de hoy", "«¿Cuánto cuesta el iPhone 18 Pro Max?»: busca en tiendas de Colombia y te muestra de dónde sacó el dato."],
-        ["🧮", "¿Me alcanza?", "«¿Me alcanza para comprar…?»: compara el precio con tu saldo y con lo que te sobra cada mes, y te dice en cuántos meses lo juntas."],
-        ["📋", "Cuadros fáciles de leer", "Pídele «hazme un cuadro» y te responde con una tabla. Y con un toque creas la meta de ahorro para esa compra."]] },
-    { titulo: "Tus pagos fijos y tu saldo", texto: "Tres ayudas para que lo que dice NOVA sea igual a lo que tienes de verdad.",
-      puntos: [["🔁", "Suscripciones y pagos fijos", "En Planes: Netflix, Spotify, arriendo… cuánto pagas al mes y al año, cuándo es el próximo cobro y si te subieron el precio."],
-        ["⚖️", "Cuadrar el saldo", "Toca «Saldo en cuentas» en Inicio, escribe cuánto tienes de verdad y NOVA anota la diferencia por ti."],
-        ["🌙", "¿Gastaste algo hoy?", "El aviso de la noche sale solo si ese día no anotaste nada, a la hora que elijas, con botones para anotar rápido."]] },
-    { titulo: "Anotar mensajes del banco", texto: "Comparte un mensaje de tu banco con NOVA y queda listo para anotar. Funciona en la app de Android.",
-      puntos: [["📤", "Compartir → NOVA", "Mantén presionado el mensaje de Nequi, Bancolombia, Nu, Davivienda… toca Compartir y elige NOVA."],
-        ["✅", "Tú decides", "Ves el valor, el comercio, la fecha y la cuenta. Tocas Anotar y Guardar; o Descartar. Nada se guarda solo."],
-        ["🔒", "Sin permisos raros", "NOVA no lee tus mensajes ni notificaciones: solo lo que tú compartes. También puedes pegar el mensaje en la caja de Inicio."]],
-      pie: "📍 Más info en Configuración → Mensajes del banco." }
-  ];
+  var NOVEDADES_VERSION = window.NovaNovedades.VERSION;
+  var NOVEDADES = window.NovaNovedades.PAGINAS;
   var paginaNovedad = 0;
   function novedadesSiHaceFalta() {
     if (leerLocal("nova-novedades", 0) >= NOVEDADES_VERSION) return;
