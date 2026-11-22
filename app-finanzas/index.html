@@ -149,6 +149,11 @@
   <div id="banner-red" class="banner-red" role="status" hidden></div>
   <p id="aviso-demo" class="aviso-demo" hidden>Modo demostración: los datos son de ejemplo y no se guardan.</p>
 
+  <aside id="aviso-version-minima" class="tarjeta aviso-config" role="status" hidden>
+    <strong>Hay una versión nueva de NOVA</strong>
+    <p id="aviso-version-notas" hidden></p>
+  </aside>
+
   <header class="cabecera">
     <div class="logo"><span>NOVA</span><svg class="chispa" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2l2.2 7.8L22 12l-7.8 2.2L12 22l-2.2-7.8L2 12l7.8-2.2z"/></svg></div>
     <button type="button" id="btn-espacio" class="chip-espacio" aria-haspopup="dialog" aria-label="Cambiar de espacio"><span id="esp-ico" class="esp-ico" aria-hidden="true">👛</span><span id="esp-nombre">Principal</span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></button>
@@ -1250,6 +1255,7 @@
       <button type="submit" id="sugerencia-enviar" class="primario">Enviar</button>
       <button type="button" class="enlace" data-cerrar>Cerrar</button>
     </form>
+    <div id="sugerencia-respuestas" class="dueno-lista" aria-live="polite"></div>
   </div>
 </div>
 <section id="pantalla-dueno" class="capa" hidden>
@@ -1257,6 +1263,37 @@
   <p class="nota">Solo tu cuenta puede ver esto. <span id="dueno-hora"></span></p>
   <p class="mensaje" id="dueno-mensaje" role="status"></p>
   <label class="dueno-interruptor"><input id="dueno-ocultar-prueba" type="checkbox"> Ocultar cuentas de prueba</label>
+  <article class="tarjeta formulario dueno-seccion">
+    <h2 class="titulo-tarjeta">Estado</h2>
+    <ul id="dueno-servicios" class="lista-banco"></ul>
+    <div id="dueno-corrida" class="dueno-lista"></div>
+    <div id="dueno-lanzamiento" class="dueno-lista"></div>
+  </article>
+  <article class="tarjeta formulario dueno-seccion">
+    <h2 class="titulo-tarjeta">Ajustes</h2>
+    <div id="dueno-config" class="dueno-lista" hidden>
+      <form class="formulario" data-clave="ia_pausada">
+        <label class="dueno-interruptor"><input id="dueno-config-ia_pausada" type="checkbox" role="switch"> Pausar la IA</label>
+        <button type="submit" class="mini">Guardar</button>
+      </form>
+      <form class="formulario" data-clave="ia_mensaje">
+        <label for="dueno-config-ia_mensaje">Mensaje de mantenimiento</label>
+        <textarea id="dueno-config-ia_mensaje" rows="2" maxlength="300"></textarea>
+        <button type="submit" class="mini">Guardar</button>
+      </form>
+      <form class="formulario" data-clave="version_minima">
+        <label for="dueno-config-version_minima">Versión mínima</label>
+        <input id="dueno-config-version_minima" type="text" maxlength="20" placeholder="1.72">
+        <button type="submit" class="mini">Guardar</button>
+      </form>
+      <form class="formulario" data-clave="notas_version">
+        <label for="dueno-config-notas_version">Notas de la versión</label>
+        <textarea id="dueno-config-notas_version" rows="3" maxlength="1000"></textarea>
+        <button type="submit" class="mini">Guardar</button>
+      </form>
+    </div>
+    <p id="dueno-config-mensaje" class="mensaje" role="status"></p>
+  </article>
   <details class="tarjeta dueno-seccion" open>
     <summary>Crecimiento</summary>
     <div id="dueno-nuevos" class="dueno-kpis"></div>
@@ -1333,6 +1370,8 @@
       <select id="dueno-aviso-audiencia">
         <option value="todos">Todos</option><option value="android">Android</option><option value="web">Web</option>
       </select>
+      <label for="dueno-aviso-desde">Mostrar desde (opcional)</label>
+      <input id="dueno-aviso-desde" type="datetime-local">
       <label for="dueno-aviso-hasta">Último día visible (opcional)</label>
       <input id="dueno-aviso-hasta" type="date">
       <p id="dueno-aviso-mensaje" class="mensaje" role="status"></p>
@@ -1483,6 +1522,7 @@
     <button type="button" id="chat-voz" class="icono-btn redondo" aria-label="Hablar" hidden><svg viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg></button>
     <button type="submit" class="icono-btn redondo primario" aria-label="Preguntar"><svg viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></svg></button>
   </form>
+  <p id="chat-mantenimiento" class="mensaje error aviso-config-texto" role="status" hidden></p>
   <p id="chat-mensaje" class="mensaje" role="status"></p>
 </section>
 
