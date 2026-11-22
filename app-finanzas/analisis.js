@@ -803,6 +803,97 @@
     });
   }
 
+  function movimientosHasta(movs, ahora) {
+    return movimientosReales(movs).filter(function (m) { return m.fecha && new Date(m.fecha) <= ahora; });
+  }
+
+  function periodosRecientes(ciclo, ahora, cantidad) {
+    return Array.from({ length: cantidad }, function (_, i) {
+      return desplazar(ciclo, ahora, i - cantidad + 1);
+    });
+  }
+
+  function balancePorPeriodo(movs, ahora, ciclo, cantidad) {
+    var reales = movimientosHasta(movs, ahora);
+    return periodosRecientes(ciclo, ahora, cantidad).map(function (rango) {
+      return Object.assign({ desde: rango.desde, hasta: rango.hasta }, totales(enRango(reales, rango)));
+    });
+  }
+
+  function ingresosGastos12(movs, ahora) {
+    return balancePorPeriodo(movs, ahora, "mensual", 12);
+  }
+
+  function tendenciaCategorias(movs, ahora, n) {
+    var meses = periodosRecientes("mensual", ahora, 6);
+    var gastos = enRango(movimientosHasta(movs, ahora).filter(esGasto), {
+      desde: meses[0].desde, hasta: meses[5].hasta
+    });
+    var porMes = meses.map(function (mes) {
+      return new Map(porCategoria(enRango(gastos, mes)).map(function (fila) { return [fila.id, fila.total]; }));
+    });
+    return porCategoria(gastos).slice(0, n === undefined ? 5 : Math.max(0, n)).map(function (fila) {
+      var serie = meses.map(function (mes, i) { return { desde: mes.desde, hasta: mes.hasta, total: porMes[i].get(fila.id) || 0 }; });
+      var anterior = serie[4].total, diferencia = serie[5].total - anterior;
+      return { id: fila.id, total: fila.total, meses: serie, diferencia: diferencia,
+        porcentaje: anterior > 0 ? diferencia / anterior * 100 : null };
+    });
+  }
+
+  function rankingComercios(movs, ahora, n) {
+    var desde = inicioDia(ahora), grupos = new Map();
+    desde.setDate(desde.getDate() - 89);
+    movimientosHasta(movs, ahora).forEach(function (m) {
+      if (!esGasto(m) || new Date(m.fecha) < desde) return;
+      var nombre = sinTildes(m.descripcion).trim().replace(/[\s#-]*\d+$/, "").replace(/\s+/g, " ").trim();
+      if (!grupos.has(nombre)) grupos.set(nombre, { nombre: nombre, total: 0, compras: 0 });
+      var comercio = grupos.get(nombre);
+      comercio.total += num(m.monto);
+      comercio.compras++;
+    });
+    return Array.from(grupos.values()).sort(function (a, b) { return b.total - a.total; })
+      .slice(0, n === undefined ? 8 : Math.max(0, n));
+  }
+
+  function comparaAnios(movs, ahora) {
+    var anio = new Date(ahora).getFullYear(), anterior = anio - 1;
+    var gastos = movimientosHasta(movs, ahora).filter(esGasto);
+    var meses = MESES_CORTOS.map(function (etiqueta, mes) {
+      function gastoDelMes(a) {
+        return totales(enRango(gastos, Periodos.periodo("mensual", new Date(a, mes, 1)))).gastos;
+      }
+      return { etiqueta: etiqueta, actual: gastoDelMes(anio), anterior: gastoDelMes(anterior) };
+    });
+    var totalActual = meses.reduce(function (suma, mes) { return suma + mes.actual; }, 0);
+    var totalAnterior = meses.reduce(function (suma, mes) { return suma + mes.anterior; }, 0);
+    return { anio: anio, anioAnterior: anterior, meses: meses, totalActual: totalActual,
+      totalAnterior: totalAnterior, diferencia: totalActual - totalAnterior };
+  }
+
+  function flujoSemanal(movs, ahora, semanas) {
+    return balancePorPeriodo(movs, ahora, "semanal", semanas === undefined ? 8 : semanas);
+  }
+
+  function diaMasCaro(movs, ahora) {
+    var gastos = movimientosHasta(movs, ahora).filter(esGasto);
+    var fecha = new Date(ahora);
+    var dia = calendarioMes(gastos, fecha.getFullYear(), fecha.getMonth(), fecha).diaTop;
+    if (!dia) return null;
+    return { fecha: new Date(fecha.getFullYear(), fecha.getMonth(), dia.dia), total: dia.gastos,
+      gastos: dia.movimientos.sort(function (a, b) { return num(b.monto) - num(a.monto); }).slice(0, 3) };
+  }
+
+  // Recibe los saldos por id y el resumen de deudas con los abonos ya descontados.
+  function patrimonioNeto(cuentas, saldos, deudas) {
+    var activos = 0, pasivos = num(deudas.debo);
+    cuentas.forEach(function (cuenta) {
+      var saldo = num(saldos[cuenta.id]);
+      activos += Math.max(0, saldo);
+      pasivos += Math.max(0, -saldo);
+    });
+    return { activos: activos, pasivos: pasivos, neto: activos - pasivos };
+  }
+
   function resumenMes(movs, ahora) {
     var enCurso = ahora.getDate() >= 25;
     var rango = desplazar("mensual", ahora, enCurso ? 0 : -1);
@@ -935,6 +1026,8 @@
   }
 
   var api = {
+    ingresosGastos12: ingresosGastos12, tendenciaCategorias: tendenciaCategorias, rankingComercios: rankingComercios,
+    comparaAnios: comparaAnios, flujoSemanal: flujoSemanal, diaMasCaro: diaMasCaro, patrimonioNeto: patrimonioNeto,
     sumarMontoRapido: sumarMontoRapido, sugerirDescripciones: sugerirDescripciones,
     promedioDia: promedioDia, regla503020: regla503020, gastosInusuales: gastosInusuales,
     proximosCortes: proximosCortes, preguntasSugeridas: preguntasSugeridas,
