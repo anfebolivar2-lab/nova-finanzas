@@ -823,6 +823,12 @@
       <button type="button" id="reg-borrar-digito" class="icono-btn" data-tecla="borrar" aria-label="Borrar el último número"><svg viewBox="0 0 24 24"><path d="M21 5H9l-6 7 6 7h12zM13 9l4 6M17 9l-4 6"/></svg></button>
     </div>
     <span id="reg-resultado" class="nota centro"></span>
+    <div class="montos-rapidos" id="reg-montos-rapidos" role="group" aria-label="Sumar al valor">
+      <button type="button" data-monto-rapido="1000">+1.000</button>
+      <button type="button" data-monto-rapido="5000">+5.000</button>
+      <button type="button" data-monto-rapido="10000">+10.000</button>
+      <button type="button" data-monto-rapido="50000">+50.000</button>
+    </div>
     <button type="button" id="reg-moneda" class="chip-opcion moneda-boton" aria-label="Cambiar la moneda"><span id="reg-moneda-bandera">🇨🇴</span><span id="reg-moneda-codigo">COP</span><span aria-hidden="true">▾</span></button>
     <div id="reg-bloque-moneda" class="tarjeta formulario moneda-bloque" hidden>
       <strong id="reg-conversion"></strong>
@@ -881,6 +887,7 @@
     <label class="casilla" id="reg-otro-fila"><input type="checkbox" id="reg-otro"> Guardar y agregar otro</label>
     <p class="mensaje" id="reg-mensaje" role="status"></p>
     <button type="submit" class="primario" id="reg-guardar">Guardar</button>
+    <button type="button" id="reg-duplicar" hidden>Duplicar</button>
     <button type="button" class="peligro" id="reg-borrar" hidden>Borrar movimiento</button>
   </form>
 </section>

@@ -682,3 +682,63 @@ test("preguntas sugeridas: ignora lo pendiente, futuro o transferido", () => {
     m(1, 9, "ingreso", 6000, { transferencia: true })
   ], [], HOY), A.preguntasSugeridas([], [], HOY));
 });
+
+test("montos rápidos suman al resultado y respetan las operaciones", () => {
+  assert.strictEqual(A.sumarMontoRapido("", 1000), "1000");
+  assert.strictEqual(A.sumarMontoRapido("2000×3", 5000), "2000×3+5000");
+  assert.strictEqual(A.evaluar(A.sumarMontoRapido("2000×3+", 5000)), 11000);
+  assert.strictEqual(A.evaluar(A.sumarMontoRapido("10,5", 1000)), 1010.5);
+  let expr = "";
+  for (let i = 0; i < 8; i++) expr = A.sumarMontoRapido(expr, 50000);
+  assert.strictEqual(A.evaluar(expr), 400000);
+});
+
+test("las sugerencias cuentan variantes, filtran por prefijo y limitan resultados", () => {
+  const movs = ["Café", "Café con leche", " CAFÉ ", "cafe", "Cafetera", "Tinto con café", "constructor", ""]
+    .map(descripcion => ({ descripcion }));
+  assert.deepStrictEqual(A.sugerirDescripciones(movs, "CAFE", 2), ["Café", "Café con leche"]);
+  assert.deepStrictEqual(A.sugerirDescripciones(movs, "cons", 8), ["constructor"]);
+  assert.deepStrictEqual(A.sugerirDescripciones(movs, "té", 8), []);
+});
+
+test("promedio diario usa los días transcurridos y los tres meses completos", () => {
+  const ahora = new Date(2026, 3, 10, 15);
+  const movs = [
+    m(5, 0, "gasto", 9000), m(10, 3, "gasto", 1150),
+    m(11, 3, "gasto", 9000), m(4, 3, "gasto", 9000, { transferencia: true }),
+    m(2, 3, "ingreso", 9000)
+  ];
+  assert.deepStrictEqual(A.promedioDia(movs, ahora), { actual: 115, anterior: 100, semaforo: "amarillo" });
+  assert.strictEqual(A.promedioDia(movs.concat(m(10, 3, "gasto", 1)), ahora).semaforo, "rojo");
+  assert.deepStrictEqual(A.promedioDia(movs.slice(0, 1), ahora), { actual: 0, anterior: 100, semaforo: "verde" });
+  assert.deepStrictEqual(A.promedioDia([], ahora), { actual: 0, anterior: 0, semaforo: "verde" });
+});
+
+test("regla 50/30/20 clasifica por nombre y calcula los porcentajes del periodo", () => {
+  const rango = { desde: new Date(2026, 9, 1), hasta: new Date(2026, 10, 1) };
+  const categorias = [
+    { id: 1, nombre: "Educación" }, { id: 2, nombre: "Ropa" }, { id: 3, nombre: "Mercado" }
+  ];
+  const movs = [
+    m(2, 9, "ingreso", 1000), m(2, 9, "gasto", 300, { categoria_id: 1 }),
+    m(3, 9, "gasto", 200, { categoria_id: 3 }), m(4, 9, "gasto", 300, { categoria_id: 2 }),
+    m(5, 9, "gasto", 400, { transferencia: true }), m(1, 10, "gasto", 500)
+  ];
+  assert.deepStrictEqual(A.regla503020(movs, categorias, rango), { necesidades: 50, deseos: 30, ahorro: 20 });
+  assert.strictEqual(A.regla503020(movs.concat(m(6, 9, "gasto", 1000)), categorias, rango).ahorro, 0);
+  assert.deepStrictEqual(A.regla503020(movs.slice(1), categorias, rango), { necesidades: null, deseos: null, ahorro: null });
+});
+
+test("gastos inusuales requieren historial y superar los dos umbrales", () => {
+  const ahora = new Date(2026, 9, 10, 15);
+  const gasto = (dia, mes, monto, categoria_id, extra) => m(dia, mes, "gasto", monto, { categoria_id, ...extra });
+  const movs = [
+    gasto(3, 6, 150000, 1), gasto(3, 9, 150000, 1),
+    gasto(4, 7, 180000, 2), gasto(4, 9, 120000, 2),
+    gasto(4, 8, 30000, 3), gasto(4, 9, 60000, 3),
+    gasto(4, 9, 100000, 4), gasto(4, 9, 90000, 2, { transferencia: true }),
+    gasto(15, 9, 100000, 2), gasto(4, 5, 600000, 1)
+  ];
+  assert.deepStrictEqual(A.gastosInusuales(movs, ahora), [{ categoriaId: 1, veces: 3 }]);
+  assert.deepStrictEqual(A.gastosInusuales([], ahora), []);
+});

@@ -861,7 +861,82 @@
     ]).slice(0, 3);
   }
 
+  function sumarMontoRapido(expr, monto) {
+    var base = String(expr || "").replace(/[+−×÷-]$/, "").replace(/,$/, "");
+    var nueva = base ? base + "+" + monto : String(monto);
+    var total = evaluar(nueva);
+    if (!Number.isFinite(total)) return expr;
+    if (nueva.replace(/\D/g, "").length <= 15) return nueva;
+    var resumida = String(total).replace(".", ",");
+    return resumida.replace(/\D/g, "").length <= 15 && Number.isFinite(evaluar(resumida)) ? resumida : expr;
+  }
+
+  function sugerirDescripciones(movs, texto, n) {
+    var prefijo = sinTildes(String(texto || "").trim());
+    var usadas = new Map();
+    movs.forEach(function (m) {
+      var desc = String(m.descripcion || "").trim();
+      var clave = sinTildes(desc);
+      if (!clave || !clave.startsWith(prefijo)) return;
+      if (!usadas.has(clave)) usadas.set(clave, { desc: desc, veces: 0 });
+      usadas.get(clave).veces++;
+    });
+    return Array.from(usadas.values()).sort(function (a, b) {
+      return b.veces - a.veces || a.desc.localeCompare(b.desc, "es");
+    }).slice(0, n).map(function (d) { return d.desc; });
+  }
+
+  function gastosDeCuatroMeses(movs, ahora) {
+    var mes = Periodos.periodo("mensual", ahora);
+    var anteriores = { desde: desplazar("mensual", ahora, -3).desde, hasta: mes.desde };
+    var gastos = movimientosReales(movs).filter(function (m) { return m.tipo === "gasto"; });
+    return {
+      actual: enRango(gastos, mes).filter(function (m) { return new Date(m.fecha) <= ahora; }),
+      anteriores: enRango(gastos, anteriores),
+      diasAnteriores: Math.round((anteriores.hasta - anteriores.desde) / DIA)
+    };
+  }
+
+  function promedioDia(movs, ahora) {
+    var gastos = gastosDeCuatroMeses(movs, ahora);
+    var actual = totales(gastos.actual).gastos / ahora.getDate();
+    var anterior = totales(gastos.anteriores).gastos / gastos.diasAnteriores;
+    var semaforo = actual <= anterior ? "verde" : actual * 100 <= anterior * 115 ? "amarillo" : "rojo";
+    return { actual: actual, anterior: anterior, semaforo: semaforo };
+  }
+
+  function regla503020(movs, categorias, rango) {
+    var nombres = new Map(categorias.map(function (c) { return [c.id, sinTildes(c.nombre).trim()]; }));
+    var esenciales = ["hogar", "comida", "mercado", "comida/mercado", "transporte", "salud", "servicios", "educacion", "deudas"];
+    var ingresos = 0, necesidades = 0, deseos = 0;
+    enRango(movimientosReales(movs), rango).forEach(function (m) {
+      if (m.tipo === "ingreso") ingresos += num(m.monto);
+      else if (esenciales.indexOf(nombres.get(m.categoria_id)) >= 0) necesidades += num(m.monto);
+      else deseos += num(m.monto);
+    });
+    function porcentaje(monto) { return ingresos > 0 ? monto / ingresos * 100 : null; }
+    return {
+      necesidades: porcentaje(necesidades),
+      deseos: porcentaje(deseos),
+      ahorro: porcentaje(Math.max(0, ingresos - necesidades - deseos))
+    };
+  }
+
+  function gastosInusuales(movs, ahora) {
+    var gastos = gastosDeCuatroMeses(movs, ahora);
+    var anteriores = new Map(porCategoria(gastos.anteriores).map(function (c) { return [c.id, c.total / 3]; }));
+    return porCategoria(gastos.actual).reduce(function (alertas, c) {
+      var promedio = anteriores.get(c.id);
+      if (promedio > 0 && c.total > 2 * promedio && c.total - promedio > 50000) {
+        alertas.push({ categoriaId: c.id, veces: c.total / promedio });
+      }
+      return alertas;
+    }, []);
+  }
+
   var api = {
+    sumarMontoRapido: sumarMontoRapido, sugerirDescripciones: sugerirDescripciones,
+    promedioDia: promedioDia, regla503020: regla503020, gastosInusuales: gastosInusuales,
     proximosCortes: proximosCortes, preguntasSugeridas: preguntasSugeridas,
     cuentasBajas: cuentasBajas, avisosLimite: avisosLimite, resumenMes: resumenMes, metaSugerida: metaSugerida,
     calorHoraDia: calorHoraDia, mayoresGastos: mayoresGastos, resumenSemana: resumenSemana, ultimoGasto: ultimoGasto,
