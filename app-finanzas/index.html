@@ -347,6 +347,20 @@
       <ul id="lista-grupos" class="lista-simple"></ul>
       <div class="seccion-cabecera"><h2>Suscripciones y pagos fijos</h2></div>
       <div id="suscripciones" class="tarjeta suscripciones"></div>
+      <article class="tarjeta formulario">
+        <h2 class="titulo-tarjeta">Inversiones</h2>
+        <p class="nota">Tus inversiones y bienes se guardan en este dispositivo.</p>
+        <p id="inversiones-total" class="nota"></p>
+        <ul id="lista-inversiones" class="lista-local"></ul>
+        <button type="button" class="primario" id="agregar-inversion">Agregar inversión</button>
+        <p id="inversiones-mensaje" class="mensaje" role="status"></p>
+      </article>
+      <article class="tarjeta formulario">
+        <h2 class="titulo-tarjeta">Bienes</h2>
+        <ul id="lista-bienes" class="lista-local"></ul>
+        <button type="button" class="primario" id="agregar-bien">Agregar bien</button>
+        <p id="bienes-mensaje" class="mensaje" role="status"></p>
+      </article>
       <article class="tarjeta formulario" id="lista-compras">
         <h2 class="titulo-tarjeta">Lista de compras</h2>
         <form id="form-compras-presupuesto" class="formulario">
@@ -1458,6 +1472,7 @@
 <script src="novedades.js"></script>
 <script src="respaldo.js"></script>
 <script src="calculadoras.js"></script>
+<script src="inversiones.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

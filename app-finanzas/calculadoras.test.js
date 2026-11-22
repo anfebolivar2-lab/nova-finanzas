@@ -221,3 +221,50 @@ test("compra de cartera: ahorro, costos que eliminan el ahorro y empate", () => 
     assert.equal(C.compraCartera(...datos), null);
   }
 });
+
+test("calcula el rendimiento de CDT efectivo anual y la retención solo sobre los intereses", () => {
+  const anual = C.rendimientoCdt(1000000, 10, 365);
+  cerca(anual.bruto, 100000);
+  cerca(anual.retencion, 4000);
+  cerca(anual.neto, 96000);
+  const parcial = C.rendimientoCdt(1000000, 12, 90, 5);
+  cerca(parcial.bruto, 1000000 * (1.12 ** (90 / 365) - 1));
+  cerca(parcial.retencion, parcial.bruto * 0.05);
+  cerca(parcial.neto, parcial.bruto * 0.95);
+  assert.deepEqual(C.rendimientoCdt(100, 0, 30, 0), { bruto: 0, retencion: 0, neto: 0 });
+  assert.equal(C.rendimientoCdt(100, 7, 30, 100).neto, 0);
+  for (const args of [[0, 10, 30, 4], [100, -1, 30, 4], [100, 10, 0, 4], [100, 10, 1.5, 4],
+    [100, 10, 30, -1], [100, 10, 30, 101], [Infinity, 10, 30, 4], [100, 10, 1e9, 4]]) {
+    assert.equal(C.rendimientoCdt(...args), null);
+  }
+});
+
+test("compara dos o tres CDT por ganancia neta y conserva los empates", () => {
+  const a = Object.freeze({ monto: 1000, tasaEaPct: 12, dias: 365, retencionPct: 50 });
+  const b = Object.freeze({ monto: 1000, tasaEaPct: 10, dias: 365, retencionPct: 0 });
+  const c = Object.freeze({ monto: 1000, tasaEaPct: 11, dias: 365, retencionPct: 0 });
+  const dos = C.compararCdt(Object.freeze([a, b]));
+  assert.deepEqual(dos.mejores, [1]);
+  assert.ok(dos.resultados[0].bruto > dos.resultados[1].bruto);
+  assert.deepEqual(C.compararCdt([a, b, c]).mejores, [2]);
+  assert.deepEqual(C.compararCdt([a, b, b]).mejores, [1, 2]);
+  for (const ofertas of [null, [a], [a, b, c, a], [a, null], [a, {}]]) {
+    assert.equal(C.compararCdt(ofertas), null);
+  }
+});
+
+test("estima el ahorro de aportes con el menor tope y nunca excede el aporte", () => {
+  assert.deepEqual(C.ahorroTributarioAporte(100000000, 40000000, 52374, 20),
+    { limite: 30000000, montoExento: 30000000, ahorro: 6000000 });
+  assert.deepEqual(C.ahorroTributarioAporte(1000000000, 500000000, 52374, 25),
+    { limite: 199021200, montoExento: 199021200, ahorro: 49755300 });
+  assert.deepEqual(C.ahorroTributarioAporte(100000000, 5000000, 50000, 10),
+    { limite: 30000000, montoExento: 5000000, ahorro: 500000 });
+  assert.deepEqual(C.ahorroTributarioAporte(1000, 800, 1, 50, 15, 100),
+    { limite: 100, montoExento: 100, ahorro: 50 });
+  assert.deepEqual(C.ahorroTributarioAporte(0, 0, 52374, 0), { limite: 0, montoExento: 0, ahorro: 0 });
+  for (const args of [[-1, 10, 1, 10], [100, -1, 1, 10], [100, 10, 0, 10], [100, 10, 1, 101],
+    [100, 10, 1, NaN], [100, 10, 1, 10, 101], [100, 10, 1, 10, 20, -1]]) {
+    assert.equal(C.ahorroTributarioAporte(...args), null);
+  }
+});

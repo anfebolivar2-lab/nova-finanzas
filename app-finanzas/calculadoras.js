@@ -23,6 +23,10 @@
     umbralSolidaridad: { valor: 4, anio: 2003 }, // Ley 797, art. 7
     solidaridad: { valor: 0.01, anio: 2003 },
     gmf: { valor: 0.004, anio: 2014 }, // Estatuto Tributario, art. 872
+    retencionCdt: { valor: 4 }, // Valor inicial de la simulación, editable según el banco
+    uvt: { valor: 52374, anio: 2026 }, // Resolución DIAN 000238 de 2025
+    topeAportePct: { valor: 30, referencia: "Estatuto Tributario, arts. 126-1 y 126-4" },
+    topeAporteUvt: { valor: 3800, referencia: "Estatuto Tributario, arts. 126-1 y 126-4" },
     retiroAnual: { valor: 0.04, anio: 1994 } // Regla de ahorro, no es una norma legal
   };
 
@@ -194,11 +198,46 @@
     return { totalActual: actual.total, totalNuevo: totalNuevo, ahorro: ahorro, conviene: ahorro > 0 };
   }
 
+  function rendimientoCdt(monto, tasaEaPct, dias, retencionPct) {
+    if (retencionPct === undefined) retencionPct = CONSTANTES.retencionCdt.valor;
+    if (!noNegativos([monto, tasaEaPct, retencionPct]) || monto === 0 ||
+        !Number.isInteger(dias) || dias <= 0 || retencionPct > 100) return null;
+    var bruto = monto * Math.expm1(Math.log1p(tasaEaPct / 100) * dias / 365);
+    if (!Number.isFinite(bruto)) return null;
+    var retencion = bruto * (retencionPct / 100);
+    return { bruto: bruto, retencion: retencion, neto: bruto - retencion };
+  }
+
+  function compararCdt(ofertas) {
+    if (!Array.isArray(ofertas) || ofertas.length < 2 || ofertas.length > 3) return null;
+    var resultados = Array.from(ofertas, function (oferta) {
+      return oferta && rendimientoCdt(oferta.monto, oferta.tasaEaPct, oferta.dias, oferta.retencionPct);
+    });
+    if (resultados.some(function (r) { return !r; })) return null;
+    var maximo = Math.max.apply(null, resultados.map(function (r) { return r.neto; }));
+    var mejores = [];
+    resultados.forEach(function (r, i) {
+      if (Math.abs(maximo - r.neto) <= Number.EPSILON * maximo * 4) mejores.push(i);
+    });
+    return { resultados: resultados, mejores: mejores };
+  }
+
+  function ahorroTributarioAporte(ingreso, aporte, uvt, tarifaPct, topePct, topeUvt) {
+    if (topePct === undefined) topePct = CONSTANTES.topeAportePct.valor;
+    if (topeUvt === undefined) topeUvt = CONSTANTES.topeAporteUvt.valor;
+    if (!noNegativos([ingreso, aporte, uvt, tarifaPct, topePct, topeUvt]) ||
+        uvt === 0 || tarifaPct > 100 || topePct > 100) return null;
+    var limite = Math.min(ingreso * (topePct / 100), uvt * topeUvt);
+    var montoExento = Math.min(aporte, limite);
+    return { limite: limite, montoExento: montoExento, ahorro: montoExento * (tarifaPct / 100) };
+  }
+
   var api = { CONSTANTES: CONSTANTES, MAX_ANIOS: MAX_ANIOS, diasComerciales: diasComerciales, liquidacion: liquidacion,
     recargoFestivo: recargoFestivo, horasExtra: horasExtra, salarioNeto: salarioNeto, gmf: gmf,
     gmfMovimientos: gmfMovimientos, interesCompuesto: interesCompuesto, reglaCuatro: reglaCuatro,
     horasDeTrabajo: horasDeTrabajo, cuotaCredito: cuotaCredito, compararCreditos: compararCreditos,
-    creditoVivienda: creditoVivienda, compraCartera: compraCartera };
+    creditoVivienda: creditoVivienda, compraCartera: compraCartera,
+    rendimientoCdt: rendimientoCdt, compararCdt: compararCdt, ahorroTributarioAporte: ahorroTributarioAporte };
   if (typeof module === "object" && module.exports) module.exports = api;
   else raiz.NovaCalculadoras = api;
 })(typeof window !== "undefined" ? window : this);
