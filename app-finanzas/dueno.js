@@ -57,7 +57,73 @@
     return conteos;
   }
 
-  var api = { filtrarPersonas: filtrarPersonas, contarFiltros: contarFiltros };
+  function cantidad(valor) {
+    var n = Number(valor);
+    return Number.isSafeInteger(n) && n > 0 ? n : 0;
+  }
+
+  function ultimos30Dias(porDia, ahora) {
+    var fin = new Date(ahora);
+    fin.setUTCHours(0, 0, 0, 0);
+    return Array.from({ length: 30 }, function (_, i) {
+      var dia = new Date(fin.getTime() - (29 - i) * DIA).toISOString().slice(0, 10);
+      return { dia: dia, total: cantidad(porDia && porDia[dia]) };
+    });
+  }
+
+  function barrasVersiones(versiones) {
+    return Object.keys(versiones || {}).map(function (version) {
+      return { version: version || "Sin versión", total: cantidad(versiones[version]) };
+    }).sort(function (a, b) { return b.total - a.total || compararCorreos(a.version, b.version); });
+  }
+
+  function registrosParaMeta(nuevos30, dias) {
+    if (nuevos30 != null) return cantidad(nuevos30);
+    return dias.slice(-30).reduce(function (total, dia) { return total + cantidad(dia.registros); }, 0);
+  }
+
+  function porcentaje(actual, meta) {
+    return cantidad(meta) ? Math.min(100, Math.round(100 * cantidad(actual) / cantidad(meta))) : 0;
+  }
+
+  function validarAviso(titulo, mensaje, audiencia, fechaFinal, ahora) {
+    titulo = titulo.trim();
+    mensaje = mensaje.trim();
+    if (!titulo || Array.from(titulo).length > 80 || !mensaje || Array.from(mensaje).length > 500 ||
+        !["todos", "android", "web"].includes(audiencia)) return null;
+    var hasta = null;
+    if (fechaFinal) {
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(fechaFinal)) return null;
+      var fechaUtc = new Date(fechaFinal + "T00:00:00Z");
+      if (!Number.isFinite(fechaUtc.getTime()) || fechaUtc.toISOString().slice(0, 10) !== fechaFinal) return null;
+      var fin = new Date(fechaFinal + "T00:00:00");
+      fin.setDate(fin.getDate() + 1);
+      if (fin.getTime() <= ahora) return null;
+      hasta = fin.toISOString();
+    }
+    return { accion: "aviso_crear", titulo: titulo, mensaje: mensaje, audiencia: audiencia, hasta: hasta };
+  }
+
+  function sugerenciasPendientes(sugerencias) {
+    return sugerencias.filter(function (s) { return !s.atendida; }).length;
+  }
+
+  function recientes(lista, limite) {
+    return (Array.isArray(lista) ? lista : []).filter(Boolean).sort(function (a, b) {
+      return fecha(b.creado_en) - fecha(a.creado_en) || 0;
+    }).slice(0, limite);
+  }
+
+  function recortarTexto(texto, limite) {
+    var letras = Array.from(String(texto || ""));
+    return letras.length <= limite ? letras.join("") : letras.slice(0, limite - 1).join("") + "…";
+  }
+
+  var api = {
+    filtrarPersonas: filtrarPersonas, contarFiltros: contarFiltros, ultimos30Dias: ultimos30Dias,
+    barrasVersiones: barrasVersiones, cantidad: cantidad, registrosParaMeta: registrosParaMeta, porcentaje: porcentaje, validarAviso: validarAviso,
+    sugerenciasPendientes: sugerenciasPendientes, recientes: recientes, recortarTexto: recortarTexto
+  };
   if (typeof module === "object" && module.exports) module.exports = api;
   else raiz.NovaDueno = api;
 })(typeof window !== "undefined" ? window : this);

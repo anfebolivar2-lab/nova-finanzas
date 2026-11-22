@@ -1003,3 +1003,18 @@ button.mini { padding: 6px 12px; border-radius: 999px; font-size: .8rem; }
 
 #pantalla-registro.valores-ocultos :is(#reg-monto-texto, #reg-orig, #reg-cop) { -webkit-text-security: disc; }
 #pantalla-registro.valores-ocultos :is(#reg-resultado, #reg-conversion) { visibility: hidden; }
+
+/* Panel del dueño y avisos de NOVA */
+#pantalla-dueno > *, #pantalla-dueno .banco-item, #pantalla-dueno .formulario > * {
+  min-width: 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+#pantalla-dueno .dueno-ejes { gap: 6px; }
+#pantalla-dueno .dueno-ejes span:nth-child(2) { text-align: center; }
+.dueno-lista, .dueno-detalle { display: grid; gap: 8px; }
+.dueno-detalle { justify-items: start; }
+.dueno-detalle p, .aviso-dueno-texto { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+#pantalla-dueno progress { width: 100%; accent-color: var(--accent); }
+#sugerencia-texto, #dueno-aviso-texto { width: 100%; resize: vertical; }
+#sugerencia-contador { text-align: right; }
