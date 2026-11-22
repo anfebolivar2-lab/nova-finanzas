@@ -932,6 +932,10 @@ button.mini { padding: 6px 12px; border-radius: 999px; font-size: .8rem; }
 .dueno-barras i { flex: 1; background: var(--accent); border-radius: 3px 3px 0 0; min-height: 2px; opacity: .9; }
 .dueno-barras i.cero { background: var(--barra-vacia); }
 .dueno-ejes { display: flex; justify-content: space-between; color: var(--muted); font-size: .72rem; margin-top: 4px; }
+#dueno-buscar, #dueno-orden { width: 100%; }
+.dueno-filtros { display: flex; flex-wrap: wrap; gap: 6px; }
+.dueno-filtros button { border-radius: 999px; padding: 6px 10px; font-size: .8rem; }
+.dueno-filtros button[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
 .dueno-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
 .dueno-chips span { background: var(--surface-2); border: 1px solid var(--line); border-radius: 999px; padding: 4px 10px; font-size: .8rem; font-weight: 600; }
 .dueno-persona { box-sizing: border-box; min-width: 0; max-width: 100%; overflow: hidden; }

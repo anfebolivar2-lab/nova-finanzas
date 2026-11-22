@@ -4575,6 +4575,17 @@
     }).then(function (r) { if (r && !r.error) guardarLocal(claveUso, hoyK); }).catch(function () { /* se intenta mañana */ });
   }
   var numDueno = new Intl.NumberFormat("es-CO");
+  var personasDueno = null;
+  var vistaDuenoGuardada = leerLocal("nova-dueno-vista", {}) || {};
+  var vistaDueno = { texto: "", filtro: "todos", orden: "uso" };
+  var filtrosDueno = [
+    ["todos", "Todos"], ["activos", "Activos"], ["inactivos", "Inactivos"], ["prueba", "Prueba"],
+    ["sin-confirmar", "Sin confirmar"], ["android", "Android"], ["web", "Web"], ["sin-movimientos", "Sin movimientos"]
+  ];
+  function guardarVistaDueno() {
+    guardarLocal("nova-dueno-vista", { filtro: vistaDueno.filtro, orden: vistaDueno.orden });
+    pintarPersonasDueno();
+  }
   function pl(n, uno, varios) { return numDueno.format(n) + " " + (n === 1 ? uno : varios); }
   function barrasDueno(cont, dias, campo) {
     cont.replaceChildren();
@@ -4619,8 +4630,23 @@
     var vers = Object.keys(d.versiones || {}).sort().reverse();
     $("dueno-versiones-tarjeta").hidden = !vers.length;
     $("dueno-versiones").replaceChildren.apply($("dueno-versiones"), vers.map(function (v) { var n = d.versiones[v]; return el("span", null, (v === "" ? "?" : v) + ": " + n + (n === 1 ? " persona" : " personas")); }));
+    personasDueno = d.personas;
+    pintarPersonasDueno();
+  }
+  function pintarPersonasDueno() {
+    if (!personasDueno) return;
+    var ahora = Date.now();
+    var personas = window.NovaDueno.filtrarPersonas(personasDueno, vistaDueno, ahora);
+    var conteos = window.NovaDueno.contarFiltros(personasDueno, ahora);
+    botonesFiltrosDueno.forEach(function (boton, i) {
+      var filtro = filtrosDueno[i];
+      boton.textContent = filtro[1] + " (" + numDueno.format(conteos[filtro[0]]) + ")";
+      boton.setAttribute("aria-pressed", String(vistaDueno.filtro === filtro[0]));
+    });
+    $("dueno-conteo").textContent = "Mostrando " + numDueno.format(personas.length) + " de " + numDueno.format(conteos.todos) + " personas";
     var ul = $("dueno-personas"); ul.replaceChildren();
-    d.personas.forEach(function (p) {
+    if (!personas.length) ul.append(el("li", "vacio", "Nadie coincide con la búsqueda."));
+    personas.forEach(function (p) {
       var li = el("li", "banco-item dueno-persona"), cab = el("div", "banco-cab");
       var app = el("span", "banco-app");
       app.append(el("span", "dueno-emoji", p.dueno ? "👑" : p.prueba ? "🧪" : "👤"), el("span", "dueno-correo", p.correo));
@@ -4647,6 +4673,32 @@
   $("dueno-apk-avanzada").href = (cfg.apkRespaldoUrl || "").replace(/NOVA\.apk$/, "NOVA-avanzada.apk");
   $("btn-dueno").addEventListener("click", function () { abrirCapa("pantalla-dueno"); cargarDueno(); });
   $("dueno-recargar").addEventListener("click", cargarDueno);
+  if (filtrosDueno.some(function (filtro) { return filtro[0] === vistaDuenoGuardada.filtro; })) {
+    vistaDueno.filtro = vistaDuenoGuardada.filtro;
+  }
+  var botonesFiltrosDueno = filtrosDueno.map(function (filtro) {
+    var boton = el("button", null, filtro[1]);
+    boton.type = "button";
+    boton.setAttribute("aria-pressed", String(vistaDueno.filtro === filtro[0]));
+    boton.addEventListener("click", function () {
+      vistaDueno.filtro = filtro[0];
+      guardarVistaDueno();
+    });
+    $("dueno-filtros").append(boton);
+    return boton;
+  });
+  $("dueno-buscar").addEventListener("input", function (e) {
+    vistaDueno.texto = e.target.value;
+    pintarPersonasDueno();
+  });
+  var ordenDueno = $("dueno-orden");
+  ordenDueno.value = vistaDuenoGuardada.orden || vistaDueno.orden;
+  vistaDueno.orden = ordenDueno.value || "uso";
+  ordenDueno.value = vistaDueno.orden;
+  ordenDueno.addEventListener("change", function () {
+    vistaDueno.orden = ordenDueno.value;
+    guardarVistaDueno();
+  });
 
   // ---------- Calendario día por día ----------
   // Cada pantalla abre el calendario con sus propios movimientos: en Buscar, lo que encontraste; en Mi trabajo,

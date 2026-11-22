@@ -1152,6 +1152,15 @@
   <article class="tarjeta dueno-grafico"><h2 class="titulo-tarjeta">Registros nuevos por día</h2><div id="dueno-registros"></div></article>
   <article class="tarjeta" id="dueno-versiones-tarjeta" hidden><h2 class="titulo-tarjeta">Versiones que tienen instaladas</h2><div id="dueno-versiones" class="dueno-chips"></div></article>
   <h2 class="seccion-cabecera">Personas</h2>
+  <input id="dueno-buscar" type="search" placeholder="Buscar por correo" autocomplete="off" aria-label="Buscar por correo">
+  <div id="dueno-filtros" class="dueno-filtros" role="group" aria-label="Filtrar personas"></div>
+  <select id="dueno-orden" aria-label="Ordenar">
+    <option value="uso">Último uso</option>
+    <option value="registro">Registro más reciente</option>
+    <option value="movimientos">Más movimientos</option>
+    <option value="correo">Correo A-Z</option>
+  </select>
+  <p id="dueno-conteo" class="nota" role="status"></p>
   <ul id="dueno-personas" class="lista-banco"></ul>
   <article class="tarjeta dueno-avanzada">
     <strong>📲 NOVA avanzada (solo para tu celular)</strong>
@@ -1373,6 +1382,7 @@
 <script src="sincronizacion.js"></script>
 <script src="vendor/supabase.js"></script>
 <script src="tarjeta.js"></script>
+<script src="dueno.js"></script>
 <script src="app.js"></script>
 </body>
 </html>
