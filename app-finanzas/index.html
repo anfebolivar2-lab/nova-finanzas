@@ -546,7 +546,12 @@
         <button type="button" data-ir="ajustes-tasas"><span class="menu-icono">💱</span><span><strong>Tasas de cambio</strong><small>Convertidor y las 162 monedas del mundo, con buscador</small></span></button>
         <button type="button" id="btn-compartir-nova"><span class="menu-icono">📤</span><span><strong>Compartir NOVA</strong><small>Invita a alguien: el enlace sale con el logo y el nombre</small></span></button>
         <button type="button" data-ir="ajustes-exportar"><span class="menu-icono">⬇</span><span><strong>Exportar datos</strong><small>Informe PDF, Excel con dashboard, CSV y respaldo</small></span></button>
+        <button type="button" id="btn-crear-cifrado"><span class="menu-icono">🔒</span><strong>Crear respaldo cifrado</strong></button>
+        <button type="button" id="btn-restaurar-cifrado"><span class="menu-icono">📂</span><strong>Restaurar respaldo cifrado</strong></button>
+        <input type="file" id="archivo-cifrado" accept=".nova-respaldo" hidden>
       </div>
+
+      <p class="mensaje" id="respaldo-cifrado-mensaje" role="status"></p>
 
       <h2 class="grupo-ajustes">Seguridad y respaldo</h2>
       <div class="menu">
@@ -1260,6 +1265,7 @@
     <p>Pregúntame lo que quieras, de cualquier tema. Si es sobre tu dinero, respondo con tus propios números: cuánto gastaste y en qué, si te alcanza para algo o cómo ahorrar más.</p>
     <div id="chat-sugerencias" class="sugerencias"></div>
   </div>
+  <p id="chat-oculto" class="nota" hidden>Los mensajes del chat se ocultan mientras están ocultos los valores.</p>
   <ol id="chat" class="chat" aria-live="polite"></ol>
   <form id="form-chat" class="rapido-fila chat-entrada" autocomplete="off">
     <div id="chat-adjunto" hidden>
@@ -1307,6 +1313,23 @@
       <p class="mensaje" id="editar-mensaje" role="status"></p>
       <button type="submit" class="primario">Guardar los cambios</button>
       <button type="button" class="peligro" id="editar-borrar" hidden>Borrar</button>
+      <button type="button" class="enlace" data-cerrar>Cancelar</button>
+    </form>
+  </div>
+</div>
+
+<div id="hoja-respaldo" class="hoja-fondo" hidden>
+  <div class="hoja" role="dialog" aria-modal="true" aria-labelledby="respaldo-titulo">
+    <h2 id="respaldo-titulo" class="centro">Respaldo cifrado</h2>
+    <form id="form-respaldo" class="formulario" autocomplete="off">
+      <label for="respaldo-clave">Contraseña del respaldo</label>
+      <input type="password" id="respaldo-clave" autocomplete="off" required>
+      <div id="respaldo-confirmacion" class="editar-campos">
+        <label for="respaldo-repetir">Repite la contraseña</label>
+        <input type="password" id="respaldo-repetir" autocomplete="off">
+      </div>
+      <p class="mensaje" id="respaldo-clave-mensaje" role="status"></p>
+      <button type="submit" id="respaldo-continuar" class="primario">Continuar</button>
       <button type="button" class="enlace" data-cerrar>Cancelar</button>
     </form>
   </div>
@@ -1381,6 +1404,7 @@
 <script src="dueno.js"></script>
 <script src="ota.js"></script>
 <script src="novedades.js"></script>
+<script src="respaldo.js"></script>
 <script src="app.js"></script>
 </body>
 </html>
