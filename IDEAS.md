@@ -215,3 +215,136 @@ Lista de ideas propuestas para revisar; ninguna está hecha todavía.
 - Página de novedades (qué trae cada versión), que la app enlaza al actualizar.
 - Formulario de sugerencias dentro de la app, que llegue a tu correo o a GitHub.
 - Programa de "invita a un amigo" con un logro especial.
+
+# 100 funciones para el panel del dueño (noviembre 2026)
+
+Ideas para el panel del dueño. El panel muestra cómo se usa la app, nunca los montos ni los movimientos de dinero de cada persona.
+
+✅ = ya está hecho o en PR.
+
+## Usuarios y crecimiento
+
+- ⭐ Buscador de usuarios por correo. ✅ (en PR)
+- ⭐ Filtros: activos, inactivos, de prueba, sin confirmar, Android o web. ✅ (en PR)
+- Ordenar por último uso, por fecha de registro o por cantidad de movimientos. ✅ (en PR)
+- Total de usuarios nuevos por día, semana y mes.
+- Gráfico de crecimiento acumulado de usuarios.
+- Usuarios activos hoy, en los últimos 7 días y en los últimos 30 días (DAU/WAU/MAU).
+- Proporción DAU/MAU (qué tan "pegajosa" es la app).
+- Retención: cuántos siguen usando la app a los 1, 7 y 30 días de registrarse.
+- Tabla de retención por semana de registro (cohortes).
+- Usuarios que se registraron y nunca anotaron nada.
+- Usuarios en riesgo: dejaron de entrar hace más de 14 días.
+- Usuarios "fieles": entraron 20 días o más este mes.
+- Ficha de cada usuario con resumen de uso (sin mostrar sus montos de dinero).
+- Ocultar las cuentas de prueba de todas las estadísticas, con un botón.
+- Exportar la lista de usuarios a Excel.
+
+## Uso de la app
+
+- ⭐ Movimientos anotados por día (total de todos los usuarios).
+- Cómo anotan: escribiendo, por voz, con foto o con el mensaje del banco.
+- Funciones más usadas (análisis, metas, deudas, IA…).
+- Funciones que nadie usa, para decidir si se quitan o se mejoran.
+- Horas del día con más uso.
+- Días de la semana con más uso.
+- Duración promedio de una sesión.
+- Pantallas más visitadas.
+- Recuadros de Análisis más vistos y más ocultados.
+- Cuántos usan espacios, metas, deudas y gastos compartidos.
+- Cuántos usan otras monedas, y cuáles.
+- Cuántos activaron el PIN o la huella.
+- Cuántos usan el modo oscuro y cuántos el claro.
+- Cuántos son conductores (modo trabajo).
+- Embudo: registro → primer movimiento → primera meta → 7 días de uso.
+
+## NOVA IA
+
+- ⭐ Preguntas a la IA por día.
+- Cuántas preguntas usan foto y cuántas voz.
+- Errores de la IA (cupo agotado, se tardó, falló).
+- Cupo diario de Gemini que queda.
+- Tiempo promedio de respuesta de la IA.
+- Temas más preguntados (agrupados, sin mostrar el texto exacto).
+- Cuántas veces la IA buscó en internet.
+- Usuarios que más usan la IA (para controlar el costo).
+- Botón para pausar la IA si se dispara el uso.
+- Mensaje de mantenimiento de la IA visible para todos.
+
+## Versiones y APK
+
+- ⭐ Cuántos usuarios hay en cada versión (ya existe; agregar un gráfico).
+- Porcentaje que ya actualizó a la última versión.
+- Fecha de publicación de cada versión.
+- Enlace directo a la APK y a la última corrida de GitHub.
+- Estado de la última publicación de la APK (bien o con error).
+- Avisar en el panel si la publicación falló.
+- Obligar a actualizar a quien use una versión muy vieja.
+- Notas de cada versión editables desde el panel.
+- Descargas de la APK por día.
+- Cuántos usan la APK "avanzada" y cuántos la normal.
+
+## Salud técnica
+
+- ⭐ Errores de la app (los que se registran) por día.
+- Lista de los últimos errores, con versión y pantalla.
+- Estado de Supabase (base de datos y funciones).
+- Estado de Vercel (la página web) y de la última publicación.
+- Tiempo de carga de la app.
+- Funciones de Supabase: llamadas, errores y tiempo de respuesta.
+- Espacio usado en la base de datos y en el almacenamiento.
+- Fotos de recibos guardadas y su tamaño total.
+- Fuente de las tasas de cambio que está funcionando (Fawaz, TRM, respaldo).
+- Prueba rápida de un botón: ¿la IA responde? ¿las tasas cargan?
+
+## Comunicación con usuarios
+
+- ⭐ Enviar un aviso dentro de la app a todos o a un grupo.
+- Banner de novedades al abrir la app.
+- Encuesta corta dentro de la app ("¿qué mejorarías?").
+- Bandeja de sugerencias y reportes de los usuarios.
+- Responder una sugerencia desde el panel.
+- Correo de bienvenida y de "te extrañamos" (automáticos).
+- Plantillas de mensajes.
+- Historial de avisos enviados y cuántos los vieron.
+- Programar un aviso para una fecha.
+- Notificación al dueño cuando se registra alguien nuevo.
+
+## Seguridad y control
+
+- ⭐ Registro de accesos al panel (quién entró y cuándo).
+- Bloquear o desbloquear una cuenta.
+- Reenviar el correo de confirmación a un usuario.
+- Ver inicios de sesión sospechosos (muchos intentos fallidos).
+- Cerrar la sesión de un usuario en todos sus dispositivos.
+- Varios administradores con permisos distintos (solo ver, o ver y actuar).
+- Doble verificación para entrar al panel.
+- Respaldo de la base de datos con un botón y la fecha del último.
+- Que borrar algo pida doble confirmación, y que siempre haya papelera.
+- Pedir PIN otra vez antes de las acciones delicadas.
+
+## Negocio y metas
+
+- ⭐ Meta de usuarios del mes, con barra de progreso.
+- Costo mensual estimado (Supabase, Vercel, IA).
+- Costo por usuario activo.
+- Proyección de usuarios a 3 y 6 meses.
+- De dónde llegan los usuarios (enlace, QR, referido).
+- Programa de referidos: quién invitó a quién.
+- Comparar este mes con el mes pasado en todo.
+- Informe mensual en PDF para compartir.
+- Exportar todas las estadísticas a Excel.
+- Hitos ("¡100 usuarios!") con aviso.
+
+## Diseño y facilidad del panel
+
+- ⭐ Tarjetas que no se salen del cuadro (ya hecho). ✅
+- Rango de fechas elegible para todos los gráficos.
+- Modo resumen (solo números grandes) y modo detalle.
+- Actualización automática cada minuto.
+- Gráficos al tocar: ver el valor de cada día.
+- Panel cómodo en el celular y en el computador.
+- Atajo para abrir el panel desde la pantalla de inicio.
+- Tema oscuro del panel.
+- Ayuda corta (ℹ️) en cada número para explicar qué significa.
+- Guardar la vista preferida (filtros y orden). ✅ (en PR)
