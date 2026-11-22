@@ -6289,6 +6289,47 @@
     }).catch(function () { /* Si no hay conexión, se intentará al volver a abrir NOVA. */ });
   }
 
+  var configNube = Nube.configDesdeFilas(), cargaConfigNube = null;
+
+  function pintarPausaIA() {
+    var aviso = $("chat-mantenimiento");
+    aviso.textContent = Nube.mensajePausaIA(configNube);
+    aviso.hidden = !aviso.textContent;
+  }
+
+  function reiniciarConfigNube() {
+    configNube = Nube.configDesdeFilas();
+    cargaConfigNube = null;
+    $("aviso-version-minima").hidden = true;
+    $("dueno-config").hidden = true;
+    formulariosConfigDueno.forEach(function (form) { form.reset(); });
+    pintarPausaIA();
+    $("sugerencia-respuestas").replaceChildren();
+  }
+
+  function cargarConfigNube() {
+    var origen = fuente;
+    if (!cliente || !origen || origen.demo || cargaConfigNube) return;
+    cargaConfigNube = conSesionNube(origen, function () {
+      return cliente.from("fin_config").select("clave,valor");
+    }).then(function (r) {
+      if (origen !== fuente || !r || r.error) return;
+      configNube = Nube.configDesdeFilas(r.data);
+      pintarPausaIA();
+      versionParaNube().then(function (version) {
+        if (origen !== fuente) return;
+        var notas = $("aviso-version-notas");
+        notas.textContent = configNube.notas_version;
+        notas.hidden = !notas.textContent;
+        $("aviso-version-minima").hidden = !Nube.versionMenor(version, configNube.version_minima);
+      });
+    }).catch(function () { /* Se conserva el último ajuste leído. */ })
+      .finally(function () { if (origen === fuente) cargaConfigNube = null; });
+  }
+
+  document.addEventListener("visibilitychange", function () { if (!document.hidden) cargarConfigNube(); });
+  window.addEventListener("online", cargarConfigNube);
+
   function puedeAbrirNube() {
     if (fuente && fuente.demo) {
       toast("No disponible en la demostración");
@@ -6303,13 +6344,33 @@
     $("sugerencia-contador").textContent = Array.from($("sugerencia-texto").value).length + " de 2000 caracteres";
   }
 
+  function cargarRespuestasSugerencias(origen) {
+    var cont = $("sugerencia-respuestas");
+    return conSesionNube(origen, function () {
+      return cliente.from("fin_sugerencias").select("mensaje,respuesta,respondida_en")
+        .eq("user_id", idUsuario()).order("respondida_en", { ascending: false });
+    }).then(function (r) {
+      if (origen !== fuente || !r || r.error) return;
+      cont.replaceChildren();
+      Nube.sugerenciasRespondidas(r.data).forEach(function (s) {
+        var cuadro = el("article", "tarjeta dueno-detalle");
+        cuadro.append(el("h3", "titulo-tarjeta", "Respuesta del equipo de NOVA"),
+          el("p", "nota", s.mensaje), el("p", null, s.respuesta));
+        if (s.respondida_en) cuadro.append(el("small", "nota", fechaDueno(s.respondida_en)));
+        cont.append(cuadro);
+      });
+    }).catch(function () { /* El formulario sigue disponible. */ });
+  }
+
   $("btn-sugerencia").addEventListener("click", function () {
     if (!puedeAbrirNube()) return;
     var origen = fuente;
     conSesionNube(origen, function () { return true; }).then(function (sesion) {
+      if (origen !== fuente) return;
       if (!sesion) return toast("Inicia sesión para enviar una sugerencia");
       mensaje("sugerencia-mensaje", "");
       abrirCapa("hoja-sugerencia");
+      cargarRespuestasSugerencias(origen);
     }).catch(function () { toast("No se pudo comprobar tu sesión. Intenta otra vez."); });
   });
   $("sugerencia-texto").addEventListener("input", pintarContadorSugerencia);
@@ -6345,6 +6406,7 @@
     versionParaNube().then(function (version) {
       return navigator.locks ? navigator.locks.request(clave, function () { return enviar(version); }) : enviar(version);
     }).then(function (r) {
+      if (origen !== fuente) return;
       if (!r) return mensaje("sugerencia-mensaje", "Inicia sesión para enviar una sugerencia.", true);
       if (r.limite) return mensaje("sugerencia-mensaje", "Puedes enviar hasta 3 sugerencias por hora. Intenta más tarde.", true);
       if (r.sinAlmacenamiento) return mensaje("sugerencia-mensaje", "No se pudo guardar el límite de envíos en este dispositivo.", true);
@@ -6352,8 +6414,9 @@
       campo.value = "";
       pintarContadorSugerencia();
       mensaje("sugerencia-mensaje", "¡Gracias!");
+      cargarRespuestasSugerencias(origen);
     }).catch(function () {
-      mensaje("sugerencia-mensaje", "No se pudo enviar la sugerencia. Revisa tu conexión e intenta otra vez.", true);
+      if (origen === fuente) mensaje("sugerencia-mensaje", "No se pudo enviar la sugerencia. Revisa tu conexión e intenta otra vez.", true);
     }).finally(function () { boton.disabled = campo.readOnly = false; });
   });
 
@@ -6492,15 +6555,86 @@
     }).finally(function () { boton.disabled = false; });
   }
 
+  var formulariosConfigDueno = Array.from($("dueno-config").querySelectorAll("form"));
+  formulariosConfigDueno.forEach(function (form) {
+    form.addEventListener("submit", function (e) {
+      e.preventDefault();
+      var clave = form.dataset.clave, campo = $("dueno-config-" + clave);
+      var valor = clave === "ia_pausada" ? campo.checked : campo.value.trim();
+      if (clave === "version_minima" && valor && !Nube.validarVersion(valor)) {
+        return mensaje("dueno-config-mensaje", "Escribe la versión así: 1.72.", true);
+      }
+      actuarDueno(form.querySelector("button"), { accion: "config_guardar", clave: clave, valor: valor },
+        "dueno-config-mensaje", "Ajuste guardado", function () {
+          if (campo.type === "checkbox") {
+            if (campo.checked === valor) campo.defaultChecked = valor;
+          } else if (campo.value.trim() === valor) {
+            campo.value = campo.defaultValue = valor;
+          }
+          var origen = fuente;
+          Promise.resolve(cargaConfigNube).then(function () {
+            if (origen === fuente) cargarConfigNube();
+          });
+        });
+    });
+  });
+
+  function agregarEnlaceDueno(cont, url, texto) {
+    if (typeof url !== "string" || !/^https:\/\//i.test(url)) return;
+    var enlace = el("a", null, texto);
+    enlace.href = url;
+    enlace.target = "_blank";
+    enlace.rel = "noopener noreferrer";
+    cont.append(enlace);
+  }
+
+  function pintarEstadoDueno(estado) {
+    estado = estado || {};
+    listaDueno("dueno-servicios", Array.isArray(estado.servicios) ? estado.servicios : [], "Estado de servicios no disponible.", function (li, servicio) {
+      var linea = el("strong", "dueno-servicio");
+      var punto = el("span", "dueno-punto" + (servicio.ok ? " ok" : ""));
+      punto.setAttribute("aria-hidden", "true");
+      linea.append(punto, servicio.nombre + " · " + (servicio.ok ? "Operativo" : "Con fallos"));
+      li.append(linea, el("small", "nota", (servicio.estado ? "HTTP " + servicio.estado + " · " : "") + servicio.ms + " ms"));
+    });
+
+    var corrida = estado.corridaApk, apk = $("dueno-corrida");
+    apk.replaceChildren(el("strong", null, "Última corrida de la APK"));
+    if (corrida) {
+      var fallo = corrida.resultado === "failure";
+      apk.append(el("p", fallo ? "mensaje error" : "nota",
+        [fallo ? "Falló la compilación de la APK" : "", corrida.resultado || corrida.estado, fechaDueno(corrida.creado)].filter(Boolean).join(" · ")));
+      if (corrida.mensaje) apk.append(el("small", "nota", corrida.mensaje));
+      agregarEnlaceDueno(apk, corrida.enlace, "Ver corrida");
+    } else apk.append(el("p", "nota", "Corrida no disponible."));
+
+    var lanzamiento = estado.lanzamiento, cont = $("dueno-lanzamiento");
+    cont.replaceChildren(el("strong", null, "Último lanzamiento"),
+      el("p", "nota", lanzamiento ? fechaDueno(lanzamiento.actualizado || lanzamiento.publicado) : "Lanzamiento no disponible."));
+    if (lanzamiento) agregarEnlaceDueno(cont, lanzamiento.enlace, "Ver lanzamiento");
+
+    $("dueno-config").hidden = !estado.config;
+    if (!estado.config) return;
+    formulariosConfigDueno.forEach(function (form) {
+      var clave = form.dataset.clave, campo = $("dueno-config-" + clave), valor = estado.config[clave];
+      if (campo.type === "checkbox") {
+        if (campo.checked === campo.defaultChecked) campo.checked = campo.defaultChecked = valor === true;
+      } else if (campo.value === campo.defaultValue) {
+        campo.value = campo.defaultValue = typeof valor === "string" ? valor : "";
+      }
+    });
+  }
+
   function pintarListasDueno(d, errores) {
     listaDueno("dueno-errores-recientes", Dueno.recientes(errores.recientes), "Todavía no hay errores registrados.", function (li, error) {
       li.append(el("p", null, Dueno.recortarTexto(error.mensaje, 180) || "Error sin detalle"),
         el("small", "nota", [error.version, error.plataforma, fechaDueno(error.creado_en)].filter(Boolean).join(" · ")));
     });
     listaDueno("dueno-avisos", Dueno.recientes(d.avisos), "Todavía no hay avisos.", function (li, aviso) {
+      var inicio = aviso.desde ? " · Desde " + fechaDueno(aviso.desde) : "";
       var fin = aviso.hasta ? " · Hasta " + fechaDueno(aviso.hasta) : "";
       li.append(el("strong", null, aviso.titulo), el("p", null, aviso.mensaje),
-        el("small", "nota", [aviso.audiencia, aviso.activo ? "Activo" : "Apagado"].filter(Boolean).join(" · ") + fin));
+        el("small", "nota", [aviso.audiencia, aviso.activo ? "Activo" : "Apagado"].filter(Boolean).join(" · ") + inicio + fin));
       if (aviso.activo && aviso.id != null) {
         var boton = botonHabito("Apagar", function () {
           if (confirm("¿Apagar este aviso?")) actuarDueno(boton, { accion: "aviso_apagar", id: aviso.id }, "dueno-aviso-mensaje", "Aviso apagado");
@@ -6513,6 +6647,30 @@
     listaDueno("dueno-sugerencias", sugerencias, "Todavía no hay sugerencias.", function (li, s) {
       li.append(el("strong", null, s.correo || "Sin correo"), el("p", null, s.mensaje),
         el("small", "nota", [s.version, fechaDueno(s.creado_en), s.atendida ? "Atendida" : "Pendiente"].filter(Boolean).join(" · ")));
+      if (s.respuesta) {
+        li.append(el("strong", null, "Respuesta"), el("p", null, s.respuesta));
+        if (s.respondida_en) li.append(el("small", "nota", fechaDueno(s.respondida_en)));
+      } else if (s.id != null) {
+        var form = el("form", "formulario dueno-responder");
+        var respuesta = el("textarea");
+        respuesta.id = "dueno-respuesta-" + s.id;
+        respuesta.rows = 3;
+        respuesta.maxLength = 1000;
+        respuesta.required = true;
+        var etiqueta = el("label", null, "Escribe una respuesta");
+        etiqueta.htmlFor = respuesta.id;
+        var enviar = el("button", "mini", "Responder");
+        enviar.type = "submit";
+        form.append(etiqueta, respuesta, enviar);
+        form.addEventListener("submit", function (e) {
+          e.preventDefault();
+          var texto = respuesta.value.trim();
+          if (!texto) return mensaje("dueno-sugerencias-mensaje", "Escribe una respuesta.", true);
+          actuarDueno(enviar, { accion: "sugerencia_responder", id: s.id, respuesta: texto },
+            "dueno-sugerencias-mensaje", "Respuesta enviada");
+        });
+        li.append(form);
+      }
       if (s.id != null) {
         var boton = botonHabito(s.atendida ? "Marcar pendiente" : "Marcar atendida", function () {
           actuarDueno(boton, { accion: "sugerencia_atender", id: s.id, atendida: !s.atendida }, "dueno-sugerencias-mensaje", "Sugerencia actualizada");
@@ -6529,8 +6687,8 @@
     e.preventDefault();
     var form = e.currentTarget;
     var aviso = Dueno.validarAviso($("dueno-aviso-titulo").value, $("dueno-aviso-texto").value,
-      $("dueno-aviso-audiencia").value, $("dueno-aviso-hasta").value, Date.now());
-    if (!aviso) return mensaje("dueno-aviso-mensaje", "Escribe un título de hasta 80 caracteres, un mensaje de hasta 500 y, si eliges una fecha, que sea hoy o después.", true);
+      $("dueno-aviso-audiencia").value, $("dueno-aviso-hasta").value, Date.now(), $("dueno-aviso-desde").value);
+    if (!aviso) return mensaje("dueno-aviso-mensaje", "Revisa el título (hasta 80 caracteres), el mensaje (hasta 500) y las fechas. El último día debe ser hoy o después y el inicio debe quedar dentro del plazo.", true);
     actuarDueno($("dueno-aviso-crear"), aviso, "dueno-aviso-mensaje", "Aviso creado", function () { form.reset(); });
   });
 
@@ -6723,6 +6881,7 @@
     barrasDueno($("dueno-errores"), Dueno.ultimos30Dias(errores.porDia, ahora), "total");
     registrosMetaDueno = Dueno.registrosParaMeta(r.nuevos30, dias);
     pintarMetaDueno();
+    pintarEstadoDueno(d.estado);
     pintarListasDueno(d, errores);
     datosAnaliticaDueno = d;
     pintarAnaliticaDueno(d, ahora);
@@ -7619,6 +7778,7 @@
     $("chat-pregunta").value = "";
     pintarChat();
     abrirCapa("pantalla-chat");
+    cargarConfigNube();
     var ol = $("chat"); setTimeout(function () { ol.scrollTop = ol.scrollHeight; }, 30);
   }
   function reiniciarChat() {
@@ -7673,6 +7833,16 @@
       burbuja("yo", textoVisible, imagen); $("chat-pregunta").value = "";
       if (tDemo) { burbuja("nova", "En la demostración la IA no escribe respuestas, pero mira tus números:"); $("chat").append(tDemo); tDemo.scrollIntoView({ block: "nearest" }); }
       mensaje("chat-mensaje", "Inicia sesión con tu cuenta para que la IA te responda.", !tDemo);
+      return;
+    }
+    if (cargaConfigNube) {
+      var origen = fuente, conversacion = chatActual;
+      return cargaConfigNube.then(function () {
+        if (fuente === origen && chatActual === conversacion && !$("pantalla-chat").hidden) preguntarNova(pregunta, opciones);
+      });
+    }
+    if (Nube.mensajePausaIA(configNube)) {
+      pintarPausaIA();
       return;
     }
     // Si todavía hay una pregunta esperando, se cancela: así nunca se queda trabado.
@@ -8549,6 +8719,7 @@
   function entrar(nuevaFuente) {
     fuente = nuevaFuente;
     avisosNube = []; erroresEnviados = [];
+    reiniciarConfigNube();
     espacioId = leerLocal(claveEspacio(), null);
     fuente = Esp.envolver(nuevaFuente, { activo: function () { return espacioId; }, alPerder: function () { espacioId = null; guardarLocal(claveEspacio(), null); } });
     if (fuente.demo) { fuente.iconosCategoria = {}; fuente.retosSemanales = []; fuente.papelera = []; }
@@ -8565,7 +8736,7 @@
       if (!fuente.demo) bloquearSiHayPin();
       revisarInactividad();
       pintarEstadoPapelera(); tutorialSiHaceFalta(); novedadesSiHaceFalta();
-      $("btn-dueno").hidden = !soyDueno(); marcarUso(); cargarAvisosNube();
+      $("btn-dueno").hidden = !soyDueno(); marcarUso(); cargarAvisosNube(); cargarConfigNube();
       while (accionesPendientes.length) anotarTeclaRapida(accionesPendientes.shift());
       programarAvisos();
       if (!fuente.demo) revisarBanco().then(function () { if (abrirBancoAlEntrar) { abrirBancoAlEntrar = false; abrirBanco(); } }).catch(function () { /* sin lista del banco */ });
@@ -9258,6 +9429,7 @@
       try { var PW = enApp && window.Capacitor.Plugins && window.Capacitor.Plugins.Preferences; if (PW) { ultimoWidget = ""; PW.remove({ key: "nova-widget" }); } } catch (e) { /* nada */ }
       fuente = null; datos = datosVacios();
       avisosNube = []; erroresEnviados = [];
+      reiniciarConfigNube();
       $("form-sugerencia").reset(); pintarContadorSugerencia();
       $("form-auth").reset(); mensaje("auth-mensaje", ""); mostrar("auth");
     });

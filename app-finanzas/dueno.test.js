@@ -108,3 +108,17 @@ test("ordena y limita los accesos y cuenta sugerencias pendientes", () => {
   assert.equal(sugerenciasPendientes(lista), 1);
   assert.equal(recortarTexto("a😀bc", 3), "a😀…");
 });
+
+test("programa el inicio del aviso en hora local y lo envía como ISO", () => {
+  const ahora = new Date(2026, 10, 22, 9).getTime();
+  const programar = (desde, hasta = "2026-11-23") => validarAviso("Aviso", "Mensaje", "todos", hasta, ahora, desde);
+  const inicio = new Date(2026, 10, 23, 10, 30).toISOString();
+
+  assert.equal(programar("2026-11-23T10:30").desde, inicio);
+  assert.equal(programar("2026-11-23T10:30", "").desde, inicio);
+  assert.equal(programar("").desde, undefined);
+  assert.equal(programar("2026-11-24T00:00"), null);
+  assert.equal(programar("2026-02-30T10:30", ""), null);
+  assert.equal(programar("2026-11-23T24:00", ""), null);
+  assert.equal(programar("2026-11-23", ""), null);
+});

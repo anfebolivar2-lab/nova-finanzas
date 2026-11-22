@@ -1046,3 +1046,13 @@ button.mini { padding: 6px 12px; border-radius: 999px; font-size: .8rem; }
 .dueno-ficha::backdrop { background: #0008; }
 .dueno-ficha dl { display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); gap: 8px; }
 .dueno-ficha dd { margin: 0; text-align: right; }
+
+.dueno-servicio { display: flex; align-items: center; gap: 8px; }
+.dueno-punto { flex: none; width: .65rem; height: .65rem; border-radius: 50%; background: var(--danger); }
+.dueno-punto.ok { background: var(--positivo); }
+.dueno-responder { width: 100%; }
+#dueno-config form + form { border-top: 1px solid var(--line); padding-top: 8px; }
+#sugerencia-respuestas:not(:empty) { margin-top: 12px; }
+.aviso-config { margin: 8px 0; border-color: var(--accent); }
+.aviso-config p { margin: 4px 0 0; }
+.aviso-config p, .aviso-config-texto { white-space: pre-wrap; overflow-wrap: anywhere; }

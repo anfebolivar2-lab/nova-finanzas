@@ -86,7 +86,7 @@
     return cantidad(meta) ? Math.min(100, Math.round(100 * cantidad(actual) / cantidad(meta))) : 0;
   }
 
-  function validarAviso(titulo, mensaje, audiencia, fechaFinal, ahora) {
+  function validarAviso(titulo, mensaje, audiencia, fechaFinal, ahora, fechaInicial) {
     titulo = titulo.trim();
     mensaje = mensaje.trim();
     if (!titulo || Array.from(titulo).length > 80 || !mensaje || Array.from(mensaje).length > 500 ||
@@ -101,7 +101,16 @@
       if (fin.getTime() <= ahora) return null;
       hasta = fin.toISOString();
     }
-    return { accion: "aviso_crear", titulo: titulo, mensaje: mensaje, audiencia: audiencia, hasta: hasta };
+    var aviso = { accion: "aviso_crear", titulo: titulo, mensaje: mensaje, audiencia: audiencia, hasta: hasta };
+    if (fechaInicial) {
+      if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(fechaInicial)) return null;
+      var inicioUtc = new Date(fechaInicial + "Z");
+      if (!Number.isFinite(inicioUtc.getTime()) || inicioUtc.toISOString().slice(0, 16) !== fechaInicial) return null;
+      var inicio = new Date(fechaInicial);
+      if (!Number.isFinite(inicio.getTime()) || (hasta && inicio >= fin)) return null;
+      aviso.desde = inicio.toISOString();
+    }
+    return aviso;
   }
 
   function sugerenciasPendientes(sugerencias) {

@@ -76,19 +76,26 @@ const rest = (ruta: string, init: RequestInit = {}) =>
   fetch(`${URL_SB}/rest/v1/${ruta}`, { ...init, headers: { ...adm, "Content-Type": "application/json", ...(init.headers || {}) } });
 const texto = (v: unknown, max: number) => String(v ?? "").trim().slice(0, max);
 const AUDIENCIAS = ["todos", "android", "web"];
+const CLAVES_CONFIG = ["ia_pausada", "ia_mensaje", "version_minima", "notas_version"];
 
 async function accionDueno(accion: string, cuerpo: Record<string, unknown>, dueno: string): Promise<Response | null> {
   if (accion === "aviso_crear") {
     const titulo = texto(cuerpo.titulo, 80), mensaje = texto(cuerpo.mensaje, 500);
     const audiencia = AUDIENCIAS.includes(String(cuerpo.audiencia)) ? String(cuerpo.audiencia) : "todos";
     if (!titulo || !mensaje) return responder(400, { error: "Escribe un título y un mensaje." });
+    let desde: string | null = null;
+    if (cuerpo.desde) {
+      const t0 = Date.parse(String(cuerpo.desde));
+      if (!Number.isFinite(t0)) return responder(400, { error: "La fecha de inicio no es válida." });
+      desde = new Date(t0).toISOString();
+    }
     let hasta: string | null = null;
     if (cuerpo.hasta) {
       const t = Date.parse(String(cuerpo.hasta));
       if (!Number.isFinite(t)) return responder(400, { error: "La fecha final no es válida." });
       hasta = new Date(t).toISOString();
     }
-    const r = await rest("fin_avisos", { method: "POST", headers: { Prefer: "return=representation" }, body: JSON.stringify({ titulo, mensaje, audiencia, hasta }) });
+    const r = await rest("fin_avisos", { method: "POST", headers: { Prefer: "return=representation" }, body: JSON.stringify({ titulo, mensaje, audiencia, hasta, ...(desde ? { desde } : {}) }) });
     if (!r.ok) return responder(502, { error: "No se pudo crear el aviso." });
     return responder(200, { ok: true, aviso: (await r.json())[0] });
   }
@@ -103,6 +110,24 @@ async function accionDueno(accion: string, cuerpo: Record<string, unknown>, duen
     if (!Number.isInteger(id) || id < 1) return responder(400, { error: "Sugerencia no válida." });
     const r = await rest(`fin_sugerencias?id=eq.${id}`, { method: "PATCH", body: JSON.stringify({ atendida: cuerpo.atendida !== false }) });
     return r.ok ? responder(200, { ok: true }) : responder(502, { error: "No se pudo actualizar." });
+  }
+  if (accion === "sugerencia_responder") {
+    const id = Number(cuerpo.id), respuesta = texto(cuerpo.respuesta, 1000);
+    if (!Number.isInteger(id) || id < 1 || !respuesta) return responder(400, { error: "Escribe una respuesta." });
+    const r = await rest(`fin_sugerencias?id=eq.${id}`, { method: "PATCH", body: JSON.stringify({ respuesta, respondida_en: new Date().toISOString(), atendida: true }) });
+    return r.ok ? responder(200, { ok: true }) : responder(502, { error: "No se pudo guardar la respuesta." });
+  }
+  if (accion === "config_guardar") {
+    const clave = String(cuerpo.clave || "");
+    if (!CLAVES_CONFIG.includes(clave)) return responder(400, { error: "Ajuste no válido." });
+    let valor: unknown = cuerpo.valor;
+    if (clave === "ia_pausada") valor = valor === true;
+    else if (clave === "version_minima") {
+      valor = texto(valor, 20);
+      if (valor && !/^\d+(\.\d+){0,3}$/.test(String(valor))) return responder(400, { error: "Escribe la versión así: 1.72" });
+    } else valor = texto(valor, clave === "notas_version" ? 1000 : 300);
+    const r = await rest("fin_config?on_conflict=clave", { method: "POST", headers: { Prefer: "resolution=merge-duplicates,return=minimal" }, body: JSON.stringify({ clave, valor, actualizado: new Date().toISOString() }) });
+    return r.ok ? responder(200, { ok: true }) : responder(502, { error: "No se pudo guardar el ajuste." });
   }
   return null;
 }
@@ -129,9 +154,9 @@ async function extrasPanel(correoDe: Record<string, string>, ahora: number) {
     extra.avisos = r.ok ? await r.json() : [];
   } catch (_e) { extra.avisos = []; }
   try {
-    const r = await rest("fin_sugerencias?select=id,user_id,mensaje,version,plataforma,atendida,creado_en&order=creado_en.desc&limit=50");
+    const r = await rest("fin_sugerencias?select=id,user_id,mensaje,version,plataforma,atendida,respuesta,respondida_en,creado_en&order=creado_en.desc&limit=50");
     const lista: Record<string, unknown>[] = r.ok ? await r.json() : [];
-    extra.sugerencias = lista.map((s) => ({ id: s.id, correo: correoDe[String(s.user_id)] || "(sin correo)", mensaje: s.mensaje, version: s.version, plataforma: s.plataforma, atendida: s.atendida, creado_en: s.creado_en }));
+    extra.sugerencias = lista.map((s) => ({ id: s.id, correo: correoDe[String(s.user_id)] || "(sin correo)", mensaje: s.mensaje, version: s.version, plataforma: s.plataforma, atendida: s.atendida, respuesta: s.respuesta || null, respondida_en: s.respondida_en || null, creado_en: s.creado_en }));
   } catch (_e) { extra.sugerencias = []; }
   try {
     const r = await rest("fin_dueno_accesos?select=user_id,creado_en&order=creado_en.desc&limit=15");
@@ -148,6 +173,48 @@ async function adopcionPanel() {
   };
   const [deudas, grupos, documentos] = await Promise.all([contar("fin_deudas"), contar("fin_grupos"), contar("fin_documentos")]);
   return { deudas, grupos, documentos };
+}
+
+// Estado de servicios y de la última publicación (solo lectura; cada parte falla por separado).
+async function pulso(nombre: string, url: string, init: RequestInit = {}) {
+  const t0 = Date.now();
+  try {
+    const r = await fetch(url, { ...init, signal: AbortSignal.timeout(6000) });
+    return { nombre, ok: r.ok, estado: r.status, ms: Date.now() - t0 };
+  } catch (_e) { return { nombre, ok: false, estado: 0, ms: Date.now() - t0 }; }
+}
+async function estadoPanel() {
+  const base = REPOS[0];
+  const [servicios, corrida, lanzamiento, config] = await Promise.all([
+    Promise.all([
+      pulso("Página web (Vercel)", "https://nova-finanzas.vercel.app/", { method: "HEAD" }),
+      pulso("Base de datos y acceso (Supabase)", `${URL_SB}/auth/v1/health`, { headers: { apikey: ANON } }),
+      pulso("Tasas de cambio (principal)", "https://cdn.jsdelivr.net/npm/@fawazahmed0/currency-api@latest/v1/currencies/cop.json"),
+      pulso("Tasas de cambio (respaldo)", "https://open.er-api.com/v6/latest/COP"),
+    ]).catch(() => []),
+    (async () => {
+      try {
+        const r = await fetch(`https://api.github.com/repos/${base}/actions/workflows/apk-nova.yml/runs?per_page=1`, { headers: { "User-Agent": "nova-dueno", Accept: "application/vnd.github+json" }, signal: AbortSignal.timeout(6000) });
+        const run = r.ok ? (await r.json()).workflow_runs?.[0] : null;
+        return run ? { estado: run.status, resultado: run.conclusion, creado: run.created_at, enlace: run.html_url, mensaje: String(run.display_title || "").slice(0, 100) } : null;
+      } catch (_e) { return null; }
+    })(),
+    (async () => {
+      try {
+        const r = await fetch(`https://api.github.com/repos/${base}/releases/tags/nova-android`, { headers: { "User-Agent": "nova-dueno", Accept: "application/vnd.github+json" }, signal: AbortSignal.timeout(6000) });
+        const rel = r.ok ? await r.json() : null;
+        return rel ? { publicado: rel.published_at, actualizado: rel.updated_at, enlace: rel.html_url } : null;
+      } catch (_e) { return null; }
+    })(),
+    (async () => {
+      try {
+        const r = await rest("fin_config?select=clave,valor");
+        const lista: { clave: string; valor: unknown }[] = r.ok ? await r.json() : [];
+        return Object.fromEntries(lista.map((c) => [c.clave, c.valor]));
+      } catch (_e) { return {}; }
+    })(),
+  ]);
+  return { servicios, corridaApk: corrida, lanzamiento, config };
 }
 
 Deno.serve(async (req) => {
@@ -249,6 +316,7 @@ Deno.serve(async (req) => {
       versiones, dias, personas,
       horas, semana, monedas, fotos: { total: fotos, personas: usuariosConFoto.size },
       adopcion: await adopcionPanel(),
+      ...(await estadoPanel().then((e) => ({ estado: e })).catch(() => ({ estado: null }))),
       ...(await extrasPanel(Object.fromEntries(lista.map((u) => [u.id, u.email || ""])), ahora)),
     });
   } catch (e) {
