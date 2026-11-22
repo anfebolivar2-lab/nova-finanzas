@@ -1572,6 +1572,20 @@
     window.open("https://wa.me/?text=" + encodeURIComponent(texto), "_blank", "noopener");
     return Promise.resolve();
   }
+  function compartirEnlace(titulo, texto, url) {
+    var P = (window.Capacitor && window.Capacitor.Plugins) || {};
+    if (enApp && P.Share) return P.Share.share({ title: titulo, text: texto, url: url, dialogTitle: titulo }).catch(function () { /* cancelado */ });
+    if (navigator.share) return navigator.share({ title: titulo, text: texto, url: url }).catch(function () { /* cancelado */ });
+    window.open("https://wa.me/?text=" + encodeURIComponent(texto + "\n" + url), "_blank", "noopener");
+    return Promise.resolve();
+  }
+  $("btn-compartir-nova").addEventListener("click", function () {
+    compartirEnlace(
+      "NOVA · Tus finanzas personales",
+      "Te recomiendo NOVA para llevar tus finanzas: anota gastos con texto, voz o foto, gratis y sin anuncios.",
+      cfg.sitioUrl || "https://nova-finanzas.vercel.app"
+    );
+  });
   $("semana-compartir").addEventListener("click", function () {
     var s = NovaConsejos.semana(datos.movimientos);
     compartirTexto("Mi semana en NOVA", "Mi semana en NOVA: gasté " + pesos.format(s.gastos) + (s.ingresos ? " e ingresé " + pesos.format(s.ingresos) : "") + (s.cambio != null ? " (" + Math.abs(s.cambio) + " % " + (s.cambio > 0 ? "más" : "menos") + " que la semana pasada)" : "") + ". — NOVA · OPITA-DIGITAL");
