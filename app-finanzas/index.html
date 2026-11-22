@@ -201,12 +201,6 @@
         <strong id="proyeccion-valor"></strong>
         <span id="proyeccion-nota" class="nota"></span>
       </article>
-      <article id="tarjeta-racha" class="tarjeta seguro" hidden>
-        <span class="etiqueta">🔥 Tu racha</span>
-        <strong id="racha-valor"></strong>
-        <span id="racha-nota" class="nota"></span>
-      </article>
-
       <article id="tarjeta-pago" class="tarjeta seguro" hidden>
         <span class="etiqueta">💵 Tu próximo pago</span>
         <strong id="pago-valor"></strong>
@@ -269,6 +263,7 @@
         <button type="button" class="enlace enlace-manual" data-abrir="hoja-mas">+ Registrar a mano, con el asistente o chatear</button>
         <button type="button" class="enlace enlace-manual" id="btn-repetir-ultimo" hidden>Repetir último gasto</button>
         <div id="frecuentes" class="frecuentes" aria-label="Registros comunes"></div>
+        <div id="sugerencias-hora" class="sugerencias-hora"></div>
       </form>
 
       <button type="button" class="tarjeta acceso-ia" data-abrir="pantalla-chat">
@@ -574,6 +569,13 @@
         <label class="menu-fila"><span class="menu-icono">📍</span><span><strong>Guardar la ubicación</strong><small>Mapa y otros pagos en el mismo lugar</small></span><input type="checkbox" id="perfil-ubicacion" class="interruptor"></label>
       </div>
       <p class="mensaje" id="ajustes-mensaje" role="status"></p>
+
+      <article class="tarjeta formulario">
+        <label for="aj-usura">Tasa de usura efectiva anual (%)</label>
+        <input id="aj-usura" inputmode="decimal" aria-describedby="aj-usura-nota">
+        <small id="aj-usura-nota" class="nota">Consulta la tasa vigente en la Superfinanciera</small>
+        <p id="aj-usura-mensaje" class="mensaje" role="status"></p>
+      </article>
 
       <h2 class="grupo-ajustes">Trabajo con apps de transporte</h2>
       <div class="menu">
@@ -894,6 +896,7 @@
       <button type="button" id="reg-monto" class="monto-grande" aria-label="Valor"><span>$</span><strong id="reg-monto-texto">0</strong></button>
       <button type="button" id="reg-borrar-digito" class="icono-btn" data-tecla="borrar" aria-label="Borrar el último número"><svg viewBox="0 0 24 24"><path d="M21 5H9l-6 7 6 7h12zM13 9l4 6M17 9l-4 6"/></svg></button>
     </div>
+    <p id="reg-tanda" class="nota centro" role="status" hidden></p>
     <span id="reg-resultado" class="nota centro"></span>
     <div class="montos-rapidos" id="reg-montos-rapidos" role="group" aria-label="Sumar al valor">
       <button type="button" data-monto-rapido="1000">+1.000</button>
@@ -956,7 +959,7 @@
       <select id="reg-frecuencia"></select>
       <span class="nota">NOVA lo registrará solo cada vez que llegue la fecha.</span>
     </div>
-    <label class="casilla" id="reg-otro-fila"><input type="checkbox" id="reg-otro"> Guardar y agregar otro</label>
+    <label class="casilla" id="reg-otro-fila"><input type="checkbox" id="reg-otro"> Anotar otro después de guardar</label>
     <p class="mensaje" id="reg-mensaje" role="status"></p>
     <button type="submit" class="primario" id="reg-guardar">Guardar</button>
     <button type="button" id="reg-duplicar" hidden>Duplicar</button>
@@ -1051,10 +1054,15 @@
 <section id="pantalla-tarjeta" class="capa" hidden>
   <div class="sub-cabecera"><button type="button" class="icono-btn" data-cerrar aria-label="Volver"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button><h1>Simulador de tarjeta</h1></div>
   <form id="form-tarjeta" class="formulario" autocomplete="off">
+    <div id="tarjeta-origen-bloque" class="formulario" hidden>
+      <label for="tarjeta-origen">Usar una de mis deudas o tarjetas</label>
+      <select id="tarjeta-origen"></select>
+    </div>
     <label for="tarjeta-deuda" class="centro">¿Cuánto debes en la tarjeta?</label>
     <input id="tarjeta-deuda" class="monto-entrada" inputmode="numeric" placeholder="$ 0" required>
     <label for="tarjeta-tasa">Tasa de interés efectiva anual (%)</label>
     <input id="tarjeta-tasa" inputmode="decimal" placeholder="28,5" required>
+    <p id="tarjeta-usura" class="mensaje error" role="status" hidden>Esta tasa supera la de usura</p>
     <label for="tarjeta-minimo-pct">Pago mínimo (% del saldo)</label>
     <input id="tarjeta-minimo-pct" inputmode="decimal" value="5">
     <label for="tarjeta-minimo-fijo">Pago mínimo fijo del banco (opcional)</label>
@@ -1062,6 +1070,7 @@
     <small class="nota" id="tarjeta-minimo-nota">Si lo dejas vacío, se usa un mínimo fijo de $ 20.000.</small>
     <label for="tarjeta-cuota">¿Cuánto podrías pagar al mes?</label>
     <input id="tarjeta-cuota" class="campo-plata" inputmode="numeric" placeholder="$ 0" required>
+    <button type="button" id="tarjeta-guardar-datos" class="mini" hidden>Guardar tasa y pago mínimo en este dispositivo</button>
     <p class="mensaje" id="tarjeta-mensaje" role="status"></p>
     <button type="submit" class="primario">Calcular</button>
   </form>
@@ -1087,6 +1096,7 @@
     <p class="mensaje" id="abono-mensaje" role="status"></p>
     <button type="submit" class="primario" id="abono-guardar">Registrar abono</button>
   </form>
+  <article id="abono-evolucion" class="tarjeta" hidden></article>
   <div class="seccion-cabecera"><h2>Abonos</h2></div>
   <ul id="lista-abonos" class="lista-simple"></ul>
   <button type="button" id="abono-editar">✏️ Editar esta deuda</button>

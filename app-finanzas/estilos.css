@@ -193,6 +193,12 @@ main .vista { display: flex; flex-direction: column; gap: 14px; }
 .etiquetas { display: inline-flex; flex-wrap: wrap; gap: 4px; }
 .etiqueta-chip { font-size: .75rem; font-weight: 700; color: var(--accent); background: var(--accent-soft); border-radius: 999px; padding: 1px 8px; }
 .frecuentes { display: flex; flex-wrap: wrap; gap: 8px; }
+.sugerencias-hora:empty { display: none; }
+.sugerencias-hora .widget { padding: 12px; }
+.sugerencias-hora button { max-width: 100%; overflow-wrap: anywhere; text-align: left; }
+.insignia-racha { align-self: flex-start; border-radius: 12px; background: var(--accent-soft); padding: 8px 12px; }
+#tarjeta-origen { width: 100%; min-width: 0; text-overflow: ellipsis; }
+#abono-evolucion .linea { display: block; width: calc(100% - 16px); margin: 0 8px; }
 .frecuentes:empty { display: none; }
 .frecuente { display: inline-flex; align-items: center; border: 1px solid var(--line); background: var(--surface-2); border-radius: 999px; max-width: 100%; }
 .frecuente button { border: 0; background: none; border-radius: 999px; padding: 6px 4px 6px 12px; font-size: .85rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }

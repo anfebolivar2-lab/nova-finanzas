@@ -671,7 +671,7 @@
     $("tarjeta-deficit").hidden = t.neto >= 0;
     $("deficit-valor").textContent = ocultos ? "$ ••••" : "−" + pesos.format(Math.abs(t.neto));
 
-    pintarSeguro(); pintarPresupuesto(); pintarFrecuentes(); pintarMiniTarjetas(); pintarProyeccionYRacha(movs, rango); pintarSaludo(); pintarSugerencias(); pintarProximoPago(); pintarApartar(); actualizarWidget();
+    pintarSeguro(); pintarPresupuesto(); pintarFrecuentes(); pintarMiniTarjetas(); pintarProyeccionPeriodo(movs, rango); pintarSaludo(); pintarSugerencias(); pintarProximoPago(); pintarApartar(); actualizarWidget();
     $("btn-repetir-ultimo").hidden = !A.ultimoGasto(datos.movimientos);
     pintarWidgets($("widgets-inicio"), true);
     listaPorDia($("lista-inicio"), movs, desfaseInicio === 0 ? "Aún no hay movimientos en este periodo. Toca + para agregar el primero." : "No hubo movimientos en este periodo.", 60);
@@ -730,19 +730,13 @@
     }
   }
 
-  function pintarProyeccionYRacha(movs, rango) {
+  function pintarProyeccionPeriodo(movs, rango) {
     var pr = desfaseInicio === 0 ? A.proyeccionPeriodo(movs, rango) : null;
     $("tarjeta-proyeccion").hidden = !pr;
     if (pr) {
       $("proyeccion-valor").textContent = ocultos ? "$ ••••" : "Gastarías " + pesos.format(pr.gastosFinal);
       $("proyeccion-nota").textContent = ocultos ? "" : "Vas gastando " + pesos.format(Math.round(pr.ritmoDiario)) + " al día. " +
         (pr.ingresos > 0 ? (pr.saldoFinal >= 0 ? "Te sobrarían " + pesos.format(pr.saldoFinal) + " al terminar." : "Te faltarían " + pesos.format(-pr.saldoFinal) + " para llegar a fin de periodo.") : "Quedan " + pr.diasRestantes + " días.");
-    }
-    var r = A.racha(datos.movimientos);
-    $("tarjeta-racha").hidden = r < 2;
-    if (r >= 2) {
-      $("racha-valor").textContent = r + " días seguidos";
-      $("racha-nota").textContent = r >= 30 ? "¡Un mes entero anotando! Eres imparable." : r >= 7 ? "¡Una semana completa! Sigue así." : "Anota algo cada día para no perderla.";
     }
   }
 
@@ -798,8 +792,10 @@
     cont.replaceChildren();
     datos.frecuentes.forEach(function (f) {
       var chip = el("span", "frecuente");
-      var usar = el("button", null, "⚡ " + f.texto); usar.type = "button";
-      usar.title = "Guardar ahora: " + f.texto;
+      var interpretado = ocultos ? Parser.interpretar(f.texto) : null;
+      var texto = ocultos ? (interpretado.ok ? interpretado.descripcion : "Registro común") : f.texto;
+      var usar = el("button", null, "⚡ " + texto); usar.type = "button";
+      usar.title = "Guardar ahora: " + texto;
       usar.addEventListener("click", function () {
         var r = Parser.interpretar(f.texto);
         if (!r.ok) { mensaje("rapido-mensaje", r.error, true); return; }
@@ -993,10 +989,16 @@
   }
 
   var diaComodidad = A.claveDia(new Date());
+  var horaComodidad = new Date().getHours();
   function revisarHoraLocal() {
     actualizarTema();
-    var dia = A.claveDia(new Date());
-    if (dia === diaComodidad) return;
+    var ahora = new Date(), dia = A.claveDia(ahora), hora = ahora.getHours();
+    if (dia === diaComodidad) {
+      if (hora !== horaComodidad && !$("pantalla-app").hidden) pintarSugerenciasHora();
+      horaComodidad = hora;
+      return;
+    }
+    horaComodidad = hora;
     diaComodidad = dia;
     if ($("pantalla-app").hidden) return;
     pintarInicio();
@@ -1268,6 +1270,9 @@
 
   // ---------- Análisis ----------
   var WIDGETS = [
+    { id: "sugerencias-hora", nombre: "Gastos comunes por hora", inicio: true },
+    { id: "racha", nombre: "Tu racha", inicio: true },
+    { id: "pagos-proximos", nombre: "Pagos programados próximos", inicio: true },
     { id: "rapida", nombre: "Vista rápida" },
     { id: "categorias", nombre: "Gastos por categoría" },
     { id: "etiquetas", nombre: "Gasto por etiqueta" },
@@ -1329,8 +1334,12 @@
     { id: "sugerencias-ahorro", nombre: "Sugerencias para bajar gastos" }
   ];
   function configWidgets() {
-    var guardado = leerLocal("nova-widgets", null) || [];
-    var lista = guardado.filter(function (w) { return WIDGETS.some(function (x) { return x.id === w.id; }); });
+    var anterior = leerLocal("nova-widgets", []) || [];
+    var guardado = fuente.demo ? fuente.widgets || anterior : leerLocal(claveComodidad("widgets"), anterior) || [];
+    var fijo = guardado.find(function (w) { return w.id === "sugerencias-hora"; });
+    var lista = [fijo || { id: "sugerencias-hora", visible: true }].concat(guardado.filter(function (w) {
+      return w.id !== "sugerencias-hora" && WIDGETS.some(function (x) { return x.id === w.id; });
+    }));
     WIDGETS.forEach(function (w) { if (!lista.some(function (x) { return x.id === w.id; })) lista.push({ id: w.id, visible: true }); });
     return lista;
   }
@@ -1353,8 +1362,9 @@
 
   function pintarWidgets(cont, inicio, movs, ciclo, ref, rango) {
     cont.replaceChildren();
+    if (inicio) pintarSugerenciasHora();
     configWidgets().forEach(function (w) {
-      if (!w.visible || (inicio && !WIDGETS.find(function (x) { return x.id === w.id; }).inicio)) return;
+      if (w.id === "sugerencias-hora" || !w.visible || (inicio && !WIDGETS.find(function (x) { return x.id === w.id; }).inicio)) return;
       var art = crearWidget(w.id, movs, ciclo, ref, rango, inicio);
       if (art.childNodes.length) cont.append(art);
     });
@@ -1364,6 +1374,8 @@
     var art = el("article", "tarjeta widget");
     art.dataset.widget = id;
     var render = {
+      "sugerencias-hora": wSugerenciasHora, racha: inicio ? wRacha : null,
+      "pagos-proximos": inicio ? wPagosProximos : null,
       rapida: wRapida, categorias: wCategorias, etiquetas: wEtiquetas, "ingresos-gastos": wIngresosGastos,
       tendencia: wTendencia, proyeccion: wProyeccion, consejos: wConsejos, calendario: wCalendario, logros: wLogros,
       herramientas: wHerramientas, salud: wSalud, calculadoras2: wMasCalculadoras, reto: wReto,
@@ -1395,6 +1407,46 @@
     b.type = "button";
     b.addEventListener("click", accion);
     return b;
+  }
+
+  function pintarSugerenciasHora() {
+    var cont = $("sugerencias-hora");
+    cont.replaceChildren();
+    if (!configWidgets().some(function (w) { return w.id === "sugerencias-hora" && w.visible; })) return;
+    var widget = crearWidget("sugerencias-hora");
+    if (widget.childNodes.length) cont.append(widget);
+  }
+
+  function wSugerenciasHora(art) {
+    var sugerencias = A.sugerenciasPorHora(datos.movimientos, new Date());
+    if (!sugerencias.length) return;
+    titulo(art, "A esta hora sueles anotar");
+    var botones = el("div", "frecuentes");
+    sugerencias.forEach(function (m) {
+      var texto = m.descripcion + (ocultos ? "" : " " + dinero(num(m.monto)));
+      botones.append(botonHabito(texto, function () { abrirRegistro({ repetir: m }); }));
+    });
+    art.append(botones);
+  }
+
+  function wRacha(art) {
+    var r = A.rachaDias(datos.movimientos, new Date()), hito = A.hitoDeRacha(r.record);
+    titulo(art, "🔥 Tu racha");
+    art.append(el("strong", null, r.actual + (r.actual === 1 ? " día seguido" : " días seguidos")),
+      el("p", "nota", "Récord de " + r.record + (r.record === 1 ? " día" : " días")));
+    if (hito) art.append(el("p", "insignia-racha", hito.emoji + " " + hito.dias + " días · " + hito.mensaje));
+  }
+
+  function wPagosProximos(art) {
+    var pagos = A.programadosProximos(datos.programados, new Date(), 1);
+    if (!pagos.length) return;
+    titulo(art, "Pagos programados");
+    var lista = el("ul", "lista-local");
+    pagos.forEach(function (p) {
+      var texto = (p.dias === 0 ? "Hoy vence: " : "Mañana vence: ") + (p.programado.descripcion || "Pago programado");
+      lista.append(el("li", null, texto + (ocultos ? "" : " (" + dinero(num(p.programado.monto)) + ")")));
+    });
+    art.append(lista);
   }
 
   function wAvisoPago(art) {
@@ -1880,8 +1932,12 @@
     var c = el("div", "calc"); c.append(el("strong", null, "🏦 Simulador de crédito"));
     var cm = campoCalc("¿Cuánto pides?", "cr-monto", "10 millones", true), ct = campoCalc("Interés mensual (%)", "cr-tasa", "1,8"), cn = campoCalc("¿En cuántos meses?", "cr-meses", "24");
     var cr = el("p", "calc-res", "Escribe los tres datos.");
-    [cm, ct, cn].forEach(function (f) { c.append(f[0], f[1]); }); c.append(cr);
+    var avisoCredito = el("p", "mensaje error", AVISO_USURA); avisoCredito.hidden = true;
+    avisoCredito.setAttribute("role", "status");
+    [cm, ct, cn].forEach(function (f) { c.append(f[0], f[1]); }); c.append(avisoCredito, cr);
     function calcCredito() {
+      var mensual = A.porcentajeValido(ct[1].value);
+      avisoCredito.hidden = !A.superaUsura(A.tasaAnualDesdeMensual(mensual), tasaUsura());
       var v = NovaConsejos.cuotaCredito(leerValor(cm[1].value), leerTasa(ct[1].value), leerTasa(cn[1].value));
       cr.textContent = v ? "Pagarías " + dinero(v.cuota) + " al mes. En total " + dinero(v.total) + " (intereses: " + dinero(v.intereses) + ")." : "Escribe los tres datos.";
     }
@@ -2333,7 +2389,7 @@
   }
   function calculadora(art, tit, campos, calcular, opciones) {
     var c = el("div", "calc"); c.append(el("strong", null, tit));
-    var res = el("div"), entradas = {};
+    var res = el("div"), entradas = {}, avisos = [];
     res.append(el("p", "calc-res", "Escribe los datos."));
     if (opciones && opciones.ayuda) c.append(el("p", "nota", opciones.ayuda));
     campos.forEach(function (f) {
@@ -2342,6 +2398,13 @@
       if (f.plata && opciones && ocultos) input.type = "password";
       if (f.valor != null) input.value = f.plata ? numeroCO.format(f.valor) : String(f.valor);
       c.append(par[0], input);
+      if (f.tasaEa) {
+        var avisoTasa = el("p", "mensaje error", AVISO_USURA);
+        avisoTasa.setAttribute("role", "status");
+        avisoTasa.hidden = true;
+        c.append(avisoTasa);
+        avisos.push({ campo: input, aviso: avisoTasa });
+      }
       entradas[f.id] = input;
     });
     c.append(res);
@@ -2355,6 +2418,10 @@
         else if (opciones) v[f.id] = texto ? Number(texto.replace(",", ".")) : f.opcional ? 0 : NaN;
         else v[f.id] = leerTasa(texto);
       });
+      if (avisos.length) {
+        var limite = tasaUsura();
+        avisos.forEach(function (a) { a.aviso.hidden = !A.superaUsura(a.campo.value, limite); });
+      }
       var resultado;
       try { resultado = calcular(v); } catch (e) { resultado = null; }
       var mensaje = opciones ? "Revisa los datos para calcular." : "Escribe los datos.";
@@ -2496,7 +2563,7 @@
       var prefijo = "Oferta " + n + " · ";
       campos.push(
         { id: "cc-monto-" + n, etq: prefijo + "Monto", plata: true, omitirVacio: n === 3 },
-        { id: "cc-tasa-" + n, etq: prefijo + tasa, omitirVacio: n === 3 },
+        { id: "cc-tasa-" + n, etq: prefijo + tasa, tasaEa: true, omitirVacio: n === 3 },
         { id: "cc-meses-" + n, etq: prefijo + "Plazo en meses", omitirVacio: n === 3 },
         { id: "cc-seguro-" + n, etq: prefijo + "Seguro mensual (opcional)", plata: true, omitirVacio: true }
       );
@@ -2526,7 +2593,7 @@
     calculadora(art, "Crédito de vivienda o leasing", [
       { id: "cv-valor", etq: "Valor del inmueble o bien", plata: true },
       { id: "cv-inicial", etq: "Cuota inicial (%)", valor: 30 },
-      { id: "cv-tasa", etq: tasa },
+      { id: "cv-tasa", etq: tasa, tasaEa: true },
       { id: "cv-anios", etq: "Plazo en años" },
       { id: "cv-vida", etq: "Seguro de vida mensual", plata: true, valor: 30000, opcional: true },
       { id: "cv-bien", etq: "Seguro de incendio o todo riesgo mensual", plata: true, valor: 30000, opcional: true }
@@ -2538,9 +2605,9 @@
 
     calculadora(art, "Compra de cartera", [
       { id: "cp-saldo", etq: "Saldo actual", plata: true },
-      { id: "cp-actual", etq: "Tasa efectiva anual actual (%)" },
+      { id: "cp-actual", etq: "Tasa efectiva anual actual (%)", tasaEa: true },
       { id: "cp-meses", etq: "Cuotas restantes" },
-      { id: "cp-nueva", etq: "Nueva tasa efectiva anual (%)" },
+      { id: "cp-nueva", etq: "Nueva tasa efectiva anual (%)", tasaEa: true },
       { id: "cp-costos", etq: "Costos de la compra de cartera", plata: true, opcional: true }
     ], function (v) {
       var r = C.compraCartera(v["cp-saldo"], v["cp-actual"], v["cp-meses"], v["cp-nueva"], v["cp-costos"]);
@@ -2871,6 +2938,11 @@
   }
 
   // Personalizar: mostrar u ocultar y reordenar los gráficos.
+  function guardarWidgets(lista) {
+    if (fuente.demo) fuente.widgets = lista;
+    else guardarLocal(claveComodidad("widgets"), lista);
+  }
+
   function pintarPersonalizar() {
     var ul = $("lista-widgets"), lista = configWidgets();
     ul.replaceChildren();
@@ -2879,11 +2951,16 @@
       var li = el("li", "fila-widget");
       var lab = el("label", "casilla");
       var chk = el("input"); chk.type = "checkbox"; chk.checked = w.visible;
-      chk.addEventListener("change", function () { w.visible = chk.checked; guardarLocal("nova-widgets", lista); pintarAnalisis(); pintarWidgets($("widgets-inicio"), true); });
+      chk.addEventListener("change", function () { w.visible = chk.checked; guardarWidgets(lista); pintarAnalisis(); pintarWidgets($("widgets-inicio"), true); });
       lab.append(chk, document.createTextNode(info.nombre));
-      var sube = el("button", "icono-btn", "↑"); sube.type = "button"; sube.disabled = i === 0; sube.setAttribute("aria-label", "Subir " + info.nombre);
+      if (w.id === "sugerencias-hora") {
+        li.append(lab);
+        ul.append(li);
+        return;
+      }
+      var sube = el("button", "icono-btn", "↑"); sube.type = "button"; sube.disabled = i === 1; sube.setAttribute("aria-label", "Subir " + info.nombre);
       var baja = el("button", "icono-btn", "↓"); baja.type = "button"; baja.disabled = i === lista.length - 1; baja.setAttribute("aria-label", "Bajar " + info.nombre);
-      function mover(d) { var x = lista.splice(i, 1)[0]; lista.splice(i + d, 0, x); guardarLocal("nova-widgets", lista); pintarPersonalizar(); pintarAnalisis(); pintarWidgets($("widgets-inicio"), true); }
+      function mover(d) { var x = lista.splice(i, 1)[0]; lista.splice(i + d, 0, x); guardarWidgets(lista); pintarPersonalizar(); pintarAnalisis(); pintarWidgets($("widgets-inicio"), true); }
       sube.addEventListener("click", function () { mover(-1); });
       baja.addEventListener("click", function () { mover(1); });
       li.append(lab, sube, baja);
@@ -2969,8 +3046,27 @@
   $("btn-exportar-busqueda").addEventListener("click", function () { exportarMovimientos(resultadosBusqueda(), "nova-busqueda"); });
 
   // ---------- Configuración ----------
+  function tasaUsura() {
+    return fuente.demo ? fuente.tasaUsura || "" : leerLocal(claveComodidad("usura"), "");
+  }
+
+  var AVISO_USURA = "Esta tasa supera la de usura";
+  $("aj-usura").addEventListener("change", function (e) {
+    var texto = e.target.value.trim(), tasa = texto ? A.porcentajeValido(texto) : "";
+    if (texto && !(tasa > 0)) return mensaje("aj-usura-mensaje", "Escribe una tasa mayor que cero o deja el campo vacío.", true);
+    if (fuente.demo) fuente.tasaUsura = tasa;
+    else if (!guardarLocal(claveComodidad("usura"), tasa)) return mensaje("aj-usura-mensaje", "No se pudo guardar en este dispositivo.", true);
+    mensaje("aj-usura-mensaje", "Guardado en este dispositivo.");
+    pintarAnalisis();
+    pintarUsuraTarjeta();
+  });
+
   function pintarAjustes() {
     $("perfil-email").textContent = fuente.email;
+    if (document.activeElement !== $("aj-usura")) {
+      $("aj-usura").value = String(tasaUsura()).replace(".", ",");
+      mensaje("aj-usura-mensaje", "");
+    }
     var inicial = (fuente.email || "?").trim().charAt(0).toUpperCase();
     $("avatar").textContent = inicial; $("perfil-avatar").textContent = inicial;
     $("aj-ciclo").textContent = Periodos.CICLOS[cicloEfectivo()] + (datos.perfil.presupuesto_monto ? " · " + dinero(num(datos.perfil.presupuesto_monto)) : "");
@@ -3861,16 +3957,94 @@
   }
   $("btn-nueva-deuda").addEventListener("click", function () { abrirDeuda(null); });
 
-  $("btn-simulador-tarjeta").addEventListener("click", function () {
+  var origenesTarjeta = new Map();
+
+  function datosGuardadosTarjeta() {
+    return fuente.demo ? fuente.datosSimulador || {} : leerLocal(claveComodidad("datos-simulador"), {});
+  }
+
+  function pintarUsuraTarjeta() {
+    $("tarjeta-usura").hidden = !A.superaUsura($("tarjeta-tasa").value, tasaUsura());
+  }
+
+  function pintarPrivacidadTarjeta() {
+    ["tarjeta-deuda", "tarjeta-minimo-fijo", "tarjeta-cuota"].forEach(function (id) {
+      $(id).type = ocultos ? "password" : "text";
+    });
+    $("tarjeta-minimo-nota").textContent = ocultos ? "Si lo dejas vacío, se usa un mínimo fijo de ejemplo."
+      : "Si lo dejas vacío, se usa un mínimo fijo de $ 20.000.";
+  }
+
+  function limpiarResultadoTarjeta() {
     mensaje("tarjeta-mensaje", "");
     $("tarjeta-resultado").replaceChildren();
     $("tarjeta-resultado").hidden = true;
+  }
+
+  $("btn-simulador-tarjeta").addEventListener("click", function () {
+    $("form-tarjeta").reset();
+    limpiarResultadoTarjeta();
+    pintarPrivacidadTarjeta();
+    pintarUsuraTarjeta();
+    origenesTarjeta.clear();
+    var sel = $("tarjeta-origen");
+    var manual = el("option", null, "Escribir los datos");
+    manual.value = "";
+    sel.replaceChildren(manual);
+    function agregarOrigen(clave, nombre, saldo) {
+      var opcion = el("option", null, nombre);
+      opcion.value = clave;
+      sel.append(opcion);
+      origenesTarjeta.set(clave, saldo);
+    }
+    resumenDeDeudas().lista.forEach(function (x) {
+      if (x.deuda.tipo === "debo" && x.falta > 0) {
+        agregarOrigen("deuda:" + x.deuda.id, [x.deuda.persona, x.deuda.concepto].filter(Boolean).join(" · "), x.falta);
+      }
+    });
+    datos.cuentas.forEach(function (c) {
+      if (c.tipo === "credito") agregarOrigen("tarjeta:" + c.id, c.nombre, Math.max(0, -saldoCuenta(c)));
+    });
+    $("tarjeta-origen-bloque").hidden = !origenesTarjeta.size;
+    $("tarjeta-guardar-datos").hidden = true;
     abrirCapa("pantalla-tarjeta");
   });
 
+  $("tarjeta-origen").addEventListener("change", function (e) {
+    var clave = e.target.value;
+    var saldo = origenesTarjeta.get(clave), guardado = datosGuardadosTarjeta()[clave];
+    $("tarjeta-deuda").value = saldo === undefined ? "" : textoMonto(saldo);
+    $("tarjeta-tasa").value = guardado ? String(guardado.tasa).replace(".", ",") : "";
+    $("tarjeta-minimo-pct").value = guardado ? String(guardado.porcentaje).replace(".", ",") : "5";
+    $("tarjeta-minimo-fijo").value = guardado ? textoMonto(guardado.minimo) : "";
+    $("tarjeta-guardar-datos").hidden = !clave;
+    limpiarResultadoTarjeta();
+    pintarUsuraTarjeta();
+  });
+
+  $("tarjeta-tasa").addEventListener("input", pintarUsuraTarjeta);
+
+  $("tarjeta-guardar-datos").addEventListener("click", function () {
+    var clave = $("tarjeta-origen").value;
+    if (!origenesTarjeta.has(clave)) return;
+    var tasa = leerPorcentajeTarjeta("tarjeta-tasa"), porcentaje = leerPorcentajeTarjeta("tarjeta-minimo-pct");
+    var textoMinimo = $("tarjeta-minimo-fijo").value.trim(), minimo = leerMontoTarjeta(textoMinimo);
+    if (!(tasa >= 0 && tasa <= 200) || !(porcentaje >= 0 && porcentaje <= 100) ||
+        !/\d/.test(textoMinimo) || !(Number.isFinite(minimo) && minimo >= 0)) {
+      return mensaje("tarjeta-mensaje", "Revisa la tasa y escribe el pago mínimo fijo para guardar. Puede ser cero.", true);
+    }
+    var guardados = datosGuardadosTarjeta();
+    guardados[clave] = { tasa: tasa, porcentaje: porcentaje, minimo: minimo };
+    if (fuente.demo) fuente.datosSimulador = guardados;
+    else if (!guardarLocal(claveComodidad("datos-simulador"), guardados)) {
+      return mensaje("tarjeta-mensaje", "No se pudo guardar en este dispositivo.", true);
+    }
+    mensaje("tarjeta-mensaje", "");
+    toast("Tasa y pago mínimo guardados");
+  });
+
   function leerPorcentajeTarjeta(id) {
-    var texto = $(id).value.trim().replace(",", ".");
-    return /^[+-]?(?:\d+(?:\.\d*)?|\.\d+)$/.test(texto) ? Number(texto) : NaN;
+    return A.porcentajeValido($(id).value);
   }
 
   function leerMontoTarjeta(texto) {
@@ -3896,8 +4070,8 @@
   $("form-tarjeta").addEventListener("submit", function (e) {
     e.preventDefault();
     var resultado = $("tarjeta-resultado");
-    resultado.replaceChildren();
-    resultado.hidden = true;
+    limpiarResultadoTarjeta();
+    pintarUsuraTarjeta();
     var deuda = leerMontoTarjeta($("tarjeta-deuda").value);
     var tasaEA = leerPorcentajeTarjeta("tarjeta-tasa");
     var pagoMinimoPct = leerPorcentajeTarjeta("tarjeta-minimo-pct");
@@ -4035,6 +4209,20 @@
     $("form-abono").hidden = x.falta <= 0;
     var ul = $("lista-abonos");
     ul.replaceChildren();
+    var grafico = $("abono-evolucion");
+    grafico.replaceChildren();
+    var puntos = ocultos ? [] : A.evolucionDeuda(d, datos.abonos);
+    grafico.hidden = puntos.length < 2;
+    if (!grafico.hidden) {
+      titulo(grafico, "Cómo ha bajado el saldo");
+      var etiquetas = puntos.map(function (p, i) {
+        return i === 0 ? "Inicio" : i === puntos.length - 1 ? "Ahora" : "";
+      });
+      var linea = lineaSVG(puntos.map(function (p) { return p.saldo; }), etiquetas, "", 90);
+      linea.setAttribute("role", "img");
+      linea.setAttribute("aria-label", "El saldo pasó de " + dinero(puntos[0].saldo) + " a " + dinero(puntos[puntos.length - 1].saldo));
+      grafico.append(linea);
+    }
     var abonos = datos.abonos.filter(function (a) { return a.deuda_id === d.id; }).sort(function (a, b) { return String(b.fecha).localeCompare(String(a.fecha)) || b.id - a.id; });
     if (!abonos.length) ul.append(el("li", "vacio", "Todavía no hay abonos."));
     abonos.forEach(function (a) {
@@ -4461,7 +4649,13 @@
         f.entrada.disabled = ocultos;
       });
     }
-    pintarInicio(); pintarPlanes(); pintarAnalisis(); pintarBuscar(); pintarAjustes(); pintarPruebasGratis(); pintarIA(); pintarConductor(); pintarDeudas(); pintarGrupos(); pintarCalendario(); pintarEspacioCabecera(); if (pilaCapas.indexOf("pantalla-detalle") >= 0) pintarDetalle(); if (deudaAbierta && pilaCapas.indexOf("pantalla-abonos") >= 0) pintarAbonos();
+    pintarInicio(); pintarPlanes(); pintarAnalisis(); pintarBuscar(); pintarAjustes(); pintarPruebasGratis(); pintarIA(); pintarConductor(); pintarDeudas(); pintarGrupos(); pintarCalendario(); pintarEspacioCabecera();
+    if (!$("pantalla-tarjeta").hidden) {
+      var cambioPrivacidad = $("tarjeta-deuda").type !== (ocultos ? "password" : "text");
+      if (cambioPrivacidad) { pintarPrivacidadTarjeta(); limpiarResultadoTarjeta(); }
+    }
+    if (!$("pantalla-registro").hidden) pintarRegistro();
+    if (pilaCapas.indexOf("pantalla-detalle") >= 0) pintarDetalle(); if (deudaAbierta && pilaCapas.indexOf("pantalla-abonos") >= 0) pintarAbonos();
   }
 
   function alerta(e) { mensaje("rapido-mensaje", "No se pudo guardar: " + (e && e.message ? e.message : e), true); }
@@ -4585,7 +4779,10 @@
     $("reg-bloque-recurrente").hidden = !o.recurrente;
     $("reg-btn-recurrente").hidden = !!editado;
     $("reg-otro-fila").hidden = !!editado;
-    if (o.repetir) $("reg-otro").checked = false;
+    reg.tanda = o.tanda || 0;
+    $("reg-otro").checked = !!o.tandaActiva;
+    $("reg-tanda").hidden = !reg.tanda;
+    $("reg-tanda").textContent = reg.tanda ? "Llevas " + reg.tanda + " en esta tanda" : "";
     $("reg-borrar").hidden = $("reg-duplicar").hidden = !editado;
     var sel = $("reg-cuenta");
     sel.replaceChildren();
@@ -4837,17 +5034,18 @@
     document.querySelectorAll("#reg-tipo button").forEach(function (b) { b.setAttribute("aria-checked", String(b.dataset.tipo === reg.tipo)); });
     $("pantalla-registro").classList.toggle("es-ingreso", reg.tipo === "ingreso");
     $("reg-montos-rapidos").hidden = !!reg.editar;
-    $("reg-monto-texto").textContent = formatearExpr(reg.expr);
+    $("reg-monto-texto").textContent = ocultos && reg.expr ? "••••" : formatearExpr(reg.expr);
     var v = A.evaluar(reg.expr), ext = reg.moneda !== monedaBase(), mi = Mon.info(reg.moneda), mb = Mon.info(monedaBase());
-    $("reg-resultado").textContent = /[+\-×÷−]/.test(reg.expr.replace(/^-/, "")) ? (isNaN(v) ? "…" : "= " + (ext ? Mon.formatoMonto(v, reg.moneda) : pesos.format(v))) : "";
+    $("reg-resultado").textContent = !ocultos && /[+\-×÷−]/.test(reg.expr.replace(/^-/, "")) ? (isNaN(v) ? "…" : "= " + (ext ? Mon.formatoMonto(v, reg.moneda) : pesos.format(v))) : "";
     $("reg-moneda-bandera").textContent = mi.bandera; $("reg-moneda-codigo").textContent = mi.codigo;
     $("reg-monto").querySelector("span").textContent = ext ? mi.codigo : monedaBase() === "COP" ? "$" : monedaBase();
     $("reg-moneda").classList.toggle("activo", ext);
     $("reg-bloque-moneda").hidden = !ext;
     if (ext) {
       var copCalc = v > 0 && reg.tasa > 0 ? pesosDelRegistro(v) : null;
-      $("reg-conversion").textContent = copCalc != null ? Mon.formatoMonto(v, reg.moneda) + " = " + pesos.format(copCalc) + " " + mb.codigo : "Escribe cuánto es en " + mi.nombre.toLowerCase() + " o en " + mb.nombre.toLowerCase() + ": el otro valor se calcula solo.";
+      $("reg-conversion").textContent = ocultos ? "" : copCalc != null ? Mon.formatoMonto(v, reg.moneda) + " = " + pesos.format(copCalc) + " " + mb.codigo : "Escribe cuánto es en " + mi.nombre.toLowerCase() + " o en " + mb.nombre.toLowerCase() + ": el otro valor se calcula solo.";
       $("reg-orig-etiqueta").textContent = "Valor en " + mi.nombre.toLowerCase() + " (" + mi.codigo + ")";
+      $("reg-orig").type = $("reg-cop").type = ocultos ? "password" : "text";
       if (document.activeElement !== $("reg-orig")) $("reg-orig").value = v > 0 ? formatearExpr(/[+\-×÷−]/.test(reg.expr.replace(/^-/, "")) ? textoMonto(v) : reg.expr) : "";
       if (document.activeElement !== $("reg-cop")) $("reg-cop").value = copCalc != null ? numeroCO.format(copCalc) : "";
       $("reg-tasa-auto").hidden = !(reg.tasaAuto && reg.tasa && Math.abs(reg.tasa - reg.tasaAuto) > 1e-9);
@@ -4954,6 +5152,7 @@
 
   $("form-registro").addEventListener("submit", function (e) {
     e.preventDefault();
+    if ($("reg-guardar").disabled) return;
     if ($("reg-etiqueta").value.trim()) agregarEtiquetaEscrita();
     var montoOriginal = A.evaluar(reg.expr), ext = reg.moneda !== monedaBase();
     if (!(montoOriginal > 0)) { $("teclado").hidden = false; return mensaje("reg-mensaje", "Escribe el valor con el teclado de números.", true); }
@@ -4970,7 +5169,7 @@
     btn.disabled = true;
     var conCategoria = reg.categoriaId != null ? Promise.resolve(categoria(reg.categoriaId))
       : categoriaPorNombre(reg.tipo === "ingreso" ? "Otros ingresos" : "Otros gastos", reg.tipo);
-    var editar = reg.editar, otro = $("reg-otro").checked, docId = reg.documentoId;
+    var registro = reg, editar = reg.editar, otro = $("reg-otro").checked, docId = reg.documentoId;
     conCategoria.then(function (c) {
       var fila = {
         cuenta_id: Number($("reg-cuenta").value) || datos.cuentas[0].id, categoria_id: c.id, tipo: reg.tipo,
@@ -5018,9 +5217,10 @@
           }
         }, accion.duracion);
       }
+      if (reg !== registro || pilaCapas[pilaCapas.length - 1] !== "pantalla-registro") return;
       if (otro && !editar) {
-        reg.expr = ""; reg.etiquetas = []; $("reg-desc").value = ""; $("reg-nota").value = ""; $("teclado").hidden = false;
-        mensaje("reg-mensaje", ""); pintarRegistro();
+        abrirRegistro({ tipo: registro.tipo, tandaActiva: true, tanda: registro.tanda + (r.m ? 1 : 0) });
+        $("reg-monto").focus();
       } else cerrarCapa();
     }).catch(function (err) { mensaje("reg-mensaje", "No se pudo guardar: " + err.message, true); })
       .finally(function () { btn.disabled = false; });
