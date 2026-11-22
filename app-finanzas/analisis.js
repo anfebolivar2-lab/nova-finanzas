@@ -775,7 +775,62 @@
     return pico ? { celdas: celdas, max: pico.total, total: total, pico: pico } : null;
   }
 
+  // Saldos y mínimos por id de cuenta. Un mínimo de cero también activa el aviso.
+  function cuentasBajas(cuentas, saldos, minimos) {
+    return cuentas.reduce(function (avisos, cuenta) {
+      var saldo = saldos[cuenta.id], minimo = minimos[cuenta.id];
+      if (Number.isFinite(saldo) && Number.isFinite(minimo) && saldo < minimo) {
+        avisos.push({ cuenta: cuenta, saldo: saldo, minimo: minimo });
+      }
+      return avisos;
+    }, []);
+  }
+
+  // Cada presupuesto usa el gasto de su propio ciclo, por id de límite.
+  function avisosLimite(presupuestos, gastos) {
+    return presupuestos.reduce(function (avisos, limite) {
+      var monto = num(limite.monto), gastado = num(gastos[limite.id]);
+      if (monto > 0 && gastado / monto >= 0.8) {
+        avisos.push({ limite: limite, gastado: gastado, nivel: gastado >= monto ? 100 : 80 });
+      }
+      return avisos;
+    }, []);
+  }
+
+  function movimientosReales(movs) {
+    return movs.filter(function (m) {
+      return !m.transferencia && m.estado !== "pendiente" && (m.tipo === "gasto" || m.tipo === "ingreso");
+    });
+  }
+
+  function resumenMes(movs, ahora) {
+    var enCurso = ahora.getDate() >= 25;
+    var rango = desplazar("mensual", ahora, enCurso ? 0 : -1);
+    var registrados = enRango(movimientosReales(movs), rango);
+    if (enCurso) registrados = registrados.filter(function (m) { return new Date(m.fecha) <= ahora; });
+    var t = totales(registrados);
+    var categoriaTop = porCategoria(registrados)[0];
+    var frase = "Aún no hay movimientos en este mes.";
+    if (t.cantidad) {
+      if (t.neto > 0) frase = "Te quedó plata para ahorrar.";
+      else if (t.neto < 0) frase = "Gastaste más de lo que ganaste.";
+      else frase = "Ganaste lo mismo que gastaste.";
+    }
+    return {
+      mes: nombrePeriodo("mensual", rango), enCurso: enCurso, ingresos: t.ingresos, gastos: t.gastos,
+      ahorro: t.neto, categoriaTop: categoriaTop, frase: frase
+    };
+  }
+
+  function metaSugerida(movs, ahora) {
+    var rango = { desde: desplazar("mensual", ahora, -3).desde, hasta: Periodos.periodo("mensual", ahora).desde };
+    var promedio = totales(enRango(movimientosReales(movs), rango)).neto / 3;
+    var monto = Math.round(promedio / 2000) * 1000;
+    return { monto: monto > 0 ? monto : null, sobro: promedio > 0 };
+  }
+
   var api = {
+    cuentasBajas: cuentasBajas, avisosLimite: avisosLimite, resumenMes: resumenMes, metaSugerida: metaSugerida,
     calorHoraDia: calorHoraDia, mayoresGastos: mayoresGastos, resumenSemana: resumenSemana, ultimoGasto: ultimoGasto,
     calendarioMes: calendarioMes, suscripciones: suscripciones, alcanza: alcanza, mesVsPromedio: mesVsPromedio, numeroLibertad: numeroLibertad,
     desplazar: desplazar, nombrePeriodo: nombrePeriodo, nombreCorto: nombreCorto, enRango: enRango, totales: totales,
