@@ -113,7 +113,7 @@ Lista de ideas propuestas para revisar; ninguna está hecha todavía.
 - ✅ Comparar este año con el anterior, mes por mes.
 - ✅ Flujo de caja: cuánto entra y sale por semana.
 - ✅ Gráfico de patrimonio neto (lo que tienes menos lo que debes).
-- Exportar un "estado financiero" mensual en PDF bonito.
+- ✅ Exportar un "estado financiero" mensual en PDF bonito.
 
 ## Para ahorrar más
 
@@ -143,7 +143,7 @@ Lista de ideas propuestas para revisar; ninguna está hecha todavía.
 
 ## Colombia: trabajo, impuestos y bancos
 
-- ⭐ La TRM del día en la pantalla de inicio.
+- ✅ ⭐ La TRM del día en la pantalla de inicio.
 - ✅ Calculadora de liquidación laboral al terminar un contrato.
 - ✅ Calculadora de horas extra y recargos nocturnos y dominicales.
 - ✅ Salario neto: cuánto llega después de salud y pensión.
@@ -177,7 +177,7 @@ Lista de ideas propuestas para revisar; ninguna está hecha todavía.
 ## NOVA IA
 
 - ✅ Preguntas sugeridas según tus datos ("¿por qué gasté más este mes?").
-- Que la IA explique cualquier gráfico con un toque.
+- ✅ Que la IA explique cualquier gráfico con un toque.
 - Plan de presupuesto generado por la IA con tus números reales.
 - La IA detecta suscripciones que olvidaste.
 - ✅ (en PR) Chat por voz con NOVA IA.
@@ -189,7 +189,7 @@ Lista de ideas propuestas para revisar; ninguna está hecha todavía.
 
 - ⭐ Pantalla de inicio personalizable (elegir y ordenar las tarjetas).
 - ✅ Modo claro y oscuro automático según la hora.
-- Animaciones suaves al anotar (confirmación visual).
+- ✅ Animaciones suaves al anotar (confirmación visual).
 - ✅ Buscar con filtros combinados (fecha, monto, categoría, cuenta).
 - ✅ Gestos: deslizar un movimiento para editarlo o borrarlo (borrar siempre con confirmación).
 - ✅ Íconos de categorías personalizables con emoji.

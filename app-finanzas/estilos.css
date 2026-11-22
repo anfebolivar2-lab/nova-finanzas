@@ -1056,3 +1056,38 @@ button.mini { padding: 6px 12px; border-radius: 999px; font-size: .8rem; }
 .aviso-config { margin: 8px 0; border-color: var(--accent); }
 .aviso-config p { margin: 4px 0 0; }
 .aviso-config p, .aviso-config-texto { white-space: pre-wrap; overflow-wrap: anywhere; }
+
+.trm-dia { display: grid; gap: 4px; text-align: start; width: 100%; padding: 0; border: 0; background: none; color: inherit; }
+.toast.movimiento-guardado .toast-titulo::before {
+  content: "✓" / "";
+  display: inline-block;
+  margin-inline-end: .35em;
+  color: var(--accent);
+}
+@media (prefers-reduced-motion: no-preference) {
+  .toast.movimiento-guardado .toast-titulo::before { animation: check-movimiento 600ms ease-out both; }
+}
+@keyframes check-movimiento {
+  0% { opacity: 0; transform: scale(.4); }
+  45% { opacity: 1; transform: scale(1.25); }
+  100% { opacity: 1; transform: scale(1); }
+}
+
+.estado-financiero table { width: 100%; border-collapse: collapse; font-size: .9rem; }
+.estado-financiero th, .estado-financiero td { padding: .5em .3em; border-bottom: 1px solid var(--line); text-align: end; overflow-wrap: break-word; }
+.estado-financiero thead th { font-size: .78rem; hyphens: none; word-break: normal; }
+.estado-financiero th:first-child { text-align: start; }
+.estado-financiero h2 { margin-top: 1.25em; font-size: 1.1rem; }
+@media print {
+  body:has(> #bloqueo:not([hidden])) > #pantalla-estado-financiero { display: none !important; }
+  body:has(> #pantalla-estado-financiero:not([hidden])):not(:has(> #bloqueo:not([hidden]))) { background: white; overflow: visible; }
+  body:has(> #pantalla-estado-financiero:not([hidden])):not(:has(> #bloqueo:not([hidden]))) > :not(#pantalla-estado-financiero) { display: none !important; }
+  body:not(:has(> #bloqueo:not([hidden]))) > #pantalla-estado-financiero:not([hidden]) {
+    display: block; position: static; padding: 0; overflow: visible; background: white; color: black;
+    --line: #c0c0c0; --muted: #444;
+  }
+  .estado-financiero .sub-cabecera { position: static; background: none; }
+  .estado-financiero button { display: none !important; }
+  .estado-financiero tr { break-inside: avoid; }
+  .estado-financiero h2 { break-after: avoid; }
+}

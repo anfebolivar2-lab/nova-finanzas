@@ -308,6 +308,7 @@
       <article class="tarjeta">
         <h2 class="titulo-tarjeta">Gastos de esta semana</h2>
         <div id="grafico-semana" class="grafico" role="img"></div>
+        <div id="grafico-semana-acciones"></div>
       </article>
 
       <div id="widgets-inicio" class="widgets"></div>
@@ -460,10 +461,12 @@
       <article class="tarjeta widget">
         <h2 class="titulo-widget">Ganancias por app</h2>
         <ul id="trabajo-plataformas" class="por-categoria"></ul>
+        <div id="trabajo-plataformas-acciones"></div>
       </article>
       <article class="tarjeta widget">
         <h2 class="titulo-widget">En qué gastas del trabajo</h2>
         <ul id="trabajo-categorias" class="por-categoria"></ul>
+        <div id="trabajo-categorias-acciones"></div>
       </article>
 
       <div class="seccion-cabecera">
@@ -832,6 +835,7 @@
       <article class="tarjeta"><strong>Informes completos</strong><p class="nota">Con tu nombre, cifras, gráficos y todos tus movimientos, listos para guardar, imprimir o enviar. Salen del periodo que ves en Inicio.</p></article>
       <div class="inf-barra"><span>Elige el periodo y descarga</span><span class="inf-iconos"><button type="button" class="inf-ico" data-informe="pdf" data-ctx="exportar" aria-label="Descargar informe en PDF"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 2h8l5 5v13a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2z" fill="#e5483d"/><path d="M14 2v5h5" fill="#f2a29c"/><text x="12" y="17" text-anchor="middle" font-size="6.2" font-weight="800" fill="#fff" font-family="Arial,sans-serif">PDF</text></svg></button><button type="button" class="inf-ico" data-informe="excel" data-ctx="exportar" aria-label="Descargar informe en Excel"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 2h8l5 5v13a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2z" fill="#1f9d55"/><path d="M14 2v5h5" fill="#8fd1ac"/><text x="12" y="17" text-anchor="middle" font-size="6.2" font-weight="800" fill="#fff" font-family="Arial,sans-serif">XLS</text></svg></button></span></div>
       <div class="menu">
+        <button type="button" data-estado-financiero><span class="menu-icono">📋</span><strong>Estado financiero del mes</strong></button>
         <button type="button" data-exportar="excel"><span class="menu-icono">📗</span><span><strong>Excel con dashboard</strong><small>Hoja de resumen con gráficos, transacciones, categorías, cuentas y límites</small></span></button>
         <button type="button" data-exportar="pdf"><span class="menu-icono">📕</span><span><strong>Informe PDF</strong><small>Documento con tus cifras, gráficos y movimientos</small></span></button>
       </div>
@@ -1181,6 +1185,7 @@
   <div class="cal-grilla" role="grid" aria-label="Días del mes">
     <span class="cal-sem">L</span><span class="cal-sem">M</span><span class="cal-sem">M</span><span class="cal-sem">J</span><span class="cal-sem">V</span><span class="cal-sem">S</span><span class="cal-sem">D</span>
     <div id="cal-dias" class="cal-dias"></div>
+    <div id="cal-grafico-acciones"></div>
   </div>
   <div class="cal-leyenda" aria-hidden="true"><span>Menos</span><i class="n0"></i><i class="n1"></i><i class="n2"></i><i class="n3"></i><i class="n4"></i><span>Más</span></div>
   <div id="cal-detalle" class="cal-detalle"></div>
@@ -1544,9 +1549,19 @@
     </div>
     <p id="informe-nombre" class="informe-nombre"></p>
     <button type="button" id="informe-descargar" class="primario">Descargar</button>
+    <button type="button" class="mini" data-estado-financiero>Estado financiero del mes</button>
     <button type="button" class="enlace" data-cerrar>Cancelar</button>
   </div>
 </div>
+
+<section id="pantalla-estado-financiero" class="capa estado-financiero" aria-labelledby="estado-financiero-titulo" hidden>
+  <div class="sub-cabecera">
+    <button type="button" class="icono-btn" data-cerrar aria-label="Volver"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button>
+    <h1 id="estado-financiero-titulo">Estado financiero del mes</h1>
+  </div>
+  <div id="estado-financiero-datos"></div>
+  <button type="button" id="estado-financiero-imprimir" class="primario">Imprimir / guardar PDF</button>
+</section>
 
 <!-- Editor general: se usa para corregir o borrar metas, abonos, cuentas, registros comunes y programaciones -->
 <div id="hoja-editar" class="hoja-fondo" hidden>

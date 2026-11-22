@@ -106,16 +106,17 @@
     '<path d="M50 52c6-2 10 2 8 8-1 3-6 4-9 1z" fill="#1f9d6f"/><rect x="53" y="44" width="5" height="11" rx="2.5" fill="#1f9d6f" transform="rotate(-18 55 50)"/>' +
     '<path d="M24 70l-3 4h8zM40 70l3 4h-8z" fill="#f3b23c"/></svg>';
   // Tarjeta de arriba: titulo, detalle y valor opcionales.
-  function toast(titulo, detalle, valor, accion) {
+  function toast(titulo, detalle, valor, accion, movimientoGuardado) {
     var espera = deshacerHasta - Date.now();
     if (espera > 0 && !(accion && accion.duracion)) {
-      setTimeout(function () { toast(titulo, detalle, valor, accion); }, espera);
+      setTimeout(function () { toast(titulo, detalle, valor, accion, movimientoGuardado); }, espera);
       return;
     }
     var t = $("toast");
     var falla = /^(No se pudo|No pude|Un cambio guardado sin internet)/.test(titulo);
     t.className = "toast" + (falla ? " toast-error" : "") + (accion ? " toast-con-accion" : "");
     t.classList.toggle("valores-ocultos", ocultos);
+    t.classList.toggle("movimiento-guardado", !!movimientoGuardado);
     t.textContent = "";
     t.insertAdjacentHTML("afterbegin", NOVI);
     var col = el("div", "toast-texto");
@@ -848,6 +849,12 @@
       d.append(col, el("small", null, DIAS[i]));
       g.append(d);
     });
+    var acciones = $("grafico-semana-acciones");
+    acciones.replaceChildren();
+    explicarGrafico(acciones, "Gastos por día de la semana", A.claveDia(semana) + " a " + A.claveDia(ahora),
+      [["Gasto total", gSemana]].concat(dias.slice(0, hoyIdx + 1).map(function (v, i) {
+        return [DIAS[i], v];
+      })));
   }
 
   function pintarFrecuentes() {
@@ -1342,6 +1349,7 @@
   // ---------- Análisis ----------
   var WIDGETS = [
     { id: "sugerencias-hora", nombre: "Gastos comunes por hora", inicio: true },
+    { id: "trm-dia", nombre: "Dólar hoy (TRM)", inicio: true },
     { id: "racha", nombre: "Tu racha", inicio: true },
     { id: "pagos-proximos", nombre: "Pagos programados próximos", inicio: true },
     { id: "rapida", nombre: "Vista rápida" },
@@ -1446,7 +1454,7 @@
     art.dataset.widget = id;
     var render = {
       "aviso-dueno": inicio ? pintarAvisoDueno : null, "sugerencias-hora": wSugerenciasHora, racha: inicio ? wRacha : null,
-      "pagos-proximos": inicio ? wPagosProximos : null,
+      "pagos-proximos": inicio ? wPagosProximos : null, "trm-dia": inicio ? wTrmDia : null,
       rapida: wRapida, categorias: wCategorias, etiquetas: wEtiquetas, "ingresos-gastos": wIngresosGastos,
       tendencia: wTendencia, proyeccion: wProyeccion, consejos: wConsejos, calendario: wCalendario, logros: wLogros,
       herramientas: wHerramientas, salud: wSalud, calculadoras2: wMasCalculadoras, reto: function (art) { wReto(art, inicio); },
@@ -1478,6 +1486,17 @@
     b.type = "button";
     b.addEventListener("click", accion);
     return b;
+  }
+
+  function wTrmDia(art) {
+    var tasas = leerLocal("nova-tasas", null);
+    var trm = Mon.formatoTRM(tasas && tasas.trm);
+    if (!trm) return;
+    var b = el("button", "trm-dia");
+    b.type = "button";
+    b.append(el("strong", null, trm.texto), el("small", "nota", trm.fecha));
+    b.addEventListener("click", function () { ir("ajustes-tasas"); });
+    art.append(b);
   }
 
   function pintarSugerenciasHora() {
@@ -1792,9 +1811,18 @@
       });
     });
     art.append(cuad, el("p", "nota", "Más intenso el color = más plata en esa franja. Toma los gastos del periodo que estás viendo."));
+    var franjasConGasto = [];
+    r.celdas.forEach(function (fila, dia) {
+      fila.forEach(function (dato, franja) {
+        if (dato.total) franjasConGasto.push([dias[dia] + " · " + franjas[franja], dato.total]);
+      });
+    });
+    franjasConGasto.sort(function (a, b) { return b[1] - a[1]; });
+    var total = franjasConGasto.reduce(function (suma, fila) { return suma + fila[1]; }, 0);
+    explicarGrafico(art, "Gasto por día y franja horaria", periodoGrafico(rango), [["Gasto total", total]].concat(franjasConGasto));
   }
 
-  function barrasAnalisis(art, filas, primera, segunda) {
+  function barrasAnalisis(art, filas, primera, segunda, nombre, periodo) {
     var max = filas.reduce(function (tope, f) { return Math.max(tope, f.a, f.b); }, 0) || 1;
     var grafico = el("div", "barras-dobles barras-analisis");
     grafico.style.gridTemplateColumns = "repeat(" + filas.length + ", minmax(0, 1fr))";
@@ -1819,6 +1847,11 @@
       lista.append(filaAnalisis(f.nombre, texto));
     });
     art.append(grafico, leyenda, detalle);
+    var total = filas.reduce(function (suma, f) { return [suma[0] + f.a, suma[1] + f.b]; }, [0, 0]);
+    var orden = " · " + primera + " / " + segunda;
+    explicarGrafico(art, nombre, periodo, [["Total" + orden, total[0], total[1]]].concat(filas.map(function (f) {
+      return [f.nombre + orden, f.a, f.b];
+    })));
   }
 
   function filaAnalisis(nombre, texto) {
@@ -1834,7 +1867,7 @@
     barrasAnalisis(art, meses.map(function (mes) {
       return { etiqueta: A.nombreCorto("mensual", mes), nombre: A.nombrePeriodo("mensual", mes),
         a: mes.ingresos, b: mes.gastos };
-    }), "Ingresos", "Gastos");
+    }), "Ingresos", "Gastos", "Ingresos vs. gastos", "Últimos 12 meses");
   }
 
   function wTendenciaCategorias(art) {
@@ -1856,6 +1889,9 @@
       }).join(", "));
       var grupo = el("div");
       grupo.append(el("strong", null, nombre), el("p", "nota", cambio), svg);
+      explicarGrafico(grupo, "Tendencia de gastos en " + nombreCategoria(f.id), "Últimos 6 meses", f.meses.map(function (mes) {
+        return [A.nombrePeriodo("mensual", mes), mes.total];
+      }));
       art.append(grupo);
     });
   }
@@ -1879,7 +1915,7 @@
     art.append(el("p", "nota", "Gasto de este año hasta hoy y del año anterior completo."));
     barrasAnalisis(art, r.meses.map(function (mes, i) {
       return { etiqueta: mes.etiqueta, nombre: A.MESES[i], a: mes.actual, b: mes.anterior };
-    }), String(r.anio), String(r.anioAnterior));
+    }), String(r.anio), String(r.anioAnterior), "Gasto de este año contra el anterior", r.anio + " y " + r.anioAnterior);
     art.append(el("p", "calc-res", r.anio + " " + dinero(r.totalActual) + " · " +
       r.anioAnterior + " " + dinero(r.totalAnterior) + " · Diferencia " + dinero(r.diferencia)));
   }
@@ -1891,7 +1927,7 @@
     barrasAnalisis(art, semanas.map(function (semana) {
       return { etiqueta: A.nombreCorto("semanal", semana), nombre: A.nombrePeriodo("semanal", semana),
         a: semana.ingresos, b: semana.gastos, neto: semana.neto };
-    }), "Entró", "Salió");
+    }), "Entró", "Salió", "Flujo de caja por semana", "Últimas 8 semanas");
     art.append(el("p", "calc-res", "Neto de esta semana " + dinero(semanas[semanas.length - 1].neto)));
   }
 
@@ -1926,6 +1962,7 @@
     if (!ocultos) art.append(barraSimple(r.activos / max * 100, false));
     art.append(el("div", "nota", "Pasivos " + dinero(r.deudas)));
     if (!ocultos) art.append(barraSimple(r.deudas / max * 100, true));
+    explicarGrafico(art, "Patrimonio neto", "Saldo actual", [["Activos", r.activos], ["Pasivos", r.deudas], ["Patrimonio neto", r.neto]]);
   }
 
   function wDistribucionPatrimonio(art) {
@@ -1939,6 +1976,9 @@
       if (!ocultos) art.append(barraSimple(pct, false));
     });
     art.append(el("p", "calc-res", "Deudas " + dinero(r.deudas)));
+    explicarGrafico(art, "Distribución del patrimonio", "Saldo actual", [
+      ["Efectivo y cuentas", valores.cuentas], ["Inversiones", valores.inversiones], ["Bienes", valores.bienes], ["Deudas", r.deudas]
+    ]);
   }
 
   function wVencimientosCdt(art) {
@@ -1971,6 +2011,7 @@
     var cuad = el("div", "cal-dias");
     pintarDiasCalendario(cuad, cal, true, null, function (clave) { abrirCalendario("analisis", clave); });
     art.append(cuad);
+    explicarCalendario(art, cal, "gasto");
   }
   function wLogros(art) {
     titulo(art, "Logros");
@@ -2378,6 +2419,9 @@
     if (!r) return art.append(el("p", "nota", "Cuando tengas gastos, aquí ves en qué parte del mes se te va más la plata."));
     art.append(el("p", "calc-res", "Gastas más " + r.mayor.nombre.toLowerCase().replace("del 22 en adelante", "del 22 en adelante") + " (" + r.mayor.pct + " %)."));
     r.filas.forEach(function (f) { var fila = el("div", "sobre"); fila.append(el("small", null, f.nombre + " · " + (ocultos ? "••••" : dinero(f.total)) + " · " + f.pct + " %"), barraSimple(f.pct)); art.append(fila); });
+    explicarGrafico(art, "En qué parte del mes gastas", "Historial de gastos agrupado por día del mes", r.filas.map(function (f) {
+      return [f.nombre, f.total];
+    }));
   }
   function wReduccion(art, movs, ciclo, ref) {
     titulo(art, "Metas de reducción");
@@ -2882,6 +2926,34 @@
       if (logro.hecho && !anteriores[i].hecho) toast("¡Nuevo logro!", logro.titulo);
     });
   });
+  function explicarGrafico(art, nombre, periodo, filas) {
+    if (ocultos || !filas.length) return;
+    var pregunta = NovaRespuestas.preguntaGrafico(nombre, periodo, monedaBase(), filas);
+    var boton = botonHabito("💬 Explícame esto", function () {
+      if (ocultos) return;
+      abrirChat(null);
+      preguntarNova(pregunta, { grafico: true });
+    });
+    art.append(boton);
+  }
+
+  function periodoGrafico(rango) {
+    return A.claveDia(rango.desde) + " a " + A.claveDia(new Date(rango.hasta.getTime() - 1));
+  }
+
+  function graficarSerieIA(art, nombre, ciclo, serie, conIngresos) {
+    var desde = A.desplazar(ciclo, serie[0].desde, 0).desde;
+    var hasta = A.desplazar(ciclo, serie[serie.length - 1].desde, 0).hasta;
+    var ingresos = 0, gastos = 0;
+    var filas = serie.map(function (p) {
+      ingresos += p.ingresos;
+      gastos += p.gastos;
+      return conIngresos ? [p.etiqueta + " · ingresos / gastos", p.ingresos, p.gastos] : [p.etiqueta, p.gastos];
+    });
+    filas.unshift(conIngresos ? ["Total · ingresos / gastos", ingresos, gastos] : ["Gasto total", gastos]);
+    explicarGrafico(art, nombre, periodoGrafico({ desde: desde, hasta: hasta }), filas);
+  }
+
   function titulo(art, texto) { art.append(el("h2", "titulo-widget", texto)); }
 
   function wRapida(art, movs, ciclo, ref) {
@@ -2945,9 +3017,12 @@
       ver.addEventListener("click", function () { ul.classList.toggle("todas"); ver.textContent = ul.classList.contains("todas") ? "Ver menos" : "Ver todas"; });
       art.append(ver);
     }
+    explicarGrafico(art, "Gastos por categoría", periodoGrafico(rango), [["Gasto total", total]].concat(filas.map(function (f) {
+      return [nombreCategoria(f.id), f.total];
+    })));
   }
 
-  function wEtiquetas(art, movs) {
+  function wEtiquetas(art, movs, ciclo, ref, rango) {
     titulo(art, "Gasto por etiqueta");
     var filas = A.porEtiqueta(movs);
     if (!filas.length) { art.append(el("p", "vacio", "Sin gastos con etiquetas en este periodo. Usa #etiqueta al registrar.")); return; }
@@ -2959,6 +3034,9 @@
       ul.append(li);
     });
     art.append(ul);
+    explicarGrafico(art, "Gasto por etiqueta", periodoGrafico(rango), filas.map(function (f) {
+      return ["#" + f.etiqueta, f.total];
+    }));
   }
 
   // Barras dobles (ingresos y gastos) de los últimos 6 periodos.
@@ -2983,6 +3061,7 @@
     var ley = el("div", "leyenda");
     ley.append(el("span", "l-ingreso", "Ingresos " + dinero(ult.ingresos)), el("span", "l-gasto", "Gastos " + dinero(ult.gastos)));
     art.append(g, ley);
+    graficarSerieIA(art, "Ingresos vs gastos", ciclo, s, true);
   }
 
   function lineaSVG(puntos, etiquetas, clase, alto) {
@@ -3026,6 +3105,7 @@
       var cambio = Math.round(((actual.gastos - anterior.gastos) / anterior.gastos) * 100);
       art.append(el("p", "nota " + (cambio > 0 ? "mal" : "bien"), (cambio > 0 ? "Subió " : "Bajó ") + Math.abs(cambio) + "% frente al periodo anterior."));
     }
+    graficarSerieIA(art, "Tendencia de gastos", ciclo, s, false);
   }
 
   function wProyeccion(art) {
@@ -3039,6 +3119,9 @@
     var fila = el("div", "fila-proyeccion");
     fila.append(el("span", "nota", "Proyectado en 90 días"), el("strong", p[3].saldo < 0 ? "negativo" : "positivo", (p[3].saldo < 0 ? "−" : "") + dinero(Math.abs(p[3].saldo))));
     art.append(fila);
+    explicarGrafico(art, "Balance futuro", "Proyección de hoy a 90 días", p.map(function (x) {
+      return [x.dias + " días", x.saldo];
+    }));
   }
 
   // Personalizar: mostrar u ocultar y reordenar los gráficos.
@@ -3735,7 +3818,8 @@
   function pintarTrabajo() {
     if (!conductor()) return;
     document.querySelectorAll("#trabajo-periodos button").forEach(function (b) { b.setAttribute("aria-pressed", String(b.dataset.cual === cualTrabajo)); });
-    var r = A.resumenTrabajo(datos.movimientos, datos.categorias, A.rangoJornada(cualTrabajo));
+    var rango = A.rangoJornada(cualTrabajo);
+    var r = A.resumenTrabajo(datos.movimientos, datos.categorias, rango);
     $("trabajo-neto").textContent = (r.netoOperativo < 0 && !ocultos ? "−" : "") + dinero(Math.abs(r.netoOperativo));
     $("trabajo-ganado").textContent = ocultos ? "$ ••••" : "+" + pesos.format(r.ingresos);
     $("trabajo-gastos").textContent = ocultos ? "$ ••••" : "−" + pesos.format(r.operacion);
@@ -3773,6 +3857,15 @@
       var c = categoria(g.id);
       filaPlataforma(ulg, c ? etiquetaCategoria(c) : "Otro", colorDe(c), g.total, r.ingresos ? Math.round((g.total / r.ingresos) * 100) + "% de lo que ganaste" : "", maxG);
     });
+
+    var accionesIngresos = $("trabajo-plataformas-acciones"), accionesGastos = $("trabajo-categorias-acciones");
+    accionesIngresos.replaceChildren();
+    accionesGastos.replaceChildren();
+    var periodo = periodoGrafico(rango);
+    if (r.porPlataforma.length) explicarGrafico(accionesIngresos, "Ganancias del trabajo por plataforma", periodo,
+      [["Ganancias totales", r.ingresos]].concat(r.porPlataforma.map(function (p) { return [nombreCategoria(p.id), p.total]; })));
+    if (r.gastosPorCategoria.length) explicarGrafico(accionesGastos, "Gastos del trabajo por categoría", periodo,
+      r.gastosPorCategoria.map(function (g) { return [nombreCategoria(g.id), g.total]; }));
 
     pintarDocumentos();
     var rap = $("doc-rapidos");
@@ -4378,6 +4471,10 @@
       linea.setAttribute("role", "img");
       linea.setAttribute("aria-label", "El saldo pasó de " + dinero(puntos[0].saldo) + " a " + dinero(puntos[puntos.length - 1].saldo));
       grafico.append(linea);
+      explicarGrafico(grafico, "Cómo ha bajado el saldo de la deuda", "Desde el saldo inicial hasta el actual", puntos.map(function (p, i) {
+        var nombre = i === 0 ? "Inicio" : i === puntos.length - 1 ? "Ahora" : "Después del abono " + i;
+        return [nombre, p.saldo];
+      }));
     }
     var abonos = datos.abonos.filter(function (a) { return a.deuda_id === d.id; }).sort(function (a, b) { return String(b.fecha).localeCompare(String(a.fecha)) || b.id - a.id; });
     if (!abonos.length) ul.append(el("li", "vacio", "Todavía no hay abonos."));
@@ -4748,6 +4845,58 @@
     }
     return inf;
   }
+  function tablaEstadoFinanciero(destino, encabezados, filas) {
+    var tabla = el("table"), cabeza = el("thead"), cuerpo = el("tbody"), cabecera = el("tr");
+    encabezados.forEach(function (texto) {
+      var celda = el("th", null, texto);
+      celda.scope = "col";
+      cabecera.append(celda);
+    });
+    cabeza.append(cabecera);
+    filas.forEach(function (fila) {
+      var tr = el("tr"), nombre = el("th", null, fila[0]);
+      nombre.scope = "row";
+      tr.append(nombre);
+      fila.slice(1).forEach(function (texto) { tr.append(el("td", null, texto)); });
+      cuerpo.append(tr);
+    });
+    tabla.append(cabeza, cuerpo);
+    destino.append(tabla);
+  }
+
+  function abrirEstadoFinanciero() {
+    if (!window.NovaInformes || !window.NovaInformes.estadoFinancieroMensual) return toast("No se pudo preparar el estado financiero");
+    var ahora = new Date();
+    var cuentas = datos.cuentas.map(function (c) { return { nombre: c.nombre, saldo: saldoCuenta(c) }; });
+    var r = window.NovaInformes.estadoFinancieroMensual(datos.movimientos, datos.categorias, cuentas, ahora);
+    var cont = $("estado-financiero-datos");
+    cont.replaceChildren(el("p", null, r.mes + " · hasta el " + fechaCorta.format(ahora)));
+    cont.append(el("h2", null, "Comparación mensual"));
+    tablaEstadoFinanciero(cont, ["Concepto", r.mes, r.mesAnterior, "Diferencia"], r.resumen.map(function (f) {
+      return [f.nombre, dinero(f.actual), dinero(f.anterior), (f.diferencia > 0 && !ocultos ? "+" : "") + dinero(f.diferencia)];
+    }));
+    cont.append(el("h2", null, "Top 5 categorías de gasto"));
+    if (r.categorias.length) tablaEstadoFinanciero(cont, ["Categoría", "Gasto"], r.categorias.map(function (c) {
+      return [c.nombre, dinero(c.total)];
+    }));
+    else cont.append(el("p", "nota", "Sin gastos registrados."));
+    cont.append(el("h2", null, "Saldos actuales por cuenta"));
+    if (r.cuentas.length) tablaEstadoFinanciero(cont, ["Cuenta", "Saldo"], r.cuentas.map(function (c) {
+      return [c.nombre, dinero(c.saldo)];
+    }));
+    else cont.append(el("p", "nota", "Sin cuentas registradas."));
+    abrirCapa("pantalla-estado-financiero");
+    $("pantalla-estado-financiero").scrollTop = 0;
+  }
+
+  document.querySelectorAll("[data-estado-financiero]").forEach(function (b) {
+    b.addEventListener("click", function () {
+      if (pilaCapas[pilaCapas.length - 1] === "hoja-informe") cerrarYLuego(abrirEstadoFinanciero);
+      else abrirEstadoFinanciero();
+    });
+  });
+  $("estado-financiero-imprimir").addEventListener("click", function () { window.print(); });
+
   var generandoInforme = false;
   function exportarInforme(tipo, ciclo, desfase) {
     if (generandoInforme) return;
@@ -5014,7 +5163,8 @@
     return Promise.all([origen, pedidoTRM]).then(function (resultados) {
       var d = resultados[0], trm = Mon.leerTRM(resultados[1], new Date());
       var t = { rates: Mon.aplicarTRM(d.rates, trm), fecha: d.fecha || "", fuente: d.fuente, trm: trm, guardado: Date.now() };
-      guardarLocal("nova-tasas", t);
+      if (guardarLocal("nova-tasas", t) && fuente && !$("pantalla-app").hidden &&
+          JSON.stringify(g && g.trm || null) !== JSON.stringify(trm)) pintarWidgets($("widgets-inicio"), true);
       return t;
     }).catch(function () { return tiene ? g : null; });
   }
@@ -5366,7 +5516,7 @@
       var detalle = etiquetaDesc + (r.m && r.m.viajes ? " · " + r.m.viajes + (r.m.viajes === 1 ? " viaje" : " viajes") : "") +
         (r.programado ? " · 🔁 " + A.FRECUENCIAS[r.programado.frecuencia].toLowerCase() : "");
       var valor = dinero(monto) + (ext && !ocultos ? " · " + Mon.formatoMonto(montoOriginal, reg.moneda) : "");
-      toast(editar ? "¡Cambios guardados!" : "¡Guardado!", detalle, valor, accion);
+      toast(editar ? "¡Cambios guardados!" : "¡Guardado!", detalle, valor, accion, !!r.m);
       pintar();
       if (accion) {
         var origen = fuente, espacio = espacioId;
@@ -7030,6 +7180,13 @@
       grilla.append(b);
     });
   }
+  function explicarCalendario(destino, cal, tipo) {
+    var clave = tipo === "gasto" ? "gastos" : "ingresos";
+    explicarGrafico(destino, "Calendario de " + clave, cal.nombre, [["Total del mes", cal[clave]]].concat(
+      cal.dias.filter(function (dia) { return dia[clave]; }).map(function (dia) { return [dia.clave, dia[clave]]; })
+    ));
+  }
+
   function pintarCalendario() {
     if (!pilaCapas || pilaCapas.indexOf("pantalla-calendario") < 0) return;
     var c = A.calendarioMes(movimientosDelCalendario(), calVista.anio, calVista.mes, new Date()), esGasto = calVista.tipo === "gasto";
@@ -7062,6 +7219,10 @@
       if (boton) boton.focus({ preventScroll: true });
       if (calVista.dia) $("cal-detalle").scrollIntoView({ behavior: "smooth", block: "start" });
     });
+
+    var acciones = $("cal-grafico-acciones");
+    acciones.replaceChildren();
+    explicarCalendario(acciones, c, calVista.tipo);
 
     var cont = $("cal-detalle"); cont.replaceChildren();
     var elegido = calVista.dia && c.dias.find(function (x) { return x.clave === calVista.dia; });
@@ -7828,11 +7989,12 @@
     var textoVisible = (opciones.porVoz ? "🎤 " : "") + pregunta;
     if (!cliente || !fuente || fuente.demo) {
       // En la demostración la IA no responde, pero la tarjeta con los números sí sale.
-      var tDemo = imagen ? null : tarjetaIA(pregunta); // con foto, la pregunta es sobre la imagen, no sobre tus números
+      var tDemo = imagen || opciones.grafico ? null : tarjetaIA(pregunta); // con foto, la pregunta es sobre la imagen, no sobre tus números
       $("chat-bienvenida").hidden = true;
       burbuja("yo", textoVisible, imagen); $("chat-pregunta").value = "";
+      if (opciones.grafico) burbuja("nova", "En la demostración puedes ver arriba las cifras del gráfico. Inicia sesión para recibir su explicación.");
       if (tDemo) { burbuja("nova", "En la demostración la IA no escribe respuestas, pero mira tus números:"); $("chat").append(tDemo); tDemo.scrollIntoView({ block: "nearest" }); }
-      mensaje("chat-mensaje", "Inicia sesión con tu cuenta para que la IA te responda.", !tDemo);
+      mensaje("chat-mensaje", opciones.grafico ? "" : "Inicia sesión con tu cuenta para que la IA te responda.", !tDemo && !opciones.grafico);
       return;
     }
     if (cargaConfigNube) {
@@ -7860,7 +8022,7 @@
     chat.mensajes.push({ rol: "usuario", texto: (imagen ? "📷 " : "") + textoVisible });
     var guardada = guardarConversacion().catch(function () { mensaje("chat-mensaje", "La pregunta no se pudo guardar en tu historial, pero puedes seguir chateando.", true); });
     Promise.resolve().then(function () {
-      return preguntarEnFlujo({ pregunta: pregunta, historial: historial, contexto: contextoFinanzas(), imagen: imagen, mime: opciones.mime }, function (texto) {
+      return preguntarEnFlujo({ pregunta: pregunta, historial: historial, contexto: opciones.grafico ? { hoy: hoyLocal() } : contextoFinanzas(), imagen: imagen, mime: opciones.mime }, function (texto) {
         if (mio !== chatToken) return;
         pintarTextoIA(espera, texto);
         espera.classList.remove("pensando");
@@ -7872,7 +8034,7 @@
       if (!respuesta) throw new Error("La IA no pudo responder. Intenta otra vez en un momento.");
       pintarTextoIA(espera, respuesta);
       espera.classList.remove("pensando");
-      var tar = imagen ? null : tarjetaIA(pregunta, respuesta);
+      var tar = imagen || opciones.grafico ? null : tarjetaIA(pregunta, respuesta);
       if (tar) { espera.after(tar); tar.scrollIntoView({ block: "nearest" }); }
       chat.mensajes.push({ rol: "nova", texto: respuesta });
       return guardada.then(function () { return guardarConversacion(); }).catch(function () { mensaje("chat-mensaje", "La respuesta no se pudo guardar en tu historial, pero puedes seguir chateando.", true); }).then(pintarIA);
@@ -8025,7 +8187,7 @@
     }).then(function (m) {
       datos.movimientos.push(m);
       ordenarMovimientos();
-      var aviso = "✓ ¡Guardado! " + m.descripcion + " " + pesos.format(num(m.monto));
+      var aviso = "¡Guardado! " + m.descripcion + " " + pesos.format(num(m.monto));
       if (!comoFrecuente) return aviso;
       return fuente.crear("frecuentes", { texto: textoOriginal.slice(0, 120) }).then(function (f) {
         datos.frecuentes.push(f);
@@ -8033,7 +8195,7 @@
       });
     }).then(function (aviso) {
       mensaje("rapido-mensaje", "");
-      toast(aviso);
+      toast(aviso, null, null, null, true);
       pintar();
       return true;
     }).catch(function (e) { alerta(e); return false; });
@@ -8732,6 +8894,7 @@
       ordenarMovimientos();
       monedaVista = monedaBase();
       mostrar("app"); ir("inicio"); pintar();
+      cargarTasas();
       ultimaActividad = Date.now();
       if (!fuente.demo) bloquearSiHayPin();
       revisarInactividad();
