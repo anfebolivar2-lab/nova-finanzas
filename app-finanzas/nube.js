@@ -13,9 +13,9 @@
   }
 
   function validarSugerencia(texto) {
-    var limpio = String(texto || "").trim();
-    var largo = Array.from(limpio).length;
-    return largo >= 3 && largo <= 2000 ? limpio : null;
+    texto = String(texto || "");
+    var limpio = texto.trim();
+    return Array.from(limpio).length >= 3 && Array.from(texto).length <= 2000 ? limpio : null;
   }
 
   function enviosDeLaHora(envios, ahora) {

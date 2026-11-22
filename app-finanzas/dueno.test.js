@@ -1,6 +1,6 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const { filtrarPersonas, contarFiltros } = require("./dueno.js");
+const { filtrarPersonas, contarFiltros, ultimos30Dias, barrasVersiones, registrosParaMeta, porcentaje, validarAviso, sugerenciasPendientes, recientes, recortarTexto } = require("./dueno.js");
 
 const ahora = new Date("2026-11-22T12:00:00Z");
 const DIA = 24 * 60 * 60 * 1000;
@@ -63,8 +63,6 @@ test("cuenta cada filtro sobre todas las personas, incluso con una lista vacía"
   });
 });
 
-const { ultimos30Dias, barrasVersiones, porcentaje, validarAviso, sugerenciasPendientes, recientes, recortarTexto } = require("./dueno.js");
-
 test("arma 30 días UTC, rellena huecos y descarta registros fuera del intervalo", () => {
   const datos = ultimos30Dias({ "2026-10-23": 10, "2026-10-24": 4, "2026-11-22": 2, "2026-11-23": 8 }, ahora);
   assert.equal(datos.length, 30);
@@ -79,6 +77,8 @@ test("ordena las versiones por cantidad y limita el progreso a 100 por ciento", 
     { version: "Sin versión", total: 5 }, { version: "1.90", total: 2 }, { version: "1.91", total: 1 }
   ]);
   assert.deepEqual(barrasVersiones(), []);
+  assert.equal(registrosParaMeta(0, [{ registros: 9 }]), 0);
+  assert.equal(registrosParaMeta(undefined, Array.from({ length: 31 }, () => ({ registros: 2 }))), 60);
   assert.equal(porcentaje(2, 3), 67);
   assert.equal(porcentaje(12, 10), 100);
   assert.equal(porcentaje(12, ""), 0);

@@ -77,6 +77,11 @@
     }).sort(function (a, b) { return b.total - a.total || compararCorreos(a.version, b.version); });
   }
 
+  function registrosParaMeta(nuevos30, dias) {
+    if (nuevos30 != null) return cantidad(nuevos30);
+    return dias.slice(-30).reduce(function (total, dia) { return total + cantidad(dia.registros); }, 0);
+  }
+
   function porcentaje(actual, meta) {
     return cantidad(meta) ? Math.min(100, Math.round(100 * cantidad(actual) / cantidad(meta))) : 0;
   }
@@ -116,7 +121,7 @@
 
   var api = {
     filtrarPersonas: filtrarPersonas, contarFiltros: contarFiltros, ultimos30Dias: ultimos30Dias,
-    barrasVersiones: barrasVersiones, cantidad: cantidad, porcentaje: porcentaje, validarAviso: validarAviso,
+    barrasVersiones: barrasVersiones, cantidad: cantidad, registrosParaMeta: registrosParaMeta, porcentaje: porcentaje, validarAviso: validarAviso,
     sugerenciasPendientes: sugerenciasPendientes, recientes: recientes, recortarTexto: recortarTexto
   };
   if (typeof module === "object" && module.exports) module.exports = api;

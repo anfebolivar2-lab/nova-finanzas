@@ -6166,7 +6166,7 @@
     var boton = $("sugerencia-enviar");
     if (boton.disabled || !puedeAbrirNube()) return;
     var campo = $("sugerencia-texto"), texto = Nube.validarSugerencia(campo.value);
-    if (!texto || Array.from(campo.value).length > 2000) {
+    if (!texto) {
       mensaje("sugerencia-mensaje", "Escribe entre 3 y 2000 caracteres.", true);
       return;
     }
@@ -6403,7 +6403,7 @@
     barrasDueno($("dueno-chats"), Dueno.ultimos30Dias(d.chatsPorDia, ahora), "total");
     barrasDueno($("dueno-errores"), Dueno.ultimos30Dias(errores.porDia, ahora), "total");
     pintarVersionesDueno(d.versiones);
-    registrosMetaDueno = Dueno.cantidad(r.nuevos30);
+    registrosMetaDueno = Dueno.registrosParaMeta(r.nuevos30, dias);
     pintarMetaDueno();
     pintarListasDueno(d, errores);
     personasDueno = Array.isArray(d.personas) ? d.personas.filter(Boolean) : [];
