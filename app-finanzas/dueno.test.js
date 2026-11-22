@@ -62,3 +62,49 @@ test("cuenta cada filtro sobre todas las personas, incluso con una lista vacía"
     todos: 0, activos: 0, inactivos: 0, prueba: 0, "sin-confirmar": 0, android: 0, web: 0, "sin-movimientos": 0
   });
 });
+
+const { ultimos30Dias, barrasVersiones, porcentaje, validarAviso, sugerenciasPendientes, recientes, recortarTexto } = require("./dueno.js");
+
+test("arma 30 días UTC, rellena huecos y descarta registros fuera del intervalo", () => {
+  const datos = ultimos30Dias({ "2026-10-23": 10, "2026-10-24": 4, "2026-11-22": 2, "2026-11-23": 8 }, ahora);
+  assert.equal(datos.length, 30);
+  assert.deepEqual(datos[0], { dia: "2026-10-24", total: 4 });
+  assert.deepEqual(datos[1], { dia: "2026-10-25", total: 0 });
+  assert.deepEqual(datos[29], { dia: "2026-11-22", total: 2 });
+  assert.ok(ultimos30Dias(null, ahora).every(d => d.total === 0));
+});
+
+test("ordena las versiones por cantidad y limita el progreso a 100 por ciento", () => {
+  assert.deepEqual(barrasVersiones({ "1.90": 2, "": 5, "1.91": 1 }), [
+    { version: "Sin versión", total: 5 }, { version: "1.90", total: 2 }, { version: "1.91", total: 1 }
+  ]);
+  assert.deepEqual(barrasVersiones(), []);
+  assert.equal(porcentaje(2, 3), 67);
+  assert.equal(porcentaje(12, 10), 100);
+  assert.equal(porcentaje(12, ""), 0);
+  assert.equal(porcentaje(-2, 10), 0);
+});
+
+test("valida avisos y conserva la vigencia hasta terminar el día local", () => {
+  assert.deepEqual(validarAviso(" Hola ", " Mensaje ", "todos", "", ahora), {
+    accion: "aviso_crear", titulo: "Hola", mensaje: "Mensaje", audiencia: "todos", hasta: null
+  });
+  const fecha = new Date(2026, 10, 22, 12);
+  assert.equal(validarAviso("t", "m", "web", "2026-11-22", fecha).hasta, new Date(2026, 10, 23).toISOString());
+  assert.equal(validarAviso("t", "m", "web", "2026-11-21", fecha), null);
+  assert.equal(validarAviso("t", "m", "web", "2027-02-30", ahora), null);
+  assert.equal(validarAviso("x".repeat(81), "m", "web", "", ahora), null);
+  assert.equal(validarAviso("t", "x".repeat(501), "web", "", ahora), null);
+  assert.equal(validarAviso("t", "m", "otro", "", ahora), null);
+});
+
+test("ordena y limita los accesos y cuenta sugerencias pendientes", () => {
+  const vieja = { creado_en: "2026-10-22", atendida: true };
+  const nueva = { creado_en: "2026-11-22", atendida: false };
+  const lista = Object.freeze([vieja, nueva]);
+  assert.deepEqual(recientes(lista, 1), [nueva]);
+  assert.deepEqual(recientes(lista), [nueva, vieja]);
+  assert.deepEqual(recientes(null, 1), []);
+  assert.equal(sugerenciasPendientes(lista), 1);
+  assert.equal(recortarTexto("a😀bc", 3), "a😀…");
+});

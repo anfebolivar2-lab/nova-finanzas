@@ -159,6 +159,7 @@
   <main>
     <!-- INICIO -->
     <section class="vista" data-vista="inicio">
+      <div id="aviso-nube-inicio" class="widgets"></div>
       <p id="saludo" class="saludo"></p>
       <div class="periodo-nav">
         <button type="button" class="icono-btn" data-periodo-inicio="-1" aria-label="Periodo anterior"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button>
@@ -597,6 +598,7 @@
 
       <h2 class="grupo-ajustes">Sobre NOVA</h2>
       <div class="menu">
+        <button type="button" id="btn-sugerencia"><span class="menu-icono" aria-hidden="true">💬</span><strong>Enviar una sugerencia</strong></button>
         <a class="menu-fila" href="ayuda.html" target="_blank" rel="noopener"><span class="menu-icono" aria-hidden="true">❔</span><span>Ayuda y preguntas frecuentes</span></a>
         <a class="menu-fila" href="inicio.html" target="_blank" rel="noopener"><span class="menu-icono" aria-hidden="true">✦</span><span>Sobre NOVA</span></a>
         <a class="menu-fila" href="privacidad.html" target="_blank" rel="noopener"><span class="menu-icono" aria-hidden="true">🛡</span><span>Política de privacidad</span></a>
@@ -605,6 +607,7 @@
       <h2 class="grupo-ajustes">Seguridad y respaldo</h2>
       <div class="menu">
         <button type="button" id="btn-pin"><span class="menu-icono">🔒</span><span><strong>Bloqueo con PIN</strong><small id="pin-estado">Pide un PIN cada vez que abres NOVA</small></span></button>
+        <button type="button" id="btn-salir-otros"><span class="menu-icono" aria-hidden="true">🔐</span><strong>Cerrar sesión en los demás dispositivos</strong></button>
         <button type="button" id="btn-pin2"><span class="menu-icono">🤫</span><span><strong>PIN discreto</strong><small id="pin2-estado">Un segundo PIN que abre NOVA con los valores ocultos</small></span></button>
         <button type="button" id="btn-restaurar"><span class="menu-icono">♻️</span><span><strong>Restaurar respaldo</strong><small>Agrega los movimientos de un archivo de respaldo, sin borrar nada</small></span></button>
         <input type="file" id="archivo-respaldo" accept=".json,application/json" hidden>
@@ -1232,6 +1235,20 @@
     <p class="mensaje" id="cuadrar-mensaje" role="status"></p>
   </form>
 </section>
+<div id="hoja-sugerencia" class="hoja-fondo" hidden>
+  <div class="hoja" role="dialog" aria-modal="true" aria-labelledby="sugerencia-titulo">
+    <h2 id="sugerencia-titulo" class="centro">Enviar una sugerencia</h2>
+    <form id="form-sugerencia" class="formulario" novalidate>
+      <label for="sugerencia-texto">¿Qué podemos mejorar?</label>
+      <textarea id="sugerencia-texto" rows="5" aria-describedby="sugerencia-ayuda sugerencia-contador"></textarea>
+      <p id="sugerencia-ayuda" class="nota">Escribe entre 3 y 2000 caracteres. Evita incluir montos, movimientos o datos personales.</p>
+      <p id="sugerencia-contador" class="nota">0 de 2000 caracteres</p>
+      <p id="sugerencia-mensaje" class="mensaje" role="status"></p>
+      <button type="submit" id="sugerencia-enviar" class="primario">Enviar</button>
+      <button type="button" class="enlace" data-cerrar>Cerrar</button>
+    </form>
+  </div>
+</div>
 <section id="pantalla-dueno" class="capa" hidden>
   <div class="sub-cabecera"><button type="button" class="icono-btn" data-cerrar aria-label="Volver"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button><h1>👑 Panel del dueño</h1></div>
   <p class="nota">Solo tu cuenta puede ver esto. <span id="dueno-hora"></span></p>
@@ -1240,7 +1257,51 @@
   <article class="tarjeta dueno-grafico"><h2 class="titulo-tarjeta">Personas que anotaron algo · últimos 30 días</h2><div id="dueno-activos"></div></article>
   <article class="tarjeta dueno-grafico"><h2 class="titulo-tarjeta">Movimientos anotados por día</h2><div id="dueno-movs"></div></article>
   <article class="tarjeta dueno-grafico"><h2 class="titulo-tarjeta">Registros nuevos por día</h2><div id="dueno-registros"></div></article>
-  <article class="tarjeta" id="dueno-versiones-tarjeta" hidden><h2 class="titulo-tarjeta">Versiones que tienen instaladas</h2><div id="dueno-versiones" class="dueno-chips"></div></article>
+  <article class="tarjeta dueno-grafico"><h2 class="titulo-tarjeta">Chats con la IA por día</h2><div id="dueno-chats"></div></article>
+  <article class="tarjeta dueno-grafico"><h2 class="titulo-tarjeta">Errores por día</h2><div id="dueno-errores"></div></article>
+  <article class="tarjeta dueno-grafico"><h2 class="titulo-tarjeta">Cuántas personas hay en cada versión</h2><div id="dueno-versiones" class="dueno-lista"></div></article>
+  <article class="tarjeta formulario">
+    <h2 class="titulo-tarjeta">Meta de usuarios del mes</h2>
+    <form id="form-dueno-meta" class="formulario">
+      <label for="dueno-meta">Meta de registros</label>
+      <input id="dueno-meta" type="number" inputmode="numeric" min="1" max="9007199254740991" step="1">
+      <button type="submit" class="mini">Guardar meta</button>
+    </form>
+    <progress id="dueno-meta-barra" max="100" value="0" aria-label="Progreso de la meta de registros"></progress>
+    <p id="dueno-meta-progreso" class="nota" role="status"></p>
+  </article>
+  <article class="tarjeta formulario">
+    <h2 class="titulo-tarjeta">Errores recientes</h2>
+    <ul id="dueno-errores-recientes" class="lista-banco"></ul>
+  </article>
+  <article class="tarjeta formulario">
+    <h2 class="titulo-tarjeta">Avisos</h2>
+    <form id="form-dueno-aviso" class="formulario" novalidate>
+      <label for="dueno-aviso-titulo">Título</label>
+      <input id="dueno-aviso-titulo" type="text" maxlength="80" required>
+      <label for="dueno-aviso-texto">Mensaje</label>
+      <textarea id="dueno-aviso-texto" rows="3" maxlength="500" required></textarea>
+      <label for="dueno-aviso-audiencia">Quién lo verá</label>
+      <select id="dueno-aviso-audiencia">
+        <option value="todos">Todos</option><option value="android">Android</option><option value="web">Web</option>
+      </select>
+      <label for="dueno-aviso-hasta">Último día visible (opcional)</label>
+      <input id="dueno-aviso-hasta" type="date">
+      <p id="dueno-aviso-mensaje" class="mensaje" role="status"></p>
+      <button type="submit" id="dueno-aviso-crear" class="primario">Crear aviso</button>
+    </form>
+    <ul id="dueno-avisos" class="lista-banco"></ul>
+  </article>
+  <article class="tarjeta formulario">
+    <h2 class="titulo-tarjeta">Sugerencias</h2>
+    <p id="dueno-pendientes" class="nota"></p>
+    <p class="mensaje" id="dueno-sugerencias-mensaje" role="status"></p>
+    <ul id="dueno-sugerencias" class="lista-banco"></ul>
+  </article>
+  <article class="tarjeta formulario">
+    <h2 class="titulo-tarjeta">Accesos al panel</h2>
+    <ul id="dueno-accesos" class="lista-banco"></ul>
+  </article>
   <h2 class="seccion-cabecera">Personas</h2>
   <input id="dueno-buscar" type="search" placeholder="Buscar por correo" autocomplete="off" aria-label="Buscar por correo">
   <div id="dueno-filtros" class="dueno-filtros" role="group" aria-label="Filtrar personas"></div>
@@ -1491,6 +1552,7 @@
 <script src="vendor/supabase.js"></script>
 <script src="tarjeta.js"></script>
 <script src="dueno.js"></script>
+<script src="nube.js"></script>
 <script src="ota.js"></script>
 <script src="novedades.js"></script>
 <script src="respaldo.js"></script>

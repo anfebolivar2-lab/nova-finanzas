@@ -673,6 +673,7 @@
 
     pintarSeguro(); pintarPresupuesto(); pintarFrecuentes(); pintarMiniTarjetas(); pintarProyeccionPeriodo(movs, rango); pintarSaludo(); pintarSugerencias(); pintarProximoPago(); pintarApartar(); actualizarWidget();
     $("btn-repetir-ultimo").hidden = !A.ultimoGasto(datos.movimientos);
+    pintarAvisoInicio();
     pintarWidgets($("widgets-inicio"), true);
     listaPorDia($("lista-inicio"), movs, desfaseInicio === 0 ? "Aún no hay movimientos en este periodo. Toca + para agregar el primero." : "No hubo movimientos en este periodo.", 60);
   }
@@ -1374,7 +1375,7 @@
     var art = el("article", "tarjeta widget");
     art.dataset.widget = id;
     var render = {
-      "sugerencias-hora": wSugerenciasHora, racha: inicio ? wRacha : null,
+      "aviso-dueno": inicio ? pintarAvisoDueno : null, "sugerencias-hora": wSugerenciasHora, racha: inicio ? wRacha : null,
       "pagos-proximos": inicio ? wPagosProximos : null,
       rapida: wRapida, categorias: wCategorias, etiquetas: wEtiquetas, "ingresos-gastos": wIngresosGastos,
       tendencia: wTendencia, proyeccion: wProyeccion, consejos: wConsejos, calendario: wCalendario, logros: wLogros,
@@ -4699,7 +4700,7 @@
     document.body.classList.add("con-capa");
     history.pushState({ capa: id }, "");
     var foco = c.querySelector("input:not([type=checkbox]):not([type=date]), textarea"); // no se enfoca ningún botón: así la flecha de volver no sale con un aro
-    if (c.classList.contains("capa") && foco && id !== "pantalla-registro" && id !== "pantalla-detalle" && id !== "pantalla-abonos") setTimeout(function () { foco.focus({ preventScroll: true }); }, 30);
+    if (c.classList.contains("capa") && foco && id !== "pantalla-dueno" && id !== "pantalla-registro" && id !== "pantalla-detalle" && id !== "pantalla-abonos") setTimeout(function () { foco.focus({ preventScroll: true }); }, 30);
   }
   function ocultarCapa() {
     var id = pilaCapas.pop();
@@ -6047,13 +6048,182 @@
   var DUENOS = ["e84fedff-8279-4a12-9ff7-4992dae4cbbf", "92bfcc78-ebac-47ab-8171-2683d624c721"];
   function idUsuario() { return (leerLocal("nova-identidad", {}) || {}).id || ""; }
   function soyDueno() { return !!fuente && !fuente.demo && DUENOS.indexOf(idUsuario()) >= 0; }
+  var Nube = window.NovaNube;
+  var plataformaNova = enApp ? "android" : "web";
+  var versionNova;
+  var avisosNube = [];
+  var avisosVistos = leerLocal("nova-avisos-vistos", []);
+  var erroresEnviados = [];
+  var archivosNova = Array.from(document.scripts).filter(function (script) {
+    return script.src && new URL(script.src).origin === location.origin;
+  }).map(function (script) { return new URL(script.src).pathname.split("/").pop(); });
+
+  function versionParaNube() {
+    if (!versionNova) {
+      versionNova = enApp ? fetch("version-app.json").then(function (r) { return r.json(); })
+        .then(function (v) { return (v && v.versionName) || ""; }).catch(function () { return ""; }) : Promise.resolve("");
+    }
+    return versionNova;
+  }
+
+  function conSesionNube(origen, tarea) {
+    if (!cliente || !origen || origen !== fuente || origen.demo) return Promise.resolve(null);
+    var id = idUsuario();
+    return cliente.auth.getSession().then(function (r) {
+      var s = r.data && r.data.session;
+      if (origen !== fuente || !s || !s.user || s.user.id !== id) return null;
+      return tarea();
+    });
+  }
+
+  function registrarErrorNube(texto, archivo, linea, rechazo) {
+    var origen = fuente;
+    if (!cliente || !origen || origen.demo || erroresEnviados.length >= 5) return;
+    Promise.resolve().then(function () {
+      var error = Nube.errorSeguro(texto, archivo, linea, rechazo, archivosNova);
+      return versionParaNube().then(function (version) {
+        return conSesionNube(origen, function () {
+          if (!Nube.puedeRegistrarError(erroresEnviados, error.mensaje)) return;
+          erroresEnviados.push(error.mensaje);
+          error.version = version;
+          error.plataforma = plataformaNova;
+          return cliente.from("fin_errores").insert(error);
+        });
+      });
+    }).catch(function () { /* Un fallo de registro no afecta el uso de NOVA. */ });
+  }
+
+  window.addEventListener("error", function (e) {
+    registrarErrorNube(e.message, e.filename, e.lineno, false);
+  });
+  window.addEventListener("unhandledrejection", function (e) {
+    try {
+      var razon = e.reason;
+      var error = razon instanceof Error;
+      var lugar = error && typeof razon.stack === "string" &&
+        razon.stack.split("\n").slice(1).join("\n").match(/\/(\w[\w.-]*\.js):(\d+):\d+/);
+      registrarErrorNube(error ? razon.name + ":" : razon, lugar && lugar[1], lugar && Number(lugar[2]), true);
+    } catch (e) { /* Algunas promesas rechazan con objetos que no se pueden leer. */ }
+  });
+
+  function pintarAvisoDueno(art) {
+    if (!fuente || fuente.demo) return;
+    var aviso = Nube.avisosParaMostrar(avisosNube, plataformaNova, avisosVistos, Date.now())[0];
+    if (!aviso) return;
+    art.append(el("h2", "titulo-tarjeta aviso-dueno-texto", aviso.titulo),
+      el("p", "aviso-dueno-texto", aviso.mensaje),
+      botonHabito("Entendido", function () {
+        avisosVistos = (Array.isArray(avisosVistos) ? avisosVistos : []).concat(aviso.id);
+        guardarLocal("nova-avisos-vistos", avisosVistos);
+        art.replaceChildren();
+        pintarAvisoDueno(art);
+        if (!art.childNodes.length) art.remove();
+      }));
+  }
+
+  function pintarAvisoInicio() {
+    var cont = $("aviso-nube-inicio");
+    var art = crearWidget("aviso-dueno", null, null, null, null, true);
+    cont.replaceChildren();
+    if (art.childNodes.length) cont.append(art);
+  }
+
+  function cargarAvisosNube() {
+    var origen = fuente;
+    conSesionNube(origen, function () { return cliente.from("fin_avisos").select("*"); }).then(function (r) {
+      if (origen !== fuente || !r || r.error) return;
+      avisosNube = r.data;
+      pintarAvisoInicio();
+    }).catch(function () { /* Si no hay conexión, se intentará al volver a abrir NOVA. */ });
+  }
+
+  function puedeAbrirNube() {
+    if (fuente && fuente.demo) {
+      toast("No disponible en la demostración");
+      return false;
+    }
+    if (cliente && fuente) return true;
+    toast("Inicia sesión para continuar");
+    return false;
+  }
+
+  function pintarContadorSugerencia() {
+    $("sugerencia-contador").textContent = Array.from($("sugerencia-texto").value).length + " de 2000 caracteres";
+  }
+
+  $("btn-sugerencia").addEventListener("click", function () {
+    if (!puedeAbrirNube()) return;
+    var origen = fuente;
+    conSesionNube(origen, function () { return true; }).then(function (sesion) {
+      if (!sesion) return toast("Inicia sesión para enviar una sugerencia");
+      mensaje("sugerencia-mensaje", "");
+      abrirCapa("hoja-sugerencia");
+    }).catch(function () { toast("No se pudo comprobar tu sesión. Intenta otra vez."); });
+  });
+  $("sugerencia-texto").addEventListener("input", pintarContadorSugerencia);
+  $("form-sugerencia").addEventListener("submit", function (e) {
+    e.preventDefault();
+    var boton = $("sugerencia-enviar");
+    if (boton.disabled || !puedeAbrirNube()) return;
+    var campo = $("sugerencia-texto"), texto = Nube.validarSugerencia(campo.value);
+    if (!texto || Array.from(campo.value).length > 2000) {
+      mensaje("sugerencia-mensaje", "Escribe entre 3 y 2000 caracteres.", true);
+      return;
+    }
+    var origen = fuente, clave = "nova-sugerencias-hora";
+    boton.disabled = campo.readOnly = true;
+    mensaje("sugerencia-mensaje", "Enviando…");
+    function enviar(version) {
+      return conSesionNube(origen, function () {
+        var ahora = Date.now(), envios = Nube.enviosDeLaHora(leerLocal(clave, []), ahora);
+        if (envios.length >= 3) return { limite: true };
+        if (!guardarLocal(clave, envios.concat(ahora))) return { sinAlmacenamiento: true };
+        return cliente.from("fin_sugerencias").insert({ mensaje: texto, version: version, plataforma: plataformaNova })
+          .then(function (r) {
+            if (r.error && r.status >= 400 && r.status < 500) {
+              var actuales = Nube.enviosDeLaHora(leerLocal(clave, []), Date.now());
+              var indice = actuales.indexOf(ahora);
+              if (indice >= 0) actuales.splice(indice, 1);
+              guardarLocal(clave, actuales);
+            }
+            return r;
+          });
+      });
+    }
+    versionParaNube().then(function (version) {
+      return navigator.locks ? navigator.locks.request(clave, function () { return enviar(version); }) : enviar(version);
+    }).then(function (r) {
+      if (!r) return mensaje("sugerencia-mensaje", "Inicia sesión para enviar una sugerencia.", true);
+      if (r.limite) return mensaje("sugerencia-mensaje", "Puedes enviar hasta 3 sugerencias por hora. Intenta más tarde.", true);
+      if (r.sinAlmacenamiento) return mensaje("sugerencia-mensaje", "No se pudo guardar el límite de envíos en este dispositivo.", true);
+      if (r.error) throw r.error;
+      campo.value = "";
+      pintarContadorSugerencia();
+      mensaje("sugerencia-mensaje", "¡Gracias!");
+    }).catch(function () {
+      mensaje("sugerencia-mensaje", "No se pudo enviar la sugerencia. Revisa tu conexión e intenta otra vez.", true);
+    }).finally(function () { boton.disabled = campo.readOnly = false; });
+  });
+
+  $("btn-salir-otros").addEventListener("click", function () {
+    var boton = $("btn-salir-otros");
+    if (boton.disabled || !puedeAbrirNube() || !confirm("¿Cerrar sesión en los demás dispositivos? Tu sesión seguirá abierta aquí.")) return;
+    boton.disabled = true;
+    conSesionNube(fuente, function () { return cliente.auth.signOut({ scope: "others" }); }).then(function (r) {
+      if (!r) return toast("Inicia sesión para continuar");
+      if (r.error) throw r.error;
+      toast("Sesión cerrada en los demás dispositivos");
+    }).catch(function () {
+      toast("No se pudieron cerrar las otras sesiones", "Revisa tu conexión e intenta otra vez.");
+    }).finally(function () { boton.disabled = false; });
+  });
+
   function marcarUso() {
     if (!cliente || !fuente || fuente.demo || !idUsuario()) return;
     var claveUso = "nova-uso-" + idUsuario(), hoyK = A.claveDia(new Date());
     if (leerLocal(claveUso, "") === hoyK) return;
-    var version = enApp ? fetch("version-app.json").then(function (r) { return r.json(); }).then(function (v) { return (v && v.versionName) || ""; }).catch(function () { return ""; }) : Promise.resolve("");
-    version.then(function (v) {
-      return cliente.auth.updateUser({ data: { nova_visto: new Date().toISOString(), nova_plataforma: enApp ? "android" : "web", nova_version: v } });
+    versionParaNube().then(function (v) {
+      return cliente.auth.updateUser({ data: { nova_visto: new Date().toISOString(), nova_plataforma: plataformaNova, nova_version: v } });
     }).then(function (r) { if (r && !r.error) guardarLocal(claveUso, hoyK); }).catch(function () { /* se intenta mañana */ });
   }
   var numDueno = new Intl.NumberFormat("es-CO");
@@ -6071,27 +6241,146 @@
   function pl(n, uno, varios) { return numDueno.format(n) + " " + (n === 1 ? uno : varios); }
   function barrasDueno(cont, dias, campo) {
     cont.replaceChildren();
-    var max = Math.max.apply(null, dias.map(function (d) { return d[campo]; }).concat([1]));
+    if (!dias.length) {
+      cont.append(el("p", "nota", "Todavía no hay datos."));
+      return;
+    }
+    var max = Math.max.apply(null, dias.map(function (d) { return Dueno.cantidad(d[campo]); }));
+    var escala = max || 1;
     var fila = el("div", "dueno-barras");
     dias.forEach(function (d) {
-      var b = el("i", d[campo] ? null : "cero");
-      b.style.height = Math.max(2, Math.round((d[campo] / max) * 100)) + "%";
-      b.title = fechaCorta.format(new Date(d.dia + "T12:00:00")) + ": " + d[campo];
+      var cantidad = Dueno.cantidad(d[campo]);
+      var b = el("i", cantidad ? null : "cero");
+      b.style.height = Math.max(2, Dueno.porcentaje(cantidad, escala)) + "%";
+      b.title = fechaCorta.format(new Date(d.dia + "T12:00:00")) + ": " + cantidad;
       fila.append(b);
     });
-    var total = dias.reduce(function (s, d) { return s + d[campo]; }, 0);
+    var total = dias.reduce(function (s, d) { return s + Dueno.cantidad(d[campo]); }, 0);
     var ejes = el("div", "dueno-ejes");
     ejes.append(el("span", null, fechaCorta.format(new Date(dias[0].dia + "T12:00:00"))), el("span", null, "Total: " + numDueno.format(total) + " · máximo " + max + " en un día"), el("span", null, "Hoy"));
     cont.append(fila, ejes);
   }
+  var Dueno = window.NovaDueno;
+  var registrosMetaDueno = 0;
+  var metaDueno = Dueno.cantidad(leerLocal("nova-dueno-meta", 0));
+  $("dueno-meta").value = metaDueno || "";
+  function pintarMetaDueno() {
+    var avance = Dueno.porcentaje(registrosMetaDueno, metaDueno);
+    $("dueno-meta-barra").value = avance;
+    $("dueno-meta-progreso").textContent = pl(registrosMetaDueno, "registro", "registros") + " en los últimos 30 días" +
+      (metaDueno ? " · meta de " + numDueno.format(metaDueno) + " · " + avance + "%" : "");
+  }
+  $("form-dueno-meta").addEventListener("submit", function (e) {
+    e.preventDefault();
+    var valor = Dueno.cantidad($("dueno-meta").value);
+    if (!guardarLocal("nova-dueno-meta", valor)) return toast("No se pudo guardar la meta en este dispositivo");
+    metaDueno = valor;
+    pintarMetaDueno();
+    toast(valor ? "Meta guardada" : "Meta quitada");
+  });
+
+  function pintarVersionesDueno(versiones) {
+    var cont = $("dueno-versiones"), filas = Dueno.barrasVersiones(versiones);
+    cont.replaceChildren();
+    if (!filas.length) cont.append(el("p", "nota", "Todavía no hay datos de versiones."));
+    filas.forEach(function (fila) {
+      var etiqueta = fila.version + " · " + pl(fila.total, "persona", "personas");
+      var barra = el("progress");
+      barra.max = filas[0].total || 1;
+      barra.value = fila.total;
+      barra.setAttribute("aria-label", etiqueta);
+      var grupo = el("div");
+      grupo.append(el("span", "nota", etiqueta), barra);
+      cont.append(grupo);
+    });
+  }
+
+  var fechaPanel = new Intl.DateTimeFormat("es-CO", { dateStyle: "medium", timeStyle: "short" });
+  function fechaDueno(valor) {
+    var tiempo = Date.parse(valor);
+    return Number.isFinite(tiempo) ? fechaPanel.format(tiempo) : "Fecha desconocida";
+  }
+
+  function listaDueno(id, filas, vacio, dibujar) {
+    var ul = $(id);
+    ul.replaceChildren();
+    if (!filas.length) ul.append(el("li", "vacio", vacio));
+    filas.forEach(function (fila) {
+      var li = el("li", "banco-item dueno-detalle");
+      dibujar(li, fila);
+      ul.append(li);
+    });
+  }
+
+  function actuarDueno(boton, cuerpo, idMensaje, exito, alGuardar) {
+    if (boton.disabled || !soyDueno()) return;
+    var origen = fuente;
+    boton.disabled = true;
+    mensaje(idMensaje, "Guardando…");
+    Promise.resolve().then(function () {
+      return cliente.functions.invoke("nova-dueno", { body: cuerpo });
+    }).then(function (r) {
+      if (fuente !== origen) return;
+      if (r.error || !r.data || !r.data.ok) throw new Error("No se guardó");
+      if (alGuardar) alGuardar();
+      mensaje(idMensaje, "");
+      toast(exito);
+      return cargarDueno();
+    }).catch(function () {
+      if (fuente === origen) mensaje(idMensaje, "No se pudo guardar el cambio. Intenta otra vez.", true);
+    }).finally(function () { boton.disabled = false; });
+  }
+
+  function pintarListasDueno(d, errores) {
+    listaDueno("dueno-errores-recientes", Dueno.recientes(errores.recientes), "Todavía no hay errores registrados.", function (li, error) {
+      li.append(el("p", null, Dueno.recortarTexto(error.mensaje, 180) || "Error sin detalle"),
+        el("small", "nota", [error.version, error.plataforma, fechaDueno(error.creado_en)].filter(Boolean).join(" · ")));
+    });
+    listaDueno("dueno-avisos", Dueno.recientes(d.avisos), "Todavía no hay avisos.", function (li, aviso) {
+      var fin = aviso.hasta ? " · Hasta " + fechaDueno(aviso.hasta) : "";
+      li.append(el("strong", null, aviso.titulo), el("p", null, aviso.mensaje),
+        el("small", "nota", [aviso.audiencia, aviso.activo ? "Activo" : "Apagado"].filter(Boolean).join(" · ") + fin));
+      if (aviso.activo && aviso.id != null) {
+        var boton = botonHabito("Apagar", function () {
+          if (confirm("¿Apagar este aviso?")) actuarDueno(boton, { accion: "aviso_apagar", id: aviso.id }, "dueno-aviso-mensaje", "Aviso apagado");
+        });
+        li.append(boton);
+      }
+    });
+    var sugerencias = Dueno.recientes(d.sugerencias);
+    $("dueno-pendientes").textContent = pl(Dueno.sugerenciasPendientes(sugerencias), "pendiente", "pendientes");
+    listaDueno("dueno-sugerencias", sugerencias, "Todavía no hay sugerencias.", function (li, s) {
+      li.append(el("strong", null, s.correo || "Sin correo"), el("p", null, s.mensaje),
+        el("small", "nota", [s.version, fechaDueno(s.creado_en), s.atendida ? "Atendida" : "Pendiente"].filter(Boolean).join(" · ")));
+      if (s.id != null) {
+        var boton = botonHabito(s.atendida ? "Marcar pendiente" : "Marcar atendida", function () {
+          actuarDueno(boton, { accion: "sugerencia_atender", id: s.id, atendida: !s.atendida }, "dueno-sugerencias-mensaje", "Sugerencia actualizada");
+        });
+        li.append(boton);
+      }
+    });
+    listaDueno("dueno-accesos", Dueno.recientes(d.accesos, 10), "Todavía no hay accesos registrados.", function (li, acceso) {
+      li.append(el("strong", null, acceso.correo || "Sin correo"), el("small", "nota", fechaDueno(acceso.creado_en)));
+    });
+  }
+
+  $("form-dueno-aviso").addEventListener("submit", function (e) {
+    e.preventDefault();
+    var form = e.currentTarget;
+    var aviso = Dueno.validarAviso($("dueno-aviso-titulo").value, $("dueno-aviso-texto").value,
+      $("dueno-aviso-audiencia").value, $("dueno-aviso-hasta").value, Date.now());
+    if (!aviso) return mensaje("dueno-aviso-mensaje", "Escribe un título de hasta 80 caracteres, un mensaje de hasta 500 y, si eliges una fecha, que sea hoy o después.", true);
+    actuarDueno($("dueno-aviso-crear"), aviso, "dueno-aviso-mensaje", "Aviso creado", function () { form.reset(); });
+  });
+
   function pintarDueno(d) {
     var r = d.resumen;
-    $("dueno-hora").textContent = "Datos de " + cuandoBanco(Date.parse(d.generado)) + ".";
+    $("dueno-hora").textContent = d.generado ? "Datos de " + fechaDueno(d.generado) + "." : "";
     var kpis = [
       ["👥", r.registrados, "Personas registradas", "+" + r.nuevos7 + " esta semana · " + r.confirmados + " confirmaron el correo"],
       ["🔥", r.activos7, "Usaron NOVA (7 días)", r.hoy + " en las últimas 24 horas"],
       ["📅", r.activos30, "Usaron NOVA (30 días)", r.conMovimientos + " han anotado algo"],
-      ["📲", d.apk.total, "Descargas de la APK", "desde GitHub (no cuenta las de la página)"],
+      ["📲", (d.apk || {}).total, "Descargas de la APK", "desde GitHub (no cuenta las de la página)"],
       ["🤖", r.android, "Abrieron la app Android", r.web + " en el navegador · desde la 1.66"],
       ["🧾", r.movimientos, "Movimientos anotados", "entre todas las personas"],
       ["✦", r.chats, "Chats con NOVA IA", ""],
@@ -6106,13 +6395,18 @@
       if (k[3]) c.append(el("small", null, k[3]));
       g.append(c);
     });
-    barrasDueno($("dueno-activos"), d.dias, "activos");
-    barrasDueno($("dueno-movs"), d.dias, "movimientos");
-    barrasDueno($("dueno-registros"), d.dias, "registros");
-    var vers = Object.keys(d.versiones || {}).sort().reverse();
-    $("dueno-versiones-tarjeta").hidden = !vers.length;
-    $("dueno-versiones").replaceChildren.apply($("dueno-versiones"), vers.map(function (v) { var n = d.versiones[v]; return el("span", null, (v === "" ? "?" : v) + ": " + n + (n === 1 ? " persona" : " personas")); }));
-    personasDueno = d.personas;
+    var dias = Array.isArray(d.dias) ? d.dias : [];
+    barrasDueno($("dueno-activos"), dias, "activos");
+    barrasDueno($("dueno-movs"), dias, "movimientos");
+    barrasDueno($("dueno-registros"), dias, "registros");
+    var ahora = Date.now(), errores = d.errores || {};
+    barrasDueno($("dueno-chats"), Dueno.ultimos30Dias(d.chatsPorDia, ahora), "total");
+    barrasDueno($("dueno-errores"), Dueno.ultimos30Dias(errores.porDia, ahora), "total");
+    pintarVersionesDueno(d.versiones);
+    registrosMetaDueno = Dueno.cantidad(r.nuevos30);
+    pintarMetaDueno();
+    pintarListasDueno(d, errores);
+    personasDueno = Array.isArray(d.personas) ? d.personas.filter(Boolean) : [];
     pintarPersonasDueno();
   }
   function pintarPersonasDueno() {
@@ -6133,7 +6427,7 @@
       var app = el("span", "banco-app");
       app.append(el("span", "dueno-emoji", p.dueno ? "👑" : p.prueba ? "🧪" : "👤"), el("span", "dueno-correo", p.correo));
       cab.append(app, el("small", null, p.ultimoUso ? "usó " + cuandoBanco(Date.parse(p.ultimoUso)) : "nunca entró"));
-      var det = "Se registró el " + fechaCorta.format(new Date(p.registro)) + (p.confirmado ? "" : " · no ha confirmado el correo") + (p.prueba ? " · cuenta de prueba" : "");
+      var det = "Se registró el " + fechaDueno(p.registro) + (p.confirmado ? "" : " · no ha confirmado el correo") + (p.prueba ? " · cuenta de prueba" : "");
       var chips = el("div", "dueno-chips");
       [p.plataforma === "android" ? "📱 Android" + (p.version ? " " + p.version : "") : p.plataforma === "web" ? "🌐 Navegador" : "",
         pl(p.movimientos, "movimiento", "movimientos"), p.chats ? pl(p.chats, "chat IA", "chats IA") : "", p.metas ? pl(p.metas, "meta", "metas") : "", p.espacios ? pl(p.espacios, "espacio", "espacios") : "", p.conductor ? "🚖 conductor" : ""]
@@ -6154,17 +6448,22 @@
       return res.data;
     });
   }
+  var cargaDueno = 0;
   function cargarDueno() {
+    if (!soyDueno()) return;
+    var carga = ++cargaDueno, origen = fuente;
     mensaje("dueno-mensaje", "Cargando los datos…");
     $("dueno-recargar").disabled = true;
-    pedirDueno(false).then(function (datosDueno) {
+    return pedirDueno(false).then(function (datosDueno) {
+      if (origen !== fuente || carga !== cargaDueno) return;
       mensaje("dueno-mensaje", "");
       pintarDueno(datosDueno);
     }).catch(function (e) {
+      if (origen !== fuente || carga !== cargaDueno) return;
       if (e && e.estado === 401) mensaje("dueno-mensaje", "Tu sesión venció. Cierra sesión en Ajustes y vuelve a entrar con tu correo.", true);
       else if (e && e.estado === 403) mensaje("dueno-mensaje", "Esta cuenta no es la del dueño.", true);
       else mensaje("dueno-mensaje", "No se pudieron cargar los datos. Revisa tu conexión e intenta otra vez.", true);
-    }).finally(function () { $("dueno-recargar").disabled = false; });
+    }).finally(function () { if (carga === cargaDueno) $("dueno-recargar").disabled = false; });
   }
   $("dueno-apk-avanzada").href = (cfg.apkRespaldoUrl || "").replace(/NOVA\.apk$/, "NOVA-avanzada.apk");
   $("btn-dueno").addEventListener("click", function () { abrirCapa("pantalla-dueno"); cargarDueno(); });
@@ -7908,6 +8207,7 @@
 
   function entrar(nuevaFuente) {
     fuente = nuevaFuente;
+    avisosNube = []; erroresEnviados = [];
     espacioId = leerLocal(claveEspacio(), null);
     fuente = Esp.envolver(nuevaFuente, { activo: function () { return espacioId; }, alPerder: function () { espacioId = null; guardarLocal(claveEspacio(), null); } });
     reiniciarChat();
@@ -7923,7 +8223,7 @@
       if (!fuente.demo) bloquearSiHayPin();
       revisarInactividad();
       pintarEstadoPapelera(); tutorialSiHaceFalta(); novedadesSiHaceFalta();
-      $("btn-dueno").hidden = !soyDueno(); marcarUso();
+      $("btn-dueno").hidden = !soyDueno(); marcarUso(); cargarAvisosNube();
       while (accionesPendientes.length) anotarTeclaRapida(accionesPendientes.shift());
       programarAvisos();
       if (!fuente.demo) revisarBanco().then(function () { if (abrirBancoAlEntrar) { abrirBancoAlEntrar = false; abrirBanco(); } }).catch(function () { /* sin lista del banco */ });
@@ -8565,6 +8865,8 @@
       if (vieja.limpiar) vieja.limpiar();
       try { var PW = enApp && window.Capacitor.Plugins && window.Capacitor.Plugins.Preferences; if (PW) { ultimoWidget = ""; PW.remove({ key: "nova-widget" }); } } catch (e) { /* nada */ }
       fuente = null; datos = datosVacios();
+      avisosNube = []; erroresEnviados = [];
+      $("form-sugerencia").reset(); pintarContadorSugerencia();
       $("form-auth").reset(); mensaje("auth-mensaje", ""); mostrar("auth");
     });
   });
