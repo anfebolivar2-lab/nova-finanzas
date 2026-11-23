@@ -232,12 +232,30 @@
     return { limite: limite, montoExento: montoExento, ahorro: montoExento * (tarifaPct / 100) };
   }
 
+  function ivaPrecio(precio, tarifaPct, incluido) {
+    if (!noNegativos([precio, tarifaPct])) return null;
+    var tarifa = tarifaPct / 100;
+    var iva = Math.round(precio * (incluido ? tarifa / (1 + tarifa) : tarifa));
+    var base = Math.round(precio) - (incluido ? iva : 0);
+    var total = base + iva;
+    return Number.isSafeInteger(total) ? { base: base, iva: iva, total: total } : null;
+  }
+
+  function ivaPeriodo(generado, descontable) {
+    if (!noNegativos([generado, descontable])) return null;
+    var diferencia = generado - descontable;
+    var saldo = Math.round(Math.abs(diferencia));
+    if (!Number.isSafeInteger(saldo)) return null;
+    return diferencia < 0 && saldo > 0 ? -saldo : saldo;
+  }
+
   var api = { CONSTANTES: CONSTANTES, MAX_ANIOS: MAX_ANIOS, diasComerciales: diasComerciales, liquidacion: liquidacion,
     recargoFestivo: recargoFestivo, horasExtra: horasExtra, salarioNeto: salarioNeto, gmf: gmf,
     gmfMovimientos: gmfMovimientos, interesCompuesto: interesCompuesto, reglaCuatro: reglaCuatro,
     horasDeTrabajo: horasDeTrabajo, cuotaCredito: cuotaCredito, compararCreditos: compararCreditos,
     creditoVivienda: creditoVivienda, compraCartera: compraCartera,
-    rendimientoCdt: rendimientoCdt, compararCdt: compararCdt, ahorroTributarioAporte: ahorroTributarioAporte };
+    rendimientoCdt: rendimientoCdt, compararCdt: compararCdt, ahorroTributarioAporte: ahorroTributarioAporte,
+    ivaPrecio: ivaPrecio, ivaPeriodo: ivaPeriodo };
   if (typeof module === "object" && module.exports) module.exports = api;
   else raiz.NovaCalculadoras = api;
 })(typeof window !== "undefined" ? window : this);

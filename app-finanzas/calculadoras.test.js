@@ -268,3 +268,26 @@ test("estima el ahorro de aportes con el menor tope y nunca excede el aporte", (
     assert.equal(C.ahorroTributarioAporte(...args), null);
   }
 });
+
+test("suma y extrae IVA, conservando el precio de entrada redondeado", () => {
+  assert.deepEqual(C.ivaPrecio(100000, 19, false), { base: 100000, iva: 19000, total: 119000 });
+  assert.deepEqual(C.ivaPrecio(119000, 19, true), { base: 100000, iva: 19000, total: 119000 });
+  assert.deepEqual(C.ivaPrecio(105.49, 5, true), { base: 100, iva: 5, total: 105 });
+  assert.deepEqual(C.ivaPrecio(10, 5, false), { base: 10, iva: 1, total: 11 });
+  assert.deepEqual(C.ivaPrecio(10.5, 0, true), { base: 11, iva: 0, total: 11 });
+  assert.deepEqual(C.ivaPrecio(10.5, 0, false), { base: 11, iva: 0, total: 11 });
+  assert.equal(C.ivaPrecio(-1, 19, false), null);
+  assert.equal(C.ivaPrecio(100, -1, true), null);
+  assert.equal(C.ivaPrecio(Infinity, 19, true), null);
+});
+
+test("IVA del periodo admite saldo a favor y redondea la diferencia a pesos", () => {
+  assert.equal(C.ivaPeriodo(19000, 5000), 14000);
+  assert.equal(C.ivaPeriodo(0, 0), 0);
+  assert.equal(C.ivaPeriodo(12.75, 10.25), 3);
+  assert.equal(C.ivaPeriodo(10.25, 12.75), -3);
+  assert.equal(C.ivaPeriodo(0, 0.25), 0);
+  assert.equal(C.ivaPeriodo(-1, 0), null);
+  assert.equal(C.ivaPeriodo(0, -1), null);
+  assert.equal(C.ivaPeriodo(0, NaN), null);
+});

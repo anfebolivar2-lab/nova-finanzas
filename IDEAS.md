@@ -152,7 +152,7 @@ Lista de ideas propuestas para revisar; ninguna está hecha todavía.
 - ✅ Calculadora del 4×1000 (GMF) en tus movimientos.
 - ✅ Comparar CDT de varios bancos.
 - ✅ Calculadora de pensión voluntaria y AFC.
-- Calculadora del IVA para independientes y del régimen simple.
+- ✅ Calculadora del IVA para independientes y del régimen simple.
 
 ## Inversiones y patrimonio
 
@@ -194,7 +194,7 @@ Lista de ideas propuestas para revisar; ninguna está hecha todavía.
 - ✅ Gestos: deslizar un movimiento para editarlo o borrarlo (borrar siempre con confirmación).
 - ✅ Íconos de categorías personalizables con emoji.
 - ✅ Tamaño de letra ajustable dentro de la app.
-- Lector de pantalla revisado en todas las pantallas (accesibilidad).
+- ✅ Lector de pantalla revisado en todas las pantallas (accesibilidad).
 - ✅ Vista de calendario con el total de cada día.
 - Tutorial interactivo la primera vez, más corto y saltable.
 

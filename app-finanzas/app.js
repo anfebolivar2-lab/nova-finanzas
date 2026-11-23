@@ -91,7 +91,11 @@
   function colorDe(c) { return (c && c.color) || COLOR_POR_ICONO[c && c.icono] || "var(--accent)"; }
 
   function mensaje(id, texto, error) {
-    var m = $(id);
+    pintarMensaje($(id), texto, error);
+  }
+
+  function pintarMensaje(m, texto, error) {
+    m.setAttribute("role", error || m.id === "bloqueo-mensaje" ? "alert" : "status");
     m.textContent = texto || "";
     m.classList.toggle("error", !!error);
   }
@@ -112,11 +116,15 @@
       setTimeout(function () { toast(titulo, detalle, valor, accion, movimientoGuardado); }, espera);
       return;
     }
-    var t = $("toast");
+    var t = $("toast"), estado = $("toast-estado"), error = $("toast-error");
     var falla = /^(No se pudo|No pude|Un cambio guardado sin internet)/.test(titulo);
     t.className = "toast" + (falla ? " toast-error" : "") + (accion ? " toast-con-accion" : "");
     t.classList.toggle("valores-ocultos", ocultos);
     t.classList.toggle("movimiento-guardado", !!movimientoGuardado);
+    function ocultarToast() {
+      t.hidden = true;
+      estado.textContent = error.textContent = "";
+    }
     t.textContent = "";
     t.insertAdjacentHTML("afterbegin", NOVI);
     var col = el("div", "toast-texto");
@@ -130,7 +138,7 @@
         if (accion.duracion && Date.now() >= deshacerHasta) return;
         if (accion.confirmar && !accion.confirmar()) return;
         deshacerHasta = 0;
-        clearTimeout(toastTimer); t.hidden = true; accion.fn();
+        clearTimeout(toastTimer); ocultarToast(); accion.fn();
       });
       t.append(bt);
     }
@@ -139,10 +147,15 @@
     var barra = el("span", "toast-barra"); t.append(barra);
     barra.style.animationDuration = accion ? duracion + "ms" : "";
     t.hidden = false;
+    estado.textContent = error.textContent = "";
+    if ($("bloqueo").hidden) {
+      var anuncio = falla || /^No se pudieron/.test(titulo) ? error : estado;
+      anuncio.textContent = [titulo, detalle, !ocultos && valor, accion && accion.texto].filter(Boolean).join(". ");
+    }
     try { if (!falla && navigator.vibrate) navigator.vibrate(25); } catch (e) { /* sin vibración */ }
     var dur = barra.style.animationDuration; barra.style.animation = "none"; void barra.offsetWidth; barra.style.animation = ""; barra.style.animationDuration = dur;
     clearTimeout(toastTimer);
-    toastTimer = setTimeout(function () { t.hidden = true; }, duracion);
+    toastTimer = setTimeout(ocultarToast, duracion);
   }
 
   // Convierte "2 millones", "850.000" o "20k" en número usando el mismo intérprete.
@@ -2167,7 +2180,7 @@
     var cm = campoCalc("¿Cuánto pides?", "cr-monto", "10 millones", true), ct = campoCalc("Interés mensual (%)", "cr-tasa", "1,8"), cn = campoCalc("¿En cuántos meses?", "cr-meses", "24");
     var cr = el("p", "calc-res", "Escribe los tres datos.");
     var avisoCredito = el("p", "mensaje error", AVISO_USURA); avisoCredito.hidden = true;
-    avisoCredito.setAttribute("role", "status");
+    avisoCredito.setAttribute("role", "alert");
     [cm, ct, cn].forEach(function (f) { c.append(f[0], f[1]); }); c.append(avisoCredito, cr);
     function calcCredito() {
       var mensual = A.porcentajeValido(ct[1].value);
@@ -2217,6 +2230,8 @@
     var meses = NovaConsejos.mesesConDatos(datos.movimientos);
     if (meses.length < 2) return art.append(el("p", "nota", "Necesito movimientos de al menos dos meses para compararlos."));
     var selA = el("select"), selB = el("select");
+    selA.setAttribute("aria-label", "Comparar dos meses: mes de referencia");
+    selB.setAttribute("aria-label", "Comparar dos meses: mes a comparar");
     meses.forEach(function (m) { [selA, selB].forEach(function (s) { var o = el("option", null, m.nombre); o.value = m.clave; s.append(o); }); });
     selA.value = meses[1].clave; selB.value = meses[0].clave;
     var res = el("div");
@@ -2303,6 +2318,7 @@
     var etiquetas = NovaConsejos.etiquetasUsadas(datos.movimientos);
     if (!etiquetas.length) return art.append(el("p", "nota", "Marca tus gastos con una etiqueta (por ejemplo #viaje) y aquí ves cuánto costó todo junto."));
     var sel = el("select"); etiquetas.forEach(function (t) { var o = el("option", null, "#" + t); o.value = t; sel.append(o); });
+    sel.setAttribute("aria-label", "Costo de un evento: etiqueta");
     var res = el("div"); art.append(sel, res);
     function pintarEv() {
       var r = NovaConsejos.costoEvento(datos.movimientos, sel.value); res.replaceChildren();
@@ -2447,6 +2463,7 @@
     art.append(el("p", "calc-res", ocultos ? "••••" : "Llevas " + dinero(total) + " apartados."));
     if (!(total > 0) || !datos.metas.length) return art.append(el("p", "nota", datos.metas.length ? "Registra gastos y esto se irá llenando." : "Crea una meta de ahorro para poder pasarle lo que apartes."));
     var sel = el("select"); datos.metas.forEach(function (m) { var o = el("option", null, m.nombre); o.value = m.id; sel.append(o); });
+    sel.setAttribute("aria-label", "Alcancía de redondeo: meta de ahorro");
     var b = el("button", "mini", "Pasar a la meta"); b.type = "button";
     b.addEventListener("click", function () {
       var m = datos.metas.find(function (x) { return String(x.id) === sel.value; }); if (!m) return;
@@ -2520,6 +2537,7 @@
     pintarSG();
     if (pendientes > 0 && datos.metas.length) {
       var sel = el("select"); datos.metas.forEach(function (m) { var o = el("option", null, m.nombre); o.value = m.id; sel.append(o); });
+      sel.setAttribute("aria-label", "Días sin gastar: meta de ahorro");
       var b = el("button", "mini", "Pasar a la meta"); b.type = "button";
       b.addEventListener("click", function () {
         var m = datos.metas.find(function (x) { return String(x.id) === sel.value; }); if (!m) return;
@@ -2570,6 +2588,8 @@
     art.append(ul);
     var sel = el("select"); datos.categorias.filter(function (c) { return c.tipo === "gasto"; }).forEach(function (c) { var o = el("option", null, etiquetaCategoria(c)); o.value = c.id; sel.append(o); });
     var pct = el("select"); [5, 10, 15, 20, 30].forEach(function (v) { var o = el("option", null, "Bajar " + v + " %"); o.value = v; pct.append(o); }); pct.value = "10";
+    sel.setAttribute("aria-label", "Metas de reducción: categoría");
+    pct.setAttribute("aria-label", "Metas de reducción: porcentaje");
     var add = el("button", "mini", "+ Agregar meta"); add.type = "button";
     add.addEventListener("click", function () { metas.push({ categoria_id: Number(sel.value), pct: Number(pct.value) }); guardarLocal("nova-reducciones", metas); pintarAnalisis(); });
     art.append(sel, pct, add);
@@ -2637,7 +2657,7 @@
       c.append(par[0], input);
       if (f.tasaEa) {
         var avisoTasa = el("p", "mensaje error", AVISO_USURA);
-        avisoTasa.setAttribute("role", "status");
+        avisoTasa.setAttribute("role", "alert");
         avisoTasa.hidden = true;
         c.append(avisoTasa);
         avisos.push({ campo: input, aviso: avisoTasa });
@@ -2903,15 +2923,69 @@
     }, { aviso: aviso, avisoSiempre: true, ayuda: "Los aportes comparten el menor de los dos topes. Escribe tu tarifa marginal para estimar el ahorro. " + K.topeAportePct.referencia + "." });
   }
 
+  function calculadoraIva(art) {
+    var C = window.NovaCalculadoras;
+    if (!C) return;
+    var caja = el("div", "calc");
+    var modo = el("select"); modo.id = "iva-modo";
+    var etiquetaModo = el("label", null, "Qué quieres calcular"); etiquetaModo.htmlFor = modo.id;
+    [["sumar", "Sumar el IVA a un precio sin IVA"], ["sacar", "Sacar el IVA de un precio con IVA incluido"],
+      ["periodo", "IVA a pagar del periodo"]].forEach(function (opcion) {
+      var opt = el("option", null, opcion[1]); opt.value = opcion[0]; modo.append(opt);
+    });
+
+    var precio = el("div", "calc formulario"), periodo = el("div", "calc formulario");
+    var valor = campoCalc("Precio sin IVA (COP)", "iva-valor", "100 mil", true);
+    var tarifa = campoCalc("Tarifa de IVA (%)", "iva-pct", "", false);
+    tarifa[1].value = "19";
+    var atajos = el("div");
+    [5, 0].forEach(function (porcentaje) {
+      var boton = el("button", "mini", porcentaje + " %"); boton.type = "button";
+      boton.addEventListener("click", function () { tarifa[1].value = String(porcentaje); actualizar(); });
+      atajos.append(boton);
+    });
+    precio.append(valor[0], valor[1], tarifa[0], tarifa[1], atajos);
+    var generado = campoCalc("IVA generado por ventas (COP)", "iva-generado", "0", true);
+    var descontable = campoCalc("IVA descontable por compras (COP)", "iva-descontable", "0", true);
+    periodo.append(generado[0], generado[1], descontable[0], descontable[1]);
+    var resultado = el("p", "calc-res"); resultado.setAttribute("role", "status");
+    caja.append(el("strong", null, "🧾 IVA para independientes"), etiquetaModo, modo, precio, periodo, resultado,
+      el("p", "nota", "Verifica con la DIAN si tus ventas son gravadas, excluidas o exentas; esta calculadora no te dice si debes responder IVA"));
+
+    function monto(campo) {
+      var texto = campo.value.trim();
+      return !texto || /[-−]/.test(texto) ? NaN : leerValor(texto);
+    }
+    function actualizar() {
+      var porPeriodo = modo.value === "periodo", incluido = modo.value === "sacar";
+      precio.hidden = porPeriodo; periodo.hidden = !porPeriodo;
+      valor[0].textContent = incluido ? "Precio con IVA incluido (COP)" : "Precio sin IVA (COP)";
+      var texto = "Escribe valores válidos para calcular.";
+      if (porPeriodo) {
+        var saldo = C.ivaPeriodo(monto(generado[1]), monto(descontable[1]));
+        if (saldo !== null) texto = saldo < 0 ? "Saldo a favor " + dineroEn(Math.abs(saldo), "COP") : "IVA a pagar del periodo " + dineroEn(saldo, "COP");
+      } else {
+        var pct = tarifa[1].value.trim().replace(",", ".");
+        var r = C.ivaPrecio(monto(valor[1]), /^\d+(\.\d+)?$/.test(pct) ? Number(pct) : NaN, incluido);
+        if (r) texto = "Sin IVA " + dineroEn(r.base, "COP") + " · IVA " + dineroEn(r.iva, "COP") + " · Con IVA " + dineroEn(r.total, "COP");
+      }
+      resultado.textContent = texto;
+    }
+    [valor[1], generado[1], descontable[1]].forEach(function (campo) {
+      if (ocultos) campo.type = "password";
+    });
+    caja.addEventListener("input", actualizar);
+    modo.addEventListener("change", actualizar);
+    actualizar();
+    art.append(caja);
+  }
+
   function wMasCalculadoras(art) {
     titulo(art, "Más calculadoras");
     calculadorasTrabajoYAhorro(art);
     calculadorasDeCredito(art);
     var N = NovaConsejos;
-    calculadora(art, "🧾 IVA (19 %)", [{ id: "iva-valor", etq: "Valor", ph: "100 mil", plata: true }, { id: "iva-pct", etq: "IVA (%)", ph: "19" }, { id: "iva-modo", etq: "¿El valor ya incluye IVA? (1 = sí, 0 = no)", ph: "0" }], function (v) {
-      var r = N.iva(v["iva-valor"], v["iva-pct"] || 19, v["iva-modo"] === 1 ? "menos" : "mas");
-      return r ? "Sin IVA " + dinero(r.base) + " · IVA " + dinero(r.iva) + " · Con IVA " + dinero(r.total) : null;
-    });
+    calculadoraIva(art);
     calculadora(art, "🍽️ Dividir la cuenta con propina", [{ id: "pr-total", etq: "Total de la cuenta", ph: "200 mil", plata: true }, { id: "pr-personas", etq: "¿Cuántas personas?", ph: "4" }, { id: "pr-pct", etq: "Propina (%)", ph: "10" }], function (v) {
       var r = N.dividirCuenta(v["pr-total"], v["pr-personas"], v["pr-pct"]);
       return r ? "Propina " + dinero(r.propina) + " · Total " + dinero(r.total) + " · Cada uno " + dinero(r.porPersona) : null;
@@ -5322,28 +5396,44 @@
 
   // Capas (pantallas encima de la app) y hojas. El botón Atrás de Android las cierra.
   var pilaCapas = [];
+  var pilaFocos = [];
   function abrirCapa(id) {
     var c = $(id);
     if (pilaCapas.indexOf(id) >= 0) return;
     pilaCapas.push(id);
+    pilaFocos.push(document.activeElement);
     c.hidden = false;
     document.body.classList.add("con-capa");
     history.pushState({ capa: id }, "");
-    var foco = c.querySelector("input:not([type=checkbox]):not([type=date]), textarea"); // no se enfoca ningún botón: así la flecha de volver no sale con un aro
-    if (c.classList.contains("capa") && foco && id !== "pantalla-dueno" && id !== "pantalla-registro" && id !== "pantalla-detalle" && id !== "pantalla-abonos") setTimeout(function () { foco.focus({ preventScroll: true }); }, 30);
+    if (!c.classList.contains("capa")) return;
+    var titulo = $(c.getAttribute("aria-labelledby"));
+    titulo.focus({ preventScroll: true });
+    var foco = c.querySelector("input:not([type=checkbox]):not([type=date]), textarea");
+    if (foco && id !== "pantalla-dueno" && id !== "pantalla-registro" && id !== "pantalla-detalle" && id !== "pantalla-abonos") {
+      setTimeout(function () {
+        if (pilaCapas[pilaCapas.length - 1] === id && document.activeElement === titulo) foco.focus({ preventScroll: true });
+      }, 30);
+    }
   }
   function ocultarCapa() {
     var id = pilaCapas.pop();
+    var foco = pilaFocos.pop();
     if (id) $(id).hidden = true;
     if (id === "hoja-respaldo") limpiarClaveRespaldo();
     if (id === "pantalla-dueno" && $("dueno-ficha").open) $("dueno-ficha").close();
     if (!pilaCapas.length) document.body.classList.remove("con-capa");
+    if (foco && foco.isConnected && !foco.closest("[hidden], [inert]")) foco.focus({ preventScroll: true });
   }
   function cerrarCapa() { if (pilaCapas.length) history.back(); }
   window.addEventListener("popstate", function () { if (pilaCapas.length) ocultarCapa(); });
   document.querySelectorAll("[data-cerrar]").forEach(function (b) { b.addEventListener("click", cerrarCapa); });
   document.querySelectorAll(".hoja-fondo").forEach(function (f) { f.addEventListener("click", function (e) { if (e.target === f) cerrarCapa(); }); });
-  document.addEventListener("keydown", function (e) { if (e.key === "Escape" && pilaCapas.length) cerrarCapa(); });
+  document.addEventListener("keydown", function (e) {
+    if (e.key !== "Escape" || e.defaultPrevented || e.isComposing || e.repeat || !pilaCapas.length) return;
+    if (document.querySelector("dialog[open]") || !$("bloqueo").hidden) return;
+    e.preventDefault();
+    cerrarCapa();
+  });
   // Cierra la capa de arriba y, cuando el navegador terminó de volver atrás, ejecuta fn.
   function cerrarYLuego(fn) {
     var listo = function () { window.removeEventListener("popstate", listo); setTimeout(fn, 0); };
@@ -5554,6 +5644,8 @@
   // Los dos valores se pueden editar: lo que se escribe en uno calcula el otro.
   function pintarConversor(origen) {
     botonMoneda($("conv-de"), conv.de); botonMoneda($("conv-a"), conv.a);
+    $("conv-de").setAttribute("aria-label", "Moneda de origen: " + conv.de);
+    $("conv-a").setAttribute("aria-label", "Moneda de destino: " + conv.a);
     var r = conv.tasas, nota = $("conv-nota");
     if (!r) { nota.textContent = "Todavía no hay tasas guardadas. Conéctate a internet una vez para descargarlas."; return; }
     var uno = Mon.convertir(1, conv.de, conv.a, r);
@@ -6479,6 +6571,7 @@
       ? "Tienes menos de lo que dice NOVA: seguramente hay gastos sin anotar. Anótalos si los recuerdas, o anota la diferencia de una vez."
       : "Tienes más de lo que dice NOVA: seguramente hay un ingreso sin anotar. Anótalo si lo recuerdas, o anota la diferencia de una vez.";
     $("cuadrar-anotar").textContent = d < 0 ? "Anotar " + pesos.format(-d) + " como gasto" : "Anotar " + pesos.format(d) + " como ingreso";
+    $("cuadrar-anotar").setAttribute("aria-label", $("cuadrar-anotar").textContent);
   }
   $("cuadrar-cuenta").addEventListener("change", pintarCuadrar);
   $("cuadrar-real").addEventListener("input", pintarCuadrar);
@@ -7794,24 +7887,25 @@
       img.addEventListener("click", function () { img.classList.toggle("grande"); });
       caja.append(img);
       fuente.fotos.url(m.foto_ruta).then(function (u) { if (vivo) img.src = u; })
-        .catch(function () { aviso.textContent = "No se pudo mostrar la foto (¿sin internet?)."; aviso.classList.add("error"); });
+        .catch(function () { pintarMensaje(aviso, "No se pudo mostrar la foto (¿sin internet?).", true); });
     }
     var archivo = el("input"); archivo.type = "file"; archivo.accept = "image/*"; archivo.hidden = true;
+    archivo.setAttribute("aria-label", "Seleccionar imagen: " + opc.titulo);
     var agregar = el("button", "mini", m.foto_ruta ? "🔄 Cambiar foto" : "📷 Agregar foto"); agregar.type = "button";
     var quitar = el("button", "mini", "🗑 Quitar foto"); quitar.type = "button"; quitar.hidden = !m.foto_ruta;
     agregar.addEventListener("click", function () {
-      if (!puede) { aviso.textContent = "La foto se puede agregar cuando tengas internet y ya esté enviado."; aviso.classList.add("error"); return; }
+      if (!puede) { pintarMensaje(aviso, "La foto se puede agregar cuando tengas internet y ya esté enviado.", true); return; }
       archivo.click();
     });
     archivo.addEventListener("change", function () {
       var f = archivo.files && archivo.files[0]; archivo.value = "";
       if (!f) return;
-      agregar.disabled = true; aviso.classList.remove("error"); aviso.textContent = "Guardando la foto…";
+      agregar.disabled = true; pintarMensaje(aviso, "Guardando la foto…");
       var vieja = m.foto_ruta;
       achicarFoto(f).then(function (blob) { return fuente.fotos.subir(blob, opc.clave + "-" + m.id); })
         .then(function (ruta) { return fuente.actualizar(opc.tabla, m.id, { foto_ruta: ruta }).then(function (n) { Object.assign(m, n); return vieja ? fuente.fotos.borrar(vieja) : null; }); })
         .then(function () { toast("¡Foto guardada!", opc.nombre(m)); vivo = false; opc.repintar(); })
-        .catch(function (err) { aviso.textContent = "No se pudo guardar la foto: " + err.message; aviso.classList.add("error"); })
+        .catch(function (err) { pintarMensaje(aviso, "No se pudo guardar la foto: " + err.message, true); })
         .finally(function () { agregar.disabled = false; });
     });
     quitar.addEventListener("click", function () {
@@ -7819,22 +7913,22 @@
       var vieja = m.foto_ruta;
       fuente.actualizar(opc.tabla, m.id, { foto_ruta: null }).then(function (n) { Object.assign(m, n); return fuente.fotos.borrar(vieja); })
         .then(function () { toast("Foto quitada"); vivo = false; opc.repintar(); })
-        .catch(function (err) { aviso.textContent = "No se pudo quitar: " + err.message; aviso.classList.add("error"); });
+        .catch(function (err) { pintarMensaje(aviso, "No se pudo quitar: " + err.message, true); });
     });
     var fila = el("div", "det-foto-botones"); fila.append(agregar, quitar, archivo);
     if (opc.productos && m.foto_ruta && puede) {
       var sep = el("button", "mini", "🧾 Separar los productos"); sep.type = "button";
       var lista = el("div", "productos-recibo");
       sep.addEventListener("click", function () {
-        if (!iaDisponible()) { aviso.textContent = "La IA no está disponible ahora mismo."; aviso.classList.add("error"); return; }
-        sep.disabled = true; aviso.classList.remove("error"); aviso.textContent = "✦ La IA está leyendo el recibo…"; lista.replaceChildren();
+        if (!iaDisponible()) { pintarMensaje(aviso, "La IA no está disponible ahora mismo.", true); return; }
+        sep.disabled = true; pintarMensaje(aviso, "✦ La IA está leyendo el recibo…"); lista.replaceChildren();
         fuente.fotos.url(m.foto_ruta).then(function (u) { return fetch(u); }).then(function (r) { return r.blob(); })
           .then(function (blob) { return new Promise(function (ok, mal) { var fr = new FileReader(); fr.onload = function () { ok(String(fr.result).split(",")[1] || ""); }; fr.onerror = function () { mal(new Error("No se pudo leer la foto.")); }; fr.readAsDataURL(blob); }); })
           .then(function (b64) { return invocarIA({ productos: true, imagen: b64, mime: "image/jpeg" }); })
           .then(function (d) {
             aviso.textContent = "";
             var items = d.productos || [];
-            if (!items.length) { aviso.textContent = "No pude leer productos en esta foto. Prueba con una foto más cercana y con buena luz."; aviso.classList.add("error"); return; }
+            if (!items.length) { pintarMensaje(aviso, "No pude leer productos en esta foto. Prueba con una foto más cercana y con buena luz.", true); return; }
             var ul = el("ul", "lista-simple");
             items.forEach(function (x) { var li = el("li", "consejo"); var t = el("div"); t.append(el("strong", null, (x.cantidad > 1 ? x.cantidad + "× " : "") + x.nombre), el("small", null, ocultos ? "••••" : pesos.format(x.valor))); li.append(t); ul.append(li); });
             lista.append(el("p", "calc-res", (d.comercio ? d.comercio + " · " : "") + items.length + (items.length === 1 ? " producto" : " productos")), ul);
@@ -7844,11 +7938,11 @@
               var base = m.nota ? m.nota + "\n" : "", nota = (base + txt).slice(0, 500);
               guardar.disabled = true;
               fuente.actualizar("movimientos", m.id, { nota: nota }).then(function (n) { Object.assign(m, n); toast("¡Guardado en la nota!", opc.nombre(m)); opc.repintar(); })
-                .catch(function (err) { guardar.disabled = false; aviso.textContent = "No se pudo guardar: " + err.message; aviso.classList.add("error"); });
+                .catch(function (err) { guardar.disabled = false; pintarMensaje(aviso, "No se pudo guardar: " + err.message, true); });
             });
             lista.append(guardar);
           })
-          .catch(function (err) { aviso.textContent = (err && err.message) || "No se pudo leer el recibo."; aviso.classList.add("error"); })
+          .catch(function (err) { pintarMensaje(aviso, (err && err.message) || "No se pudo leer el recibo.", true); })
           .finally(function () { sep.disabled = false; });
       });
       fila.append(sep);
@@ -9570,7 +9664,7 @@
   // ---------- Bloqueo con PIN (el PIN se guarda solo en este dispositivo, cifrado) ----------
   var PIN_CLAVE = "nova-pin", PIN2_CLAVE = "nova-pin2", pinModo = null, pinPrimero = "";
   var minutosBloqueo = leerLocal("nova-bloqueo-minutos", 5), ultimaActividad = Date.now(), timerBloqueo;
-  var contenidoBloqueado = document.querySelectorAll("#pantalla-app, .capa, .hoja-fondo, #tutorial, #novedades, #toast");
+  var contenidoBloqueado = document.querySelectorAll("#pantalla-app, .capa, .hoja-fondo, #tutorial, #novedades, #toast, .anuncio-accesible");
   $("bloqueo-minutos").value = String(minutosBloqueo);
   $("bloqueo-minutos").addEventListener("change", function () {
     minutosBloqueo = Number(this.value);
