@@ -444,6 +444,7 @@
       alMapear: remapearDatos, alCambiar: pintarAvisoRed,
       alFallar: function () { toast("Un cambio guardado sin internet no se pudo enviar y se descartó."); }
     });
+    f.usuarioEventos = usuario.id;
     // Historial de cambios: lo escriben disparadores de la base de datos; aquí solo se lee.
     f.historial = function () {
       return cliente.from("fin_historial").select("*").order("creado_en", { ascending: false }).limit(100).then(function (r) { if (r.error) throw new Error(r.error.message); return r.data; });
@@ -3342,7 +3343,7 @@
       var li = el("li", "fila-widget");
       var lab = el("label", "casilla");
       var chk = el("input"); chk.type = "checkbox"; chk.checked = w.visible;
-      chk.addEventListener("change", function () { w.visible = chk.checked; guardarWidgets(lista); pintarAnalisis(); pintarWidgets($("widgets-inicio"), true); });
+      chk.addEventListener("change", function () { if (w.visible && !chk.checked) registrarEvento("recuadro", "oculto_" + info.id); w.visible = chk.checked; guardarWidgets(lista); pintarAnalisis(); pintarWidgets($("widgets-inicio"), true); });
       lab.append(chk, document.createTextNode(info.nombre));
       if (w.id === "sugerencias-hora") {
         li.append(lab);
@@ -5374,6 +5375,7 @@
       b.classList.toggle("activo", b.dataset.ir === principal);
       if (b.dataset.ir === principal) b.setAttribute("aria-current", "page"); else b.removeAttribute("aria-current");
     });
+    if (vista !== enVista && ["inicio", "planes", "analisis", "buscar"].indexOf(vista) >= 0) registrarEvento("pantalla", "tab_" + vista);
     enVista = vista;
     actualizarFab();
     if (vista === "buscar") pintarBuscar();
@@ -5401,6 +5403,7 @@
     var c = $(id);
     if (pilaCapas.indexOf(id) >= 0) return;
     pilaCapas.push(id);
+    registrarEvento("pantalla", id.replace(/^(pantalla|hoja)-/, ""));
     pilaFocos.push(document.activeElement);
     c.hidden = false;
     document.body.classList.add("con-capa");
@@ -5471,6 +5474,7 @@
     var monedaRepetida = o.repetir && usaMontoOriginal && num(m.tasa) > 0;
     reg = {
       editar: o.movimiento || null,
+      via: o.repetir ? "rapido" : "manual",
       tipo: m ? m.tipo : o.tipo || "gasto",
       expr: m ? textoMonto((o.repetir ? monedaRepetida : usaMontoOriginal) ? num(m.monto_original) : num(m.monto)) : (o.expr || ""),
       categoriaId: categoriaId != null && (!o.repetir || categoria(categoriaId)) ? categoriaId : null,
@@ -5902,6 +5906,7 @@
     var conCategoria = reg.categoriaId != null ? Promise.resolve(categoria(reg.categoriaId))
       : categoriaPorNombre(reg.tipo === "ingreso" ? "Otros ingresos" : "Otros gastos", reg.tipo);
     var registro = reg, editar = reg.editar, otro = $("reg-otro").checked, docId = reg.documentoId;
+    var uso = usoActivoEventos();
     conCategoria.then(function (c) {
       var fila = {
         cuenta_id: Number($("reg-cuenta").value) || datos.cuentas[0].id, categoria_id: c.id, tipo: reg.tipo,
@@ -5928,6 +5933,7 @@
         }).then(function (m) { datos.movimientos.push(m); return { m: m, c: c, programado: pr && pr.p }; });
       });
     }).then(function (r) {
+      if (!editar && r.m) registrarEventoDe(uso, "anotar", registro.via);
       ordenarMovimientos();
       var redondeo = !editar && r.m && r.m.tipo === "gasto" ? sumarAlcancia(num(r.m.monto)) : 0;
       if (docId) renovarDocumentoListo(docId);
@@ -6786,6 +6792,104 @@
     return script.src && new URL(script.src).origin === location.origin;
   }).map(function (script) { return new URL(script.src).pathname.split("/").pop(); });
 
+  // ---------- Estadísticas de uso ----------
+  var Eventos = window.NovaEventos;
+  var usoEventos = null;
+  var permitirEventos = leerLocal("nova-eventos-activo", true) !== false;
+  $("uso-activo").checked = permitirEventos;
+  $("uso-activo").addEventListener("change", function () {
+    guardarLocal("nova-eventos-activo", this.checked);
+    cambiarPermisoEventos(this.checked);
+  });
+  window.addEventListener("storage", function (e) {
+    if (e.key === "nova-eventos-activo" || e.key === null) cambiarPermisoEventos(leerLocal("nova-eventos-activo", true) !== false);
+  });
+  function cambiarPermisoEventos(permitido) {
+    $("uso-activo").checked = permitido;
+    if (permitirEventos === permitido) return;
+    permitirEventos = permitido;
+    if (!permitido) reiniciarEventos();
+    else if (fuente && !$("pantalla-app").hidden) iniciarEventos();
+  }
+
+  function reiniciarEventos() {
+    if (usoEventos) usoEventos.control.abort();
+    usoEventos = null;
+  }
+  function iniciarEventos() {
+    if (!Eventos || !permitirEventos || !cliente || !fuente || fuente.demo || !fuente.usuarioEventos) return;
+    var uso = usoEventos = { origen: fuente, inicio: document.hidden ? null : performance.now(), cola: [], ajustes: false,
+      control: new AbortController(), version: "" };
+    versionParaNube().then(function (v) { uso.version = String(v).slice(0, 20); }).catch(function () {});
+  }
+  function usoActivoEventos() {
+    return usoEventos && permitirEventos && usoEventos.origen === fuente ? usoEventos : null;
+  }
+  function registrarEventoDe(uso, tipo, nombre, valor) {
+    if (!uso || uso !== usoActivoEventos()) return;
+    uso.cola = Eventos.encolar(uso.cola, Eventos.eventoSeguro(tipo, nombre, valor));
+  }
+  function registrarEvento(tipo, nombre, valor) {
+    registrarEventoDe(usoActivoEventos(), tipo, nombre, valor);
+  }
+  function registrarAjustesUso(uso) {
+    if (uso.ajustes) return;
+    uso.ajustes = true;
+    var tema = document.documentElement.getAttribute("data-theme");
+    var oscuro = tema !== "claro" && !(tema === "sistema" && window.matchMedia("(prefers-color-scheme: light)").matches);
+    registrarEventoDe(uso, "ajuste", oscuro ? "tema_oscuro" : "tema_claro");
+    registrarEventoDe(uso, "ajuste", leerPin() ? "pin_on" : "pin_off");
+    registrarEventoDe(uso, "ajuste", conductor() ? "modo_conductor_on" : "modo_conductor_off");
+  }
+  function enviarEventos() {
+    var uso = usoActivoEventos();
+    if (!uso || !uso.cola.length || uso.enviando) return;
+    registrarAjustesUso(uso);
+    uso.enviando = true;
+    cliente.auth.getSession().then(function (r) {
+      if (uso !== usoActivoEventos()) return;
+      var sesion = r.data && r.data.session;
+      var lotes = Eventos.lotesParaEnviar(uso.cola);
+      uso.cola = [];
+      if (!sesion || !sesion.user || sesion.user.id !== uso.origen.usuarioEventos) {
+        uso.ajustes = false;
+        return;
+      }
+      var version = uso.version;
+      return Promise.all(lotes.map(function (lote) {
+        var filas = lote.map(function (evento) {
+          return Object.assign({}, evento, { plataforma: plataformaNova, version: version });
+        });
+        return Promise.resolve(cliente.from("fin_eventos").insert(filas).abortSignal(uso.control.signal)).catch(function () {});
+      }));
+    }).catch(function () { uso.cola = []; }).finally(function () {
+      uso.enviando = false;
+      if (uso === usoActivoEventos() && (document.hidden || uso.inicio === null) && uso.cola.length) enviarEventos();
+    });
+  }
+  function pausarEventos() {
+    var uso = usoActivoEventos();
+    if (!uso) return;
+    if (uso.inicio !== null) {
+      var segundos = Math.floor((performance.now() - uso.inicio) / 1000);
+      uso.inicio = null;
+      if (segundos >= 5 && segundos < 86400) registrarEventoDe(uso, "sesion", "duracion", segundos);
+    }
+    registrarAjustesUso(uso);
+    enviarEventos();
+  }
+  function reanudarEventos() {
+    var uso = usoActivoEventos();
+    if (uso && !document.hidden && uso.inicio === null) uso.inicio = performance.now();
+  }
+  document.addEventListener("visibilitychange", function () {
+    if (document.hidden) pausarEventos();
+    else reanudarEventos();
+  });
+  window.addEventListener("pagehide", pausarEventos);
+  window.addEventListener("pageshow", reanudarEventos);
+  setInterval(enviarEventos, 5 * 60 * 1000);
+
   function versionParaNube() {
     if (!versionNova) {
       versionNova = enApp ? fetch("version-app.json").then(function (r) { return r.json(); })
@@ -7010,11 +7114,13 @@
   });
 
   function marcarUso() {
-    if (!cliente || !fuente || fuente.demo || !idUsuario()) return;
-    var claveUso = "nova-uso-" + idUsuario(), hoyK = A.claveDia(new Date());
+    if (!permitirEventos || !cliente || !fuente || fuente.demo || !idUsuario()) return;
+    var origen = fuente, claveUso = "nova-uso-" + idUsuario(), hoyK = A.claveDia(new Date());
     if (leerLocal(claveUso, "") === hoyK) return;
     versionParaNube().then(function (v) {
-      return cliente.auth.updateUser({ data: { nova_visto: new Date().toISOString(), nova_plataforma: plataformaNova, nova_version: v } });
+      return conSesionNube(origen, function () {
+        if (permitirEventos) return cliente.auth.updateUser({ data: { nova_visto: new Date().toISOString(), nova_plataforma: plataformaNova, nova_version: v } });
+      });
     }).then(function (r) { if (r && !r.error) guardarLocal(claveUso, hoyK); }).catch(function () { /* se intenta mañana */ });
   }
   var numDueno = new Intl.NumberFormat("es-CO");
@@ -7286,13 +7392,14 @@
       cont.append(tarjeta);
     });
   }
-  function barrasHorizontalesDueno(id, filas, detalle) {
+  function barrasHorizontalesDueno(id, filas, detalle, textoExtra) {
     var cont = $(id);
     cont.replaceChildren();
     filas.forEach(function (fila) {
       var grupo = el("div");
       var etiqueta = fila.nombre + " · " + (fila.total == null ? "Sin dato por persona" : numDueno.format(fila.total));
-      if (fila.porcentaje != null) etiqueta += " · " + textoPorcentajeDueno(fila.porcentaje) + detalle;
+      if (textoExtra) etiqueta += " · " + textoExtra(fila);
+      if (fila.porcentaje != null && detalle != null) etiqueta += " · " + textoPorcentajeDueno(fila.porcentaje) + detalle;
       grupo.append(el("span", "nota", etiqueta));
       if (fila.porcentaje != null) {
         var barra = el("progress");
@@ -7541,6 +7648,40 @@
     setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
   });
 
+  function pintarUsoEventos(datosUso, ahora) {
+    var uso = Analitica.prepararUso(datosUso, ahora);
+    var mensajeUso = $("dueno-eventos-mensaje");
+    mensajeUso.textContent = !uso ? "Las estadísticas de uso no están disponibles." :
+      !uso.total ? "Todavía no hay eventos de uso en los últimos 30 días." : "";
+    $("dueno-eventos-datos").hidden = !uso || !uso.total;
+    if (!uso || !uso.total) return;
+
+    var s = uso.sesion;
+    kpisAnaliticaDueno("dueno-eventos-kpis", [
+      ["Eventos registrados", numDueno.format(uso.total)],
+      ["Sesiones con duración registrada", numDueno.format(s.n)],
+      ["Duración promedio", s.n ? numDueno.format(s.promedioSeg) + " s" : "Sin dato"],
+      ["Duración mediana", s.n ? numDueno.format(s.medianaSeg) + " s" : "Sin dato"],
+      ["Personas en modo conductor", numDueno.format(uso.conductor)],
+      ["Personas con datos de seguridad", numDueno.format(uso.personasSeguridad)]
+    ]);
+    barrasHorizontalesDueno("dueno-eventos-pantallas", uso.pantallas, null, function (fila) {
+      return pl(fila.personas, "persona", "personas");
+    });
+    barrasHorizontalesDueno("dueno-eventos-anotar", uso.anotar, null);
+    barrasHorizontalesDueno("dueno-eventos-ia", uso.ia, null);
+    barrasDueno($("dueno-eventos-ia-dias"), uso.dias, "total");
+    barrasHorizontalesDueno("dueno-eventos-tema", uso.tema, null);
+    barrasHorizontalesDueno("dueno-eventos-seguridad", uso.seguridad, null);
+    var recuadros = uso.recuadros.map(function (fila) {
+      var widget = WIDGETS.find(function (w) { return "oculto_" + w.id === fila.id; });
+      return Object.assign({}, fila, { nombre: widget ? widget.nombre : fila.nombre });
+    });
+    barrasHorizontalesDueno("dueno-eventos-recuadros", recuadros, null);
+    if (!uso.pantallas.length) $("dueno-eventos-pantallas").append(el("p", "nota", "Sin aperturas registradas."));
+    if (!recuadros.length) $("dueno-eventos-recuadros").append(el("p", "nota", "Sin recuadros ocultados."));
+  }
+
   function pintarDueno(d) {
     var r = d.resumen || {};
     $("dueno-hora").textContent = d.generado ? "Datos de " + fechaDueno(d.generado) + "." : "";
@@ -7574,6 +7715,7 @@
     pintarMetaDueno();
     pintarEstadoDueno(d.estado);
     pintarListasDueno(d, errores);
+    pintarUsoEventos(d.uso, d.generado || ahora);
     datosAnaliticaDueno = d;
     pintarAnaliticaDueno(d, ahora);
   }
@@ -7987,7 +8129,8 @@
       repetir.disabled = true;
       var fila = { cuenta_id: m.cuenta_id, categoria_id: m.categoria_id, tipo: m.tipo, monto: m.monto, descripcion: m.descripcion, etiquetas: m.etiquetas || [], fecha: new Date().toISOString() };
       ["moneda", "monto_original", "tasa"].forEach(function (k) { if (m[k] != null) fila[k] = m[k]; });
-      fuente.crear("movimientos", fila).then(function (n) { datos.movimientos.push(n); ordenarMovimientos(); toast("¡Repetido!", n.descripcion, dinero(num(n.monto)), deshacerRegistro(n, 0)); pintar(); })
+      var uso = usoActivoEventos();
+      fuente.crear("movimientos", fila).then(function (n) { registrarEventoDe(uso, "anotar", "rapido"); datos.movimientos.push(n); ordenarMovimientos(); toast("¡Repetido!", n.descripcion, dinero(num(n.monto)), deshacerRegistro(n, 0)); pintar(); })
         .catch(function (err) { toast("No se pudo repetir: " + err.message); }).finally(function () { repetir.disabled = false; });
     });
     var duplicar = el("button", "mini", "Duplicar"); duplicar.type = "button";
@@ -8111,10 +8254,12 @@
   var iaActiva = true;
   function iaDisponible() { return iaActiva && enLinea() && !!cliente && !!fuente && !fuente.demo; }
   function hoyLocal() { return A.claveDia(new Date()); }
-  function invocarIA(cuerpo) {
+  function invocarIA(cuerpo, via) {
     if (!enLinea()) return Promise.reject(new Error("Sin internet: la IA necesita conexión. Todo lo demás de NOVA sigue funcionando sin internet."));
     // Si la IA no contesta en 50 segundos, se avisa en vez de dejar "Pensando…" para siempre.
-    var tiempo = new Promise(function (_, mal) { setTimeout(function () { mal(new Error("La IA tardó demasiado. Revisa tu conexión e intenta otra vez.")); }, 50000); });
+    var uso = usoActivoEventos(), aviso;
+    registrarEventoDe(uso, "ia", cuerpo.imagen ? "pregunta_foto" : via === "voz" ? "pregunta_voz" : "pregunta_texto");
+    var tiempo = new Promise(function (_, mal) { aviso = setTimeout(function () { mal(errorIA(408, "La IA tardó demasiado. Revisa tu conexión e intenta otra vez.")); }, 50000); });
     var llamada = cliente.functions.invoke("nova-ia", { body: cuerpo }).then(function (res) {
       if (res.error) {
         var estado = res.error.context && res.error.context.status;
@@ -8135,7 +8280,19 @@
       iaActiva = true;
       return res.data || {};
     });
-    return Promise.race([llamada, tiempo]);
+    return Promise.race([llamada, tiempo]).catch(function (e) {
+      registrarErrorIA(uso, e);
+      throw e;
+    }).finally(function () { clearTimeout(aviso); });
+  }
+  function errorIA(estado, detalle) {
+    var error = new Error(detalle);
+    error.estado = estado;
+    return error;
+  }
+  function registrarErrorIA(uso, error) {
+    var estado = error && error.estado;
+    registrarEventoDe(uso, "ia", estado === 429 ? "error_cupo" : estado === 408 || estado === 504 ? "error_tiempo" : "error_otro");
   }
   // Respuesta en vivo del chat: el texto aparece a medida que la IA lo escribe (no hay que esperar a que termine).
   function mensajeDeFalloIA(estado, detalle) {
@@ -8159,7 +8316,7 @@
         if (!r.ok) {
           return r.json().catch(function () { return {}; }).then(function (c) {
             if (r.status === 503) iaActiva = false;
-            throw new Error(mensajeDeFalloIA(r.status, c && c.detalle));
+            throw errorIA(r.status, mensajeDeFalloIA(r.status, c && c.detalle));
           });
         }
         if (!r.body || !r.body.getReader) return r.text().then(function (t) { alTexto(t); return t; });
@@ -8174,7 +8331,7 @@
         }
         return leer();
       }).catch(function (e) {
-        if (e && e.name === "AbortError") throw new Error("La IA tardó demasiado. Revisa tu conexión e intenta otra vez.");
+        if (e && e.name === "AbortError") throw errorIA(408, "La IA tardó demasiado. Revisa tu conexión e intenta otra vez.");
         throw e;
       }).finally(function () { clearTimeout(aviso); });
     });
@@ -8188,9 +8345,9 @@
              etiquetas: Array.isArray(d.etiquetas) ? d.etiquetas : [] };
   }
   function cuerpoIA(extra) { return Object.assign({ categorias: datos.categorias.map(function (c) { return c.nombre; }), hoy: hoyLocal() }, extra); }
-  function preguntarIA(entrada) {
+  function preguntarIA(entrada, via) {
     if (!iaDisponible()) return Promise.reject(new Error("IA no disponible"));
-    return invocarIA(cuerpoIA(entrada)).then(function (d) {
+    return invocarIA(cuerpoIA(entrada), via).then(function (d) {
       if (!(d.monto > 0)) throw new Error("La IA no encontró el valor");
       return registroDeIA(d);
     });
@@ -8618,7 +8775,7 @@
     // Si todavía hay una pregunta esperando, se cancela: así nunca se queda trabado.
     if (chatControl) { try { chatControl.abort(); } catch (e) { /* ya terminó */ } }
     var mio = ++chatToken, control = chatControl = new AbortController();
-    var chat = chatActual;
+    var chat = chatActual, uso = usoActivoEventos();
     $("chat-bienvenida").hidden = true;
     mensaje("chat-mensaje", "");
     $("chat").querySelectorAll("li.pensando").forEach(function (x) { x.remove(); });
@@ -8631,6 +8788,7 @@
     var guardada = guardarConversacion().catch(function () { mensaje("chat-mensaje", "La pregunta no se pudo guardar en tu historial, pero puedes seguir chateando.", true); });
     return Promise.resolve().then(function () {
       if ((soloCifras && ocultos) || (opciones.vigente && !opciones.vigente())) return "";
+      registrarEventoDe(uso, "ia", imagen ? "pregunta_foto" : opciones.porVoz ? "pregunta_voz" : "pregunta_texto");
       return preguntarEnFlujo({ pregunta: pregunta, historial: historial, contexto: soloCifras ? { hoy: hoyLocal() } : contextoFinanzas(), imagen: imagen, mime: opciones.mime }, function (texto) {
         if (mio !== chatToken) return;
         pintarTextoIA(espera, texto);
@@ -8642,6 +8800,7 @@
       if (opciones.vigente && !opciones.vigente()) { espera.remove(); return; }
       respuesta = (respuesta || "").trim();
       if (!respuesta) throw new Error("La IA no pudo responder. Intenta otra vez en un momento.");
+      if (marcasIA(respuesta).fuentes.length) registrarEventoDe(uso, "ia", "busqueda_web");
       pintarTextoIA(espera, respuesta);
       espera.classList.remove("pensando");
       var tar = imagen || soloCifras ? null : tarjetaIA(pregunta, respuesta);
@@ -8651,6 +8810,7 @@
       return guardada.then(function () { if (chat === chatActual) return guardarConversacion(); }).catch(function () { mensaje("chat-mensaje", "La respuesta no se pudo guardar en tu historial, pero puedes seguir chateando.", true); }).then(function () { pintarIA(); return respuesta; });
     }).catch(function (e) {
       if (mio !== chatToken) return;
+      if (!control.signal.aborted) registrarErrorIA(uso, e);
       espera.remove();
       mensaje("chat-mensaje", (e && e.message) || "No se pudo responder. Intenta otra vez.", true);
       if (!soloCifras) $("chat-pregunta").value = pregunta;      // para reintentar con un toque
@@ -8700,10 +8860,12 @@
     } else preguntarNova(texto);
   });
 
-  var consulta = 0;
+  var consulta = 0, viaEntradaRapida = "texto";
   $("form-rapido").addEventListener("submit", function (e) {
     e.preventDefault();
     var texto = $("entrada-rapida").value, id = ++consulta;
+    var via = viaEntradaRapida;
+    viaEntradaRapida = "texto";
     var deBanco = NovaConsejos.mensajeBancoATexto(texto);          // mensaje de un banco pegado: se convierte en una frase simple
     if (deBanco) { texto = deBanco; $("entrada-rapida").value = deBanco; }
     var local = Parser.interpretar(texto);
@@ -8711,7 +8873,7 @@
     var enviar = e.target.querySelector("button[type=submit]");
     enviar.disabled = true;
     mensaje("rapido-mensaje", "✦ La IA está leyendo…");
-    preguntarIA({ texto: texto }).then(function (r) {
+    preguntarIA({ texto: texto }, via === "voz" ? "voz" : "texto").then(function (r) {
       // Las etiquetas escritas con # siempre se respetan.
       (local.etiquetas || []).forEach(function (t) { if (r.etiquetas.indexOf(t) < 0) r.etiquetas.push(t); });
       // En otra moneda ("20 dólares") el valor sale de la frase tal cual: la IA lee todo como pesos.
@@ -8726,6 +8888,7 @@
       mensaje("rapido-mensaje", "");
       // Viene de un aviso del banco: se guarda con la fecha del aviso y en la cuenta de ese banco.
       if (bancoEnCurso && bancoEnCurso.frase === texto) { r.fecha = bancoEnCurso.fecha; r.cuentaId = bancoEnCurso.cuentaId; r.origenBanco = bancoEnCurso.origen; }
+      r.via = deBanco || r.origenBanco ? "banco" : via;
       bancoEnCurso = null;
       var mon = Mon.detectar(texto);
       // En un espacio en dólares, euros… los centavos cuentan: "taxi 12.5" es 12,50 y no 13.
@@ -8786,6 +8949,7 @@
 
   // Guarda un registro interpretado. Devuelve una promesa que no falla (los errores se muestran).
   function guardarRegistro(r, nombreCat, comoFrecuente, textoOriginal) {
+    var uso = usoActivoEventos();
     return Promise.all([categoriaPorNombre(nombreCat || r.categoria, r.tipo, r.icono), ubicacionActual()]).then(function (res) {
       var c = res[0], lugar = res[1];
       if (r.moneda && !r.listo) throw new Error("Falta la tasa de cambio para convertir " + r.moneda + ". Anótalo con el botón + y escribe la tasa.");
@@ -8796,6 +8960,7 @@
       if (lugar) { fila.lat = lugar.lat; fila.lng = lugar.lng; precargarMapa(lugar.lat, lugar.lng); }
       return fuente.crear("movimientos", fila);
     }).then(function (m) {
+      registrarEventoDe(uso, "anotar", r.via || "rapido");
       datos.movimientos.push(m);
       ordenarMovimientos();
       var aviso = "¡Guardado! " + m.descripcion + " " + pesos.format(num(m.monto));
@@ -8879,6 +9044,7 @@
     mensaje("rapido-mensaje", "Te escucho…");
     dictar("Dime tu gasto o ingreso").then(function (dicho) {
       mensaje("rapido-mensaje", "");
+      viaEntradaRapida = "voz";
       $("entrada-rapida").value = dicho;
       $("form-rapido").requestSubmit();
     }).catch(function (err) { mensaje("rapido-mensaje", err.message, true); })
@@ -8970,6 +9136,7 @@
     interpretarFoto(archivo, avisar).then(function (x) {
       $("entrada-rapida").value = x.texto;
       if (!x.r) { $("entrada-rapida").focus(); return mensaje("rapido-mensaje", x.error, true); }
+      x.r.via = "foto";
       mostrarPrevia(x.r);
       mensaje("rapido-mensaje", x.aviso + " Revisa el valor: si no es correcto, corrige el texto y vuelve a tocar la flecha.");
     }).catch(function (err) { mensaje("rapido-mensaje", (err && err.message) || "No se pudo leer la foto.", true); })
@@ -8977,7 +9144,11 @@
   });
 
   // ---------- Asistente inteligente (varios registros a la vez) ----------
-  var asisItems = [];
+  var asisItems = [], lineasDictadas = new Set();
+  $("asis-texto").addEventListener("input", function () {
+    var actuales = lineasDe(this.value);
+    lineasDictadas = new Set(actuales.filter(function (linea) { return lineasDictadas.has(linea); }));
+  });
   function lineasDe(texto) {
     // Una por línea, o separadas por comas que no sean decimales ("1,5 millones").
     return texto.split(/\n|;|,(?=\s*[^\d\s])/).map(function (l) { return l.trim(); }).filter(Boolean).slice(0, 30);
@@ -8991,7 +9162,9 @@
     var b = $("asis-leer");
     b.disabled = true;
     var local = interpretarLocal(texto);
-    var op = !iaDisponible() ? Promise.resolve(local) : (mensaje("asis-mensaje", "✦ La IA está leyendo…"), invocarIA(cuerpoIA({ texto: texto.slice(0, 2000), varios: true })).then(function (d) {
+    var vias = local.map(function (r) { return lineasDictadas.has(r.linea) ? "voz" : "texto"; });
+    var via = vias.every(function (v) { return v === "voz"; }) ? "voz" : "texto";
+    var op = !iaDisponible() ? Promise.resolve(local) : (mensaje("asis-mensaje", "✦ La IA está leyendo…"), invocarIA(cuerpoIA({ texto: texto.slice(0, 2000), varios: true }), via).then(function (d) {
       var lista = (d.movimientos || []).filter(function (x) { return x.monto > 0; }).map(registroDeIA);
       if (!lista.length) throw new Error("vacío");
       // Si la IA encontró lo mismo que las líneas, cada uno conserva las etiquetas # de su línea.
@@ -8999,7 +9172,7 @@
       return lista;
     }).catch(function () { return local; }));
     op.then(function (lista) {
-      asisItems = lista.map(function (r) { return Object.assign({ elegido: !!r.ok }, r); });
+      asisItems = lista.map(function (r, i) { return Object.assign({ elegido: !!r.ok, via: lista.length === local.length ? vias[i] : via }, r); });
       var buenos = asisItems.filter(function (r) { return r.ok; }).length;
       mensaje("asis-mensaje", buenos ? (asisItems[0] && asisItems[0].ia ? "✦ " : "") + "Encontré " + buenos + (buenos === 1 ? " registro" : " registros") + ". Revisa y toca Guardar." : "No encontré valores. Escribe por ejemplo «almuerzo 20 mil».", !buenos);
       pintarAsistente();
@@ -9044,7 +9217,7 @@
   $("asis-guardar").addEventListener("click", function () {
     var elegidos = asisItems.filter(function (r) { return r.ok && r.elegido; });
     if (!elegidos.length) return;
-    var b = $("asis-guardar");
+    var b = $("asis-guardar"), uso = usoActivoEventos();
     b.disabled = true;
     // Uno por uno, para crear las categorías que falten sin repetirlas.
     elegidos.reduce(function (p, r) {
@@ -9058,10 +9231,11 @@
     }, Promise.resolve([])).then(function (filas) {
       return fuente.crearVarios("movimientos", filas);
     }).then(function (creados) {
+      creados.forEach(function (_m, i) { registrarEventoDe(uso, "anotar", elegidos[i].via); });
       Array.prototype.push.apply(datos.movimientos, creados);
       ordenarMovimientos();
       toast("✓ Se guardaron " + creados.length + (creados.length === 1 ? " registro" : " registros"));
-      asisItems = []; $("asis-texto").value = ""; mensaje("asis-mensaje", ""); pintarAsistente();
+      asisItems = []; lineasDictadas.clear(); $("asis-texto").value = ""; mensaje("asis-mensaje", ""); pintarAsistente();
       pintar(); cerrarCapa();
     }).catch(function (err) { mensaje("asis-mensaje", "No se pudo guardar: " + err.message, true); })
       .finally(function () { b.disabled = false; });
@@ -9072,7 +9246,9 @@
     mensaje("asis-mensaje", "Te escucho… di uno o varios gastos.");
     dictar("Dime tus gastos o ingresos").then(function (dicho) {
       var t = $("asis-texto");
+      var nuevas = new Set(lineasDe(dicho));
       t.value = (t.value.trim() ? t.value.trim() + "\n" : "") + dicho;
+      lineasDictadas = new Set(lineasDe(t.value).filter(function (linea) { return lineasDictadas.has(linea) || nuevas.has(linea); }));
       mensaje("asis-mensaje", "Listo. Puedes dictar más o tocar Interpretar.");
     }).catch(function (err) { mensaje("asis-mensaje", err.message, true); })
       .finally(function () { b.classList.remove("escuchando"); });
@@ -9086,7 +9262,7 @@
     b.disabled = true;
     interpretarFoto(archivo, function (t) { mensaje("asis-mensaje", t); }).then(function (x) {
       if (!x.r) return mensaje("asis-mensaje", x.error, true);
-      asisItems.push(Object.assign({ elegido: true }, x.r));
+      asisItems.push(Object.assign({ elegido: true, via: "foto" }, x.r));
       mensaje("asis-mensaje", x.aviso + " Revisa el valor y toca Guardar.");
       pintarAsistente();
     }).catch(function (err) { mensaje("asis-mensaje", (err && err.message) || "No se pudo leer la foto.", true); })
@@ -9100,7 +9276,13 @@
   var esRecuperacion = hashInicial.get("type") === "recovery";
   var errorEnlace = hashInicial.get("error_description");
 
-  var cliente = window.supabase && cfg.supabaseUrl ? window.supabase.createClient(cfg.supabaseUrl, cfg.supabaseKey) : null;
+  var cliente = window.supabase && cfg.supabaseUrl ? window.supabase.createClient(cfg.supabaseUrl, cfg.supabaseKey, {
+    global: { fetch: function (url, opciones) {
+      var rutaEventos = cfg.supabaseUrl.replace(/\/$/, "") + "/rest/v1/fin_eventos";
+      if (String(url).split("?")[0] === rutaEventos) opciones = Object.assign({}, opciones, { keepalive: true });
+      return window.fetch(url, opciones);
+    } }
+  }) : null;
 
   // Candado para ver u ocultar la contraseña.
   var CANDADO_CERRADO = '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/><circle cx="12" cy="16" r="1.2"/></svg>';
@@ -9490,6 +9672,7 @@
   }
 
   function entrar(nuevaFuente) {
+    reiniciarEventos();
     fuente = nuevaFuente;
     avisosNube = []; erroresEnviados = [];
     reiniciarConfigNube();
@@ -9504,6 +9687,8 @@
       datos = Object.assign(datosVacios(), d);
       ordenarMovimientos();
       monedaVista = monedaBase();
+      iniciarEventos();
+      if (enVista === "inicio") registrarEvento("pantalla", "tab_inicio");
       mostrar("app"); ir("inicio"); pintar();
       cargarTasas();
       ultimaActividad = Date.now();
@@ -10198,6 +10383,7 @@
   $("btn-salir").addEventListener("click", function () {
     var n = fuente.pendientes ? fuente.pendientes() : 0;
     if (n > 0 && !confirm("Tienes " + n + (n === 1 ? " cambio" : " cambios") + " guardados sin internet que todavía no se envían. Si cierras sesión ahora se pierden. ¿Cerrar sesión de todos modos?")) return;
+    reiniciarEventos();
     var vieja = fuente;
     fuente.salir().finally(function () {
       try { localStorage.removeItem("kv:nova-identidad"); localStorage.removeItem("nova-identidad"); } catch (e) { /* nada */ }

@@ -132,6 +132,109 @@ async function accionDueno(accion: string, cuerpo: Record<string, unknown>, duen
   return null;
 }
 
+// v6: solo identificadores fijos y resultados agregados de fin_eventos.
+const nombresUso = new Map(Object.entries({
+    pantalla: `
+      abonos asistente banco calendario calor categoria categorizar-lote chat
+      cuadrar deducibles detalle deuda documento dueno editar espacio
+      espacios estado-financiero grupo grupo-nuevo historial informe informe-dueno limite
+      mas moneda notas-nova papelera pasar pruebas registro respaldo
+      simulacion sugerencia tarjeta tab_inicio tab_planes tab_analisis tab_buscar`,
+    anotar: "texto voz foto banco manual rapido",
+    ia: "pregunta_texto pregunta_foto pregunta_voz error_cupo error_tiempo error_otro busqueda_web",
+    sesion: "duracion",
+    ajuste: "tema_oscuro tema_claro pin_on pin_off huella_on huella_off modo_conductor_on modo_conductor_off",
+    recuadro: `
+      oculto_sugerencias-hora oculto_trm-dia oculto_racha oculto_pagos-proximos oculto_rapida oculto_categorias oculto_etiquetas oculto_ingresos-gastos
+      oculto_tendencia oculto_proyeccion oculto_consejos oculto_calendario oculto_logros oculto_herramientas oculto_salud oculto_calculadoras2
+      oculto_reto oculto_suscripciones oculto_inflacion oculto_comparar oculto_evento oculto_fijos oculto_pronostico oculto_anio
+      oculto_bola oculto_alcancia oculto_sobres oculto_plan oculto_singasto oculto_lugares oculto_semanasmes oculto_reduccion
+      oculto_mesvsprom oculto_libertad oculto_calorhora oculto_resumensemana oculto_mayoresgastos oculto_cortes-tarjeta oculto_saldo-bajo oculto_avisos-limite
+      oculto_resumen-mes oculto_meta-sugerida oculto_ingresos-gastos-12 oculto_tendencia-categorias oculto_ranking-comercios oculto_compara-anios oculto_flujo-semanal oculto_dia-mas-caro
+      oculto_patrimonio-neto oculto_distribucion-patrimonio oculto_vencimientos-cdt oculto_calculadoras-inversion oculto_promedio-dia oculto_regla503020 oculto_gasto-inusual oculto_fondo-emergencia
+      oculto_servicios-por-mes oculto_consejo-dia oculto_pruebas-gratis oculto_aviso-pago oculto_calificar-compra oculto_resumen-compras oculto_sugerencias-ahorro`
+}).map(([tipo, nombres]) => [tipo, new Set(nombres.trim().split(/\s+/))]));
+
+type EventoUso = { user_id: string; tipo: string; nombre: string; valor: number | null; creado_en: string };
+
+async function usoPanel(ahora: number) {
+  const desde = encodeURIComponent(new Date(ahora - 30 * DIA).toISOString());
+  const hasta = encodeURIComponent(new Date(ahora).toISOString());
+  const ruta = `fin_eventos?select=user_id,tipo,nombre,valor,creado_en&creado_en=gte.${desde}&creado_en=lte.${hasta}&order=creado_en.desc,user_id.asc,tipo.asc,nombre.asc,valor.asc`;
+  const signal = AbortSignal.timeout(15_000);
+  const pantallas = new Map<string, { total: number; personas: Set<string> }>();
+  const recuadros = new Map<string, number>();
+  const anotar = { texto: 0, voz: 0, foto: 0, banco: 0, manual: 0, rapido: 0 };
+  const ia = { pregunta_texto: 0, pregunta_foto: 0, pregunta_voz: 0, error_cupo: 0, error_tiempo: 0, error_otro: 0, busqueda_web: 0 };
+  const iaPorDia: Record<string, number> = {};
+  const duraciones: number[] = [];
+  const temas = new Map<string, string>();
+  const pines = new Map<string, string>();
+  const huellas = new Map<string, string>();
+  const conductores = new Map<string, string>();
+  let totalEventos = 0;
+
+  // Se recorre de más reciente a más antiguo para conservar el último estado por persona.
+  for (let inicio = 0; inicio < 50_000; inicio += 1000) {
+    const respuesta = await rest(ruta, { signal, headers: { Range: `${inicio}-${inicio + 999}`, "Range-Unit": "items" } });
+    if (!respuesta.ok) throw new Error("fin_eventos " + respuesta.status);
+    const lote: EventoUso[] = await respuesta.json();
+    for (const { user_id, tipo, nombre, valor, creado_en } of lote) {
+      if (!user_id || !nombresUso.get(tipo)?.has(nombre)) continue;
+      totalEventos++;
+      if (tipo === "pantalla") {
+        const datos = pantallas.get(nombre) || { total: 0, personas: new Set<string>() };
+        datos.total++;
+        datos.personas.add(user_id);
+        pantallas.set(nombre, datos);
+      } else if (tipo === "anotar") {
+        anotar[nombre as keyof typeof anotar]++;
+      } else if (tipo === "ia") {
+        ia[nombre as keyof typeof ia]++;
+        if (nombre.startsWith("pregunta_")) {
+          const dia = clave(creado_en);
+          iaPorDia[dia] = (iaPorDia[dia] || 0) + 1;
+        }
+      } else if (tipo === "sesion" && valor !== null && Number.isInteger(valor) && valor >= 5 && valor < 86400) {
+        duraciones.push(valor);
+      } else if (tipo === "ajuste") {
+        const grupo = nombre.startsWith("tema_") ? temas : nombre.startsWith("pin_") ? pines : nombre.startsWith("huella_") ? huellas : conductores;
+        if (!grupo.has(user_id)) grupo.set(user_id, nombre);
+      } else if (tipo === "recuadro") {
+        recuadros.set(nombre, (recuadros.get(nombre) || 0) + 1);
+      }
+    }
+    if (lote.length < 1000) break;
+  }
+
+  const contarEstado = (estados: Map<string, string>, nombre: string) =>
+    Array.from(estados.values()).filter((estado) => estado === nombre).length;
+  const mayorPrimero = (a: { nombre: string; total: number }, b: { nombre: string; total: number }) =>
+    b.total - a.total || a.nombre.localeCompare(b.nombre);
+  duraciones.sort((a, b) => a - b);
+  const n = duraciones.length, medio = Math.floor(n / 2);
+  return {
+    pantallas: Array.from(pantallas, ([nombre, datos]) => ({ nombre, total: datos.total, personas: datos.personas.size })).sort(mayorPrimero).slice(0, 15),
+    anotar,
+    iaPorDia,
+    ia,
+    sesion: {
+      n,
+      promedioSeg: n ? duraciones.reduce((suma, seg) => suma + seg, 0) / n : 0,
+      medianaSeg: n ? (duraciones[medio] + duraciones[Math.floor((n - 1) / 2)]) / 2 : 0,
+    },
+    tema: { oscuro: contarEstado(temas, "tema_oscuro"), claro: contarEstado(temas, "tema_claro") },
+    seguridad: {
+      pin: contarEstado(pines, "pin_on"),
+      huella: contarEstado(huellas, "huella_on"),
+      personas: new Set([...pines.keys(), ...huellas.keys()]).size,
+    },
+    conductor: contarEstado(conductores, "modo_conductor_on"),
+    recuadrosOcultos: Array.from(recuadros, ([nombre, total]) => ({ nombre, total })).sort(mayorPrimero).slice(0, 10),
+    totalEventos,
+  };
+}
+
 // Datos extra del panel. Cada bloque falla por separado: si algo no responde, el panel sigue con lo demás.
 async function extrasPanel(correoDe: Record<string, string>, ahora: number) {
   const desde30 = new Date(ahora - 30 * DIA).toISOString();
@@ -300,6 +403,7 @@ Deno.serve(async (req) => {
     const versiones: Record<string, number> = {};
     reales.forEach((p) => { if (p.version) versiones[p.version] = (versiones[p.version] || 0) + 1; });
 
+    const uso = usoPanel(ahora).catch(() => null);
     return responder(200, {
       generado: new Date().toISOString(),
       apk,
@@ -318,6 +422,7 @@ Deno.serve(async (req) => {
       adopcion: await adopcionPanel(),
       ...(await estadoPanel().then((e) => ({ estado: e })).catch(() => ({ estado: null }))),
       ...(await extrasPanel(Object.fromEntries(lista.map((u) => [u.id, u.email || ""])), ahora)),
+      uso: await uso,
     });
   } catch (e) {
     console.error("nova-dueno", String(e));

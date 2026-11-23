@@ -338,8 +338,53 @@
     return { correos: correos.slice(0, 20), restantes: Math.max(0, correos.length - 20) };
   }
 
+  function prepararUso(uso, ahora) {
+    if (!uso) return null;
+    var total = cantidad(uso.totalEventos) || 0;
+    if (!total) return { total: 0 };
+
+    function barras(filas) {
+      var maximo = filas.reduce(function (max, fila) { return Math.max(max, fila.total); }, 0);
+      return filas.map(function (fila) { return Object.assign({}, fila, { porcentaje: porcentaje(fila.total, maximo) }); });
+    }
+    function conteos(datos, etiquetas) {
+      return barras(etiquetas.map(function (par) {
+        return { nombre: par[1], total: cantidad((datos || {})[par[0]]) || 0 };
+      }));
+    }
+    function ranking(filas) {
+      return barras(lista(filas).map(function (fila) {
+        return { id: fila.nombre, nombre: fila.nombre, total: cantidad(fila.total) || 0, personas: cantidad(fila.personas) };
+      }));
+    }
+    var porDia = uso.iaPorDia || {}, dias = [];
+    var hoy = Math.floor(instante(ahora) / DIA);
+    if (Number.isFinite(hoy) && Object.keys(porDia).length) {
+      for (var dia = hoy - 30; dia <= hoy; dia++) {
+        var clave = fecha(dia);
+        dias.push({ dia: clave, total: cantidad(porDia[clave]) || 0 });
+      }
+    }
+    var sesion = uso.sesion || {}, seguridad = uso.seguridad || {};
+    function segundos(valor) { return Number.isFinite(valor) && valor >= 0 ? valor : 0; }
+    return {
+      total: total,
+      pantallas: ranking(uso.pantallas),
+      anotar: conteos(uso.anotar, [["texto", "Texto"], ["voz", "Voz"], ["foto", "Foto"], ["banco", "Mensaje del banco"], ["manual", "Formulario manual"], ["rapido", "Registro rápido"]]),
+      ia: conteos(uso.ia, [["pregunta_texto", "Consultas por texto"], ["pregunta_foto", "Consultas por foto"], ["pregunta_voz", "Consultas por voz"],
+        ["error_cupo", "Errores de cupo"], ["error_tiempo", "Errores de tiempo"], ["error_otro", "Otros errores"], ["busqueda_web", "Respuestas con búsqueda web"]]),
+      dias: dias,
+      sesion: { n: cantidad(sesion.n) || 0, promedioSeg: segundos(sesion.promedioSeg), medianaSeg: segundos(sesion.medianaSeg) },
+      tema: conteos(uso.tema, [["oscuro", "Oscuro"], ["claro", "Claro"]]),
+      seguridad: conteos(seguridad, [["pin", "PIN activado"], ["huella", "Huella activada"]]),
+      personasSeguridad: cantidad(seguridad.personas) || 0,
+      conductor: cantidad(uso.conductor) || 0,
+      recuadros: ranking(uso.recuadrosOcultos)
+    };
+  }
+
   var api = {
-    nuevosPor: nuevosPor, crecimientoAcumulado: crecimientoAcumulado, usoActivo: usoActivo,
+    prepararUso: prepararUso, nuevosPor: nuevosPor, crecimientoAcumulado: crecimientoAcumulado, usoActivo: usoActivo,
     retencion: retencion, cohortes: cohortes, segmentos: segmentos, etiquetasSemana: etiquetasSemana,
     picoDe: picoDe, embudo: embudo, adopcion: adopcion, porcentajeUltimaVersion: porcentajeUltimaVersion,
     repartoApk: repartoApk, usuariosACsv: usuariosACsv, fichaUsuario: fichaUsuario,
