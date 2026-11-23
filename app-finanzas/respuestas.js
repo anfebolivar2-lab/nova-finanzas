@@ -236,7 +236,83 @@
       " Sugiere ajustes concretos para este escenario.";
   }
 
-  var api = { preguntaPlanPresupuesto: preguntaPlanPresupuesto, candidatosSuscripciones: candidatosSuscripciones,
+  function rangoCategoria(monto) {
+    var valor = Number.isFinite(Number(monto)) ? Math.abs(num(monto)) : 0;
+    if (valor < 10) return [0, 10];
+    var base = Math.pow(10, Math.floor(Math.log10(valor)));
+    return [base, Math.min(base * 10, Number.MAX_VALUE)];
+  }
+
+  function prepararLoteCategorias(movimientos, historial, categorias) {
+    var codigos = { gasto: 0, ingreso: 0 }, grupos = new Map();
+    var opciones = categorias.filter(function (c) { return c.tipo === "ingreso" || c.tipo === "gasto"; }).map(function (c) {
+      return Object.assign({}, c, { codigo: (c.tipo === "gasto" ? "G" : "I") + (++codigos[c.tipo]) });
+    });
+    var porId = new Map(opciones.map(function (c) { return [c.id, c]; }));
+    function contar(m, rango) {
+      var exactos = new Map(), aproximados = new Map(), descripcion = sinTildes(m.descripcion).trim();
+      historial.forEach(function (h) {
+        var c = porId.get(h.categoria_id);
+        if (!c || h.tipo !== m.tipo || c.tipo !== m.tipo || h.transferencia) return;
+        if (descripcion && sinTildes(h.descripcion).trim() === descripcion) exactos.set(c.codigo, (exactos.get(c.codigo) || 0) + 1);
+        if (rangoCategoria(h.monto)[0] === rango[0]) aproximados.set(c.codigo, (aproximados.get(c.codigo) || 0) + 1);
+      });
+      return Array.from((exactos.size ? exactos : aproximados).entries()).sort(function (a, b) {
+        return b[1] - a[1] || a[0].localeCompare(b[0]);
+      }).slice(0, 3).map(function (p) { return p.join("="); }).join(",");
+    }
+    var lote = movimientos.slice(0, 20).map(function (m, i) {
+      var rango = rangoCategoria(m.monto), prefijo = m.tipo === "ingreso" ? "I" : "G", frecuencias = contar(m, rango);
+      var clave = [prefijo, rango[0], rango[1], frecuencias].join(" ");
+      if (!grupos.has(clave)) grupos.set(clave, { prefijo: prefijo, rango: rango, frecuencias: frecuencias, numeros: [] });
+      grupos.get(clave).numeros.push(i + 1);
+      return { id: m.id, tipo: m.tipo, descripcion: String(m.descripcion || "").trim().slice(0, 80), rango: rango };
+    });
+    var pregunta = "Sugiere categorías con estos datos agregados. Cada fila incluye números de movimientos, tipo (G gasto, I ingreso), rango [mín,máx) y frecuencias históricas código=recuento. " +
+      "Responde solo una línea por movimiento: n° → código. Omite los que no tengan evidencia. Códigos válidos: G1–G" + codigos.gasto + ", I1–I" + codigos.ingreso + ".";
+    function limiteBreve(n) {
+      var entero = String(n), cientifico = n.toExponential();
+      return entero.length <= cientifico.length ? entero : cientifico;
+    }
+    var filas = Array.from(grupos.values()).map(function (g) {
+      return { base: "\n" + g.numeros.join(",") + " " + g.prefijo + " " + g.rango.map(limiteBreve).join("–"), frecuencias: g.frecuencias };
+    });
+    var disponible = 1200 - pregunta.length - filas.reduce(function (s, f) { return s + f.base.length; }, 0);
+    filas.forEach(function (f, i) {
+      pregunta += f.base;
+      var cuota = Math.floor(disponible / (filas.length - i));
+      var frecuencias = f.frecuencias.split(",").slice(0, 3);
+      while (frecuencias.join(",").length + 1 > cuota && frecuencias.length) frecuencias.pop();
+      if (frecuencias[0]) {
+        var sufijo = " " + frecuencias.join(",");
+        pregunta += sufijo;
+        disponible -= sufijo.length;
+      }
+    });
+    return { movimientos: lote, categorias: opciones, pregunta: pregunta };
+  }
+
+  function leerSugerenciasCategoria(texto, movimientos, categorias) {
+    var vistos = new Set(), sugerencias = new Map();
+    String(texto || "").split(/\r?\n/).forEach(function (linea) {
+      var partes = linea.trim().replace(/^[-*+]\s+/, "").replace(/[*`]/g, "")
+        .match(/^(?:n[°º.]?\s*)?(\d+)\s*[°º.)]?\s*(?:→|->|=>|:|[-–—])\s*(.+)$/i);
+      if (!partes) return;
+      var n = Number(partes[1]), m = movimientos[n - 1];
+      if (!m) return;
+      if (vistos.has(n)) { sugerencias.delete(n); return; }
+      vistos.add(n);
+      var valor = sinTildes(partes[2].trim().replace(/^["«“]|["»”]$/g, "")).trim();
+      var validas = categorias.filter(function (c) { return c.tipo === m.tipo; });
+      var codigo = validas.find(function (c) { return c.codigo && sinTildes(c.codigo) === valor; });
+      var nombres = validas.filter(function (c) { return sinTildes(c.nombre).trim() === valor; });
+      var categoria = codigo || (nombres.length === 1 ? nombres[0] : null);
+      if (categoria) sugerencias.set(n, { numero: n, movimiento_id: m.id, categoria_id: categoria.id });
+    });
+    return Array.from(sugerencias.values()).sort(function (a, b) { return a.numero - b.numero; });
+  }
+
+  var api = { prepararLoteCategorias: prepararLoteCategorias, leerSugerenciasCategoria: leerSugerenciasCategoria, preguntaPlanPresupuesto: preguntaPlanPresupuesto, candidatosSuscripciones: candidatosSuscripciones,
     preguntaSuscripciones: preguntaSuscripciones, preguntaSimulacion: preguntaSimulacion, preguntaGrafico: preguntaGrafico, periodo: periodo, categoriaNombrada: categoriaNombrada, serie: serie, tarjeta: tarjeta };
   if (typeof module === "object" && module.exports) module.exports = api;
   else raiz.NovaRespuestas = api;

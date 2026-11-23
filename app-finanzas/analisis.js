@@ -176,27 +176,151 @@
 
   // Gastos compartidos: cuánto puso y cuánto le tocaba a cada persona, y quién le paga a quién para quedar a mano.
   // Un "pago" es un gasto cuyo pagador le da la plata a la única persona de "repartido".
-  function saldosGrupo(miembros, gastos) {
-    var s = {};
-    miembros.forEach(function (m) { s[m] = 0; });
-    gastos.forEach(function (g) {
-      var monto = num(g.monto), rep = g.repartido && g.repartido.length ? g.repartido : miembros;
-      s[g.pagador] = (s[g.pagador] || 0) + monto;
-      rep.forEach(function (n) { s[n] = (s[n] || 0) - monto / rep.length; });
-    });
-    var nombres = Object.keys(s);
-    nombres.forEach(function (n) { s[n] = Math.round(s[n]); if (Math.abs(s[n]) < 1) s[n] = 0; });
-    var deben = nombres.filter(function (n) { return s[n] < 0; }).map(function (n) { return { n: n, v: -s[n] }; }).sort(function (a, b) { return b.v - a.v; });
-    var cobran = nombres.filter(function (n) { return s[n] > 0; }).map(function (n) { return { n: n, v: s[n] }; }).sort(function (a, b) { return b.v - a.v; });
-    var transferencias = [], i = 0, j = 0;
-    while (i < deben.length && j < cobran.length) {
-      var m = Math.min(deben[i].v, cobran[j].v);
-      if (m > 0) transferencias.push({ de: deben[i].n, a: cobran[j].n, monto: m });
-      deben[i].v -= m; cobran[j].v -= m;
-      if (deben[i].v <= 0) i++;
-      if (cobran[j].v <= 0) j++;
+  function saldosGrupo(miembros, gastos, soloSaldos) {
+    var personas = new Map(), total = 0;
+    function persona(nombre) {
+      if (!personas.has(nombre)) personas.set(nombre, { nombre: nombre, pagado: 0, parte: 0, ajuste: 0 });
+      return personas.get(nombre);
     }
-    return { saldos: s, transferencias: transferencias };
+    miembros.forEach(persona);
+    gastos.forEach(function (g) {
+      var monto = num(g.monto), pagador = persona(g.pagador);
+      var reparto = Array.from(new Set(g.repartido && g.repartido.length ? g.repartido : miembros));
+      if (!reparto.length) reparto.push(g.pagador);
+      if (g.tipo === "pago") {
+        pagador.ajuste += Math.round(monto);
+        persona(reparto[0]).ajuste -= Math.round(monto);
+        return;
+      }
+      total += monto;
+      pagador.pagado += monto;
+      reparto.forEach(function (n) { persona(n).parte += monto / reparto.length; });
+    });
+    var filas = Array.from(personas.values());
+    total = Math.round(total);
+    function repartirRestos(campo) {
+      var faltan = total - filas.reduce(function (s, f) { return s + Math.floor(f[campo]); }, 0);
+      var porResto = filas.slice().sort(function (a, b) {
+        function resto(f) { return f[campo] - Math.floor(f[campo]); }
+        return Math.round((resto(b) - resto(a)) * 1e9) || a.nombre.localeCompare(b.nombre);
+      });
+      porResto.forEach(function (f, i) {
+        f[campo] = Math.floor(f[campo]) + (i < faltan ? 1 : 0);
+      });
+    }
+    repartirRestos("pagado");
+    repartirRestos("parte");
+    filas.forEach(function (f) { f.saldo = f.pagado - f.parte + f.ajuste; });
+    var saldos = Object.fromEntries(filas.map(function (f) { return [f.nombre, f.saldo]; }));
+    return { total: total, filas: filas, saldos: saldos, transferencias: soloSaldos ? [] : pagosMinimosGrupo(filas.filter(function (f) { return f.saldo; })) };
+  }
+
+  function pagosMinimosGrupo(filas) {
+    function liquidar(grupo) {
+      var deben = grupo.filter(function (f) { return f.saldo < 0; }).map(function (f) { return { nombre: f.nombre, monto: -f.saldo }; });
+      var cobran = grupo.filter(function (f) { return f.saldo > 0; }).map(function (f) { return { nombre: f.nombre, monto: f.saldo }; });
+      var pagos = [], i = 0, j = 0;
+      while (i < deben.length && j < cobran.length) {
+        var monto = Math.min(deben[i].monto, cobran[j].monto);
+        pagos.push({ de: deben[i].nombre, a: cobran[j].nombre, monto: monto });
+        deben[i].monto -= monto;
+        cobran[j].monto -= monto;
+        if (!deben[i].monto) i++;
+        if (!cobran[j].monto) j++;
+      }
+      return pagos;
+    }
+
+    var memo = new Map();
+    function resolver(grupo) {
+      var clave = JSON.stringify(grupo.map(function (f) { return f.nombre; }));
+      if (memo.has(clave)) return memo.get(clave);
+      var mejor = liquidar(grupo);
+      var minimo = Math.max(grupo.filter(function (f) { return f.saldo < 0; }).length,
+        grupo.filter(function (f) { return f.saldo > 0; }).length);
+      if (mejor.length === minimo) return mejor;
+      var pareja = grupo.find(function (f, i) { return i > 0 && f.saldo === -grupo[0].saldo; });
+      if (pareja) {
+        var separados = [grupo[0], pareja];
+        mejor = liquidar(separados).concat(resolver(grupo.filter(function (f) { return separados.indexOf(f) < 0; })));
+        memo.set(clave, mejor);
+        return mejor;
+      }
+      var negativos = [0], positivos = [0];
+      for (var i = grupo.length - 1; i >= 0; i--) {
+        negativos.unshift(negativos[0] + Math.min(0, grupo[i].saldo));
+        positivos.unshift(positivos[0] + Math.max(0, grupo[i].saldo));
+      }
+      // Cada componente de una liquidación suma cero. Probar las particiones
+      // que contienen a la primera persona evita evaluar dos veces el mismo corte.
+      function buscar(i, suma, parte, resto) {
+        if (mejor.length === minimo || suma + negativos[i] > 0 || suma + positivos[i] < 0) return;
+        if (suma === 0) {
+          var otros = resto.concat(grupo.slice(i));
+          if (otros.length) {
+            var opcion = resolver(parte).concat(resolver(otros));
+            if (opcion.length < mejor.length) mejor = opcion;
+          }
+        }
+        if (i === grupo.length) return;
+        var f = grupo[i];
+        buscar(i + 1, suma + f.saldo, parte.concat(f), resto);
+        buscar(i + 1, suma, parte, resto.concat(f));
+      }
+      buscar(1, grupo[0].saldo, [grupo[0]], []);
+      memo.set(clave, mejor);
+      return mejor;
+    }
+    return resolver(filas);
+  }
+
+  var TIPOS_DEDUCIBLES = [
+    ["deducible-dependientes", "Dependientes"],
+    ["deducible-vivienda", "Intereses de vivienda"],
+    ["deducible-salud", "Medicina prepagada y salud"],
+    ["deducible-pension-afc", "Aportes voluntarios a pensión/AFC"],
+    ["deducible-otros", "Otros"]
+  ];
+
+  function tipoDeducible(etiquetas) {
+    var tipo = TIPOS_DEDUCIBLES.find(function (t) { return (etiquetas || []).indexOf(t[0]) >= 0; });
+    return tipo ? tipo[0] : "";
+  }
+
+  function etiquetasDeducible(etiquetas, tipo) {
+    var lista = (etiquetas || []).filter(function (e) { return !tipoDeducible([e]); });
+    if (tipoDeducible([tipo])) lista.push(tipo);
+    return lista;
+  }
+
+  function anoDeducible(fecha) {
+    return (/^\d{4}-\d{2}-\d{2}$/.test(fecha) ? parteFecha(fecha) : new Date(fecha || NaN)).getFullYear();
+  }
+
+  function deduciblesDelAno(movimientos, ano) {
+    var filas = TIPOS_DEDUCIBLES.map(function (t) { return { tipo: t[0], nombre: t[1], total: 0 }; });
+    movimientos.forEach(function (m) {
+      if (!esGasto(m) || String(anoDeducible(m.fecha)) !== String(ano)) return;
+      var tipo = tipoDeducible(m.etiquetas);
+      var fila = filas.find(function (f) { return f.tipo === tipo; });
+      if (fila) fila.total += num(m.monto);
+    });
+    return filas;
+  }
+
+  function mensajeRecordatorioDeuda(deuda, hoy) {
+    if (deuda.tipo !== "me_deben" || !(deuda.falta > 0)) return "";
+    var monto = new Intl.NumberFormat("es-CO", { style: "currency", currency: deuda.moneda || "COP", maximumFractionDigits: 2 }).format(deuda.falta);
+    var texto = "Hola " + deuda.persona + ", ¿cómo estás? Te envío un recordatorio del pago pendiente por " + monto + ".";
+    var vence = deuda.vence && parteFecha(deuda.vence);
+    if (vence && !isNaN(vence)) {
+      var dias = Math.round((vence - parteFecha(hoy instanceof Date ? claveDia(hoy) : hoy)) / DIA);
+      var fecha = new Intl.DateTimeFormat("es-CO", { dateStyle: "long" }).format(vence);
+      var plazo = dias === 0 ? " (hoy)" : !isFinite(dias) ? "" :
+        " (" + (dias < 0 ? "hace " : "en ") + Math.abs(dias) + (Math.abs(dias) === 1 ? " día)" : " días)");
+      texto += " Fecha de vencimiento: " + fecha + plazo + ".";
+    }
+    return texto + " ¿Me avisas cuándo te queda bien hacer el pago? ¡Gracias!";
   }
 
   // ---------- Análisis ----------
@@ -1453,7 +1577,8 @@
     estadoDocumento: estadoDocumento, sumarMeses: sumarMeses, proximoVencimiento: proximoVencimiento, avisosDocumentos: avisosDocumentos,
     rachaDias: rachaDias, hitoDeRacha: hitoDeRacha, sugerenciasPorHora: sugerenciasPorHora,
     porcentajeValido: porcentajeValido, tasaAnualDesdeMensual: tasaAnualDesdeMensual, superaUsura: superaUsura, programadosProximos: programadosProximos,
-    evolucionDeuda: evolucionDeuda, resumenDeudas: resumenDeudas, avisosDeudas: avisosDeudas, racha: racha, saldosGrupo: saldosGrupo, cuotaMeta: cuotaMeta, proyeccionPeriodo: proyeccionPeriodo
+    evolucionDeuda: evolucionDeuda, resumenDeudas: resumenDeudas, avisosDeudas: avisosDeudas, racha: racha, saldosGrupo: saldosGrupo, tiposDeducibles: TIPOS_DEDUCIBLES, tipoDeducible: tipoDeducible,
+    etiquetasDeducible: etiquetasDeducible, anoDeducible: anoDeducible, deduciblesDelAno: deduciblesDelAno, mensajeRecordatorioDeuda: mensajeRecordatorioDeuda, cuotaMeta: cuotaMeta, proyeccionPeriodo: proyeccionPeriodo
   };
   if (typeof module === "object" && module.exports) module.exports = api;
   else raiz.NovaAnalisis = api;

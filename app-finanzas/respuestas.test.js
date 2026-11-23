@@ -124,3 +124,30 @@ test("la pregunta del simulador incluye las cifras calculadas y la duración", (
   assert.match(pregunta, /ante el déficit: 2/);
   assert.ok(pregunta.length <= 1200);
 });
+
+test("lee categorías de NOVA con flechas, viñetas, códigos o nombres completos", () => {
+  const movimientos = [{ id: 20, tipo: "gasto" }, { id: 21, tipo: "ingreso" }, { id: 22, tipo: "gasto" }, { id: 23, tipo: "gasto" }];
+  const opciones = categorias.map((c, i) => ({ ...c, codigo: c.tipo === "gasto" ? "G" + (i + 1) : "I1" }));
+  const texto = [
+    "Aquí van las sugerencias:", "- **1.** → \"comida rapida\"", "2) -> i1", "3º: Salario",
+    "4 → Comida", "4 → Transporte", "5 → Comida", "0 → G1", "3.5 → G3"
+  ].join("\n");
+  assert.deepStrictEqual(R.leerSugerenciasCategoria(texto, movimientos, opciones), [
+    { numero: 1, movimiento_id: 20, categoria_id: 2 }, { numero: 2, movimiento_id: 21, categoria_id: 9 }
+  ]);
+  assert.deepStrictEqual(R.leerSugerenciasCategoria("1 → Comida porque es un gasto", movimientos, opciones), []);
+});
+
+test("el lote limita la pregunta a rangos y recuentos y conserva la descripción local", () => {
+  const movimientos = Array.from({ length: 24 }, (_, i) => ({
+    id: i + 30, tipo: "gasto", descripcion: "Descripción privada", nota: "Nota privada", monto: 13837
+  }));
+  const historial = [{ ...movimientos[0], categoria_id: 1 }, { ...movimientos[1], categoria_id: 1 }];
+  const lote = R.prepararLoteCategorias(movimientos, historial, categorias);
+  assert.strictEqual(lote.movimientos.length, 20);
+  assert.strictEqual(lote.movimientos[0].descripcion, "Descripción privada");
+  assert.deepStrictEqual(lote.movimientos[0].rango, [10000, 100000]);
+  assert.ok(lote.pregunta.length <= 1200);
+  assert.doesNotMatch(lote.pregunta, /privada|13837|Comida|Salario/);
+  assert.match(lote.pregunta, /19,20 G 1e\+4–1e\+5 G1=2/);
+});
