@@ -242,31 +242,31 @@ Ideas para el panel del dueño. El panel muestra cómo se usa la app, nunca los 
 
 ## Uso de la app
 
-- ⭐ Movimientos anotados por día (total de todos los usuarios).
-- Cómo anotan: escribiendo, por voz, con foto o con el mensaje del banco.
+- ✅ ⭐ Movimientos anotados por día (total de todos los usuarios).
+- ✅ Cómo anotan: escribiendo, por voz, con foto o con el mensaje del banco.
 - ✅ Funciones más usadas (análisis, metas, deudas, IA…).
 - ✅ Funciones que nadie usa, para decidir si se quitan o se mejoran.
 - ✅ Horas del día con más uso.
 - ✅ Días de la semana con más uso.
-- Duración promedio de una sesión.
-- Pantallas más visitadas.
-- Recuadros de Análisis más vistos y más ocultados.
+- ✅ Duración promedio de una sesión.
+- ✅ Pantallas más visitadas.
+- ✅ Recuadros de Análisis más vistos y más ocultados.
 - ✅ Cuántos usan espacios, metas, deudas y gastos compartidos.
 - ✅ Cuántos usan otras monedas, y cuáles.
-- Cuántos activaron el PIN o la huella.
-- Cuántos usan el modo oscuro y cuántos el claro.
+- ✅ Cuántos activaron el PIN o la huella.
+- ✅ Cuántos usan el modo oscuro y cuántos el claro.
 - ✅ Cuántos son conductores (modo trabajo).
 - ✅ Embudo: registro → primer movimiento → primera meta → 7 días de uso.
 
 ## NOVA IA
 
-- ⭐ Preguntas a la IA por día.
-- Cuántas preguntas usan foto y cuántas voz.
-- Errores de la IA (cupo agotado, se tardó, falló).
+- ✅ ⭐ Preguntas a la IA por día.
+- ✅ Cuántas preguntas usan foto y cuántas voz.
+- ✅ Errores de la IA (cupo agotado, se tardó, falló).
 - Cupo diario de Gemini que queda.
 - Tiempo promedio de respuesta de la IA.
 - Temas más preguntados (agrupados, sin mostrar el texto exacto).
-- Cuántas veces la IA buscó en internet.
+- ✅ Cuántas veces la IA buscó en internet.
 - Usuarios que más usan la IA (para controlar el costo).
 - Botón para pausar la IA si se dispara el uso.
 - Mensaje de mantenimiento de la IA visible para todos.

@@ -242,3 +242,35 @@ test("agrega estadísticas al CSV existente sin volcar costos, correos extra ni 
   assert.match(sinDatos, /"Proyección estimada","Usuarios"\r\n"sin dato"/);
   assert.match(sinDatos, /"Hitos \(usuarios\)"[^\r]+\r\n"sin dato"/);
 });
+
+test("uso distingue estadísticas no disponibles de una ventana vacía", () => {
+  assert.equal(A.prepararUso(null, ahora), null);
+  assert.deepEqual(A.prepararUso({ totalEventos: 0 }, ahora), { total: 0 });
+});
+
+test("uso prepara una sola pantalla, un día de IA y sesiones con segundos fraccionarios", () => {
+  const fuente = {
+    totalEventos: 3,
+    pantallas: [{ nombre: "tab_inicio", total: 1, personas: 1 }],
+    iaPorDia: { "2026-11-02": 1 },
+    ia: { pregunta_voz: 1 },
+    sesion: { n: 1, promedioSeg: 7, medianaSeg: 7.5 }
+  };
+  const uso = A.prepararUso(fuente, ahora);
+  assert.deepEqual(uso.pantallas, [{ id: "tab_inicio", nombre: "tab_inicio", total: 1, personas: 1, porcentaje: 100 }]);
+  assert.deepEqual(uso.sesion, fuente.sesion);
+  assert.equal(uso.ia.find(fila => fila.nombre === "Consultas por voz").total, 1);
+  assert.deepEqual(uso.dias.at(-1), { dia: "2026-11-02", total: 1 });
+  assert.equal(uso.dias.reduce((total, fila) => total + fila.total, 0), 1);
+});
+
+test("uso prepara barras con cero eventos por grupo sin dividir por cero", () => {
+  const uso = A.prepararUso({ totalEventos: 1, seguridad: { personas: 1 } }, ahora);
+  assert.deepEqual(uso.pantallas, []);
+  assert.deepEqual(uso.dias, []);
+  assert.equal(uso.personasSeguridad, 1);
+  assert.deepEqual(uso.sesion, { n: 0, promedioSeg: 0, medianaSeg: 0 });
+  for (const grupo of [uso.anotar, uso.ia, uso.tema, uso.seguridad]) {
+    assert.ok(grupo.every(fila => fila.total === 0 && fila.porcentaje === 0));
+  }
+});

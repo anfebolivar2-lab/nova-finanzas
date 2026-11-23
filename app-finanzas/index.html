@@ -619,6 +619,11 @@
         <a class="menu-fila" href="privacidad.html" target="_blank" rel="noopener"><span class="menu-icono" aria-hidden="true">🛡</span><span>Política de privacidad</span></a>
       </div>
 
+      <h2 class="grupo-ajustes">Privacidad</h2>
+      <div class="menu">
+        <label class="menu-fila"><span>Ayudar a mejorar NOVA (uso anónimo: pantallas y funciones, nunca montos ni textos)</span><input type="checkbox" id="uso-activo" class="interruptor" role="switch" checked></label>
+      </div>
+
       <h2 class="grupo-ajustes">Seguridad y respaldo</h2>
       <div class="menu">
         <button type="button" id="btn-pin"><span class="menu-icono">🔒</span><span><strong>Bloqueo con PIN</strong><small id="pin-estado">Pide un PIN cada vez que abres NOVA</small></span></button>
@@ -1395,6 +1400,28 @@
     <h3>Descargas desde GitHub</h3>
     <div id="dueno-reparto-apk" class="dueno-lista"></div>
   </details>
+  <article class="tarjeta dueno-grafico">
+    <h2 class="titulo-tarjeta">Uso de la app</h2>
+    <p class="nota" id="dueno-eventos-mensaje" role="status"></p>
+    <div id="dueno-eventos-datos" hidden>
+      <p class="nota">Últimos 30 días · Solo incluye a quienes comparten su uso.</p>
+      <div id="dueno-eventos-kpis" class="dueno-kpis"></div>
+      <h3>Pantallas más abiertas</h3>
+      <div id="dueno-eventos-pantallas" class="dueno-lista"></div>
+      <h3>Cómo se anotan los movimientos</h3>
+      <div id="dueno-eventos-anotar" class="dueno-lista"></div>
+      <h3>Consultas y errores de IA</h3>
+      <div id="dueno-eventos-ia" class="dueno-lista"></div>
+      <h3>Consultas de IA por día (UTC)</h3>
+      <div id="dueno-eventos-ia-dias"></div>
+      <h3>Tema por persona</h3>
+      <div id="dueno-eventos-tema" class="dueno-lista"></div>
+      <h3>Seguridad por persona</h3>
+      <div id="dueno-eventos-seguridad" class="dueno-lista"></div>
+      <h3>Recuadros más ocultados</h3>
+      <div id="dueno-eventos-recuadros" class="dueno-lista"></div>
+    </div>
+  </article>
   <div id="dueno-kpis" class="dueno-kpis"></div>
   <article class="tarjeta dueno-grafico"><h2 class="titulo-tarjeta">Personas que anotaron algo · últimos 30 días</h2><div id="dueno-activos"></div></article>
   <article class="tarjeta dueno-grafico"><h2 class="titulo-tarjeta">Movimientos anotados por día</h2><div id="dueno-movs"></div></article>
@@ -1760,6 +1787,7 @@
 <script src="respaldo.js"></script>
 <script src="calculadoras.js"></script>
 <script src="inversiones.js"></script>
+<script src="eventos.js"></script>
 <script src="app.js"></script>
 </body>
 </html>
