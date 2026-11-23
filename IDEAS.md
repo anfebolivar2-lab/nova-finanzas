@@ -106,7 +106,7 @@ Lista de ideas propuestas para revisar; ninguna está hecha todavía.
 - ✅ Ingresos vs. gastos en un gráfico de 12 meses.
 - ✅ Tendencia de cada categoría en los últimos 6 meses (mini gráficos).
 - ✅ Ranking de comercios donde más gastas.
-- Gasto por persona en gastos compartidos del hogar.
+- ✅ Gasto por persona en gastos compartidos del hogar.
 - ✅ "Tu día más caro del mes" y qué lo causó.
 - ✅ Porcentaje del ingreso que se va en cada categoría (regla 50/30/20).
 - ✅ Alertas de gastos inusuales ("gastaste 3 veces más de lo normal en ropa").
@@ -138,7 +138,7 @@ Lista de ideas propuestas para revisar; ninguna está hecha todavía.
 - ✅ Calculadora de compra de cartera.
 - ✅ Historial de pagos de cada deuda, con gráfico de cómo baja.
 - ✅ Aviso cuando una tasa supera la tasa de usura vigente.
-- Préstamos a amigos con fecha y recordatorio por WhatsApp (ampliar lo que ya hay).
+- ✅ Préstamos a amigos con fecha y recordatorio por WhatsApp (ampliar lo que ya hay).
 - ✅ Calculadora de crédito de vivienda y leasing (cuota, seguros).
 
 ## Colombia: trabajo, impuestos y bancos
@@ -148,7 +148,7 @@ Lista de ideas propuestas para revisar; ninguna está hecha todavía.
 - ✅ Calculadora de horas extra y recargos nocturnos y dominicales.
 - ✅ Salario neto: cuánto llega después de salud y pensión.
 - Calendario tributario de la DIAN con avisos de vencimiento.
-- Gastos deducibles de renta marcados (dependientes, intereses de vivienda, medicina prepagada).
+- ✅ Gastos deducibles de renta marcados (dependientes, intereses de vivienda, medicina prepagada).
 - ✅ Calculadora del 4×1000 (GMF) en tus movimientos.
 - ✅ Comparar CDT de varios bancos.
 - ✅ Calculadora de pensión voluntaria y AFC.
@@ -181,7 +181,7 @@ Lista de ideas propuestas para revisar; ninguna está hecha todavía.
 - ✅ Plan de presupuesto generado por la IA con tus números reales.
 - ✅ La IA detecta suscripciones que olvidaste.
 - ✅ (en PR) Chat por voz con NOVA IA.
-- La IA categoriza los gastos sin categoría en lote (preguntando antes).
+- ✅ La IA categoriza los gastos sin categoría en lote (preguntando antes).
 - ✅ Simulador "¿qué pasa si…?" (si me suben el arriendo, si cambio de trabajo).
 - ✅ Resumen de la conversación con la IA guardado como nota.
 

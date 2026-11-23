@@ -1264,3 +1264,76 @@ test("papelera y retos: mantienen las referencias al sincronizar categorías y c
   assert.deepStrictEqual(historial[0].reto.categorias, [-5, 6]);
   assert.strictEqual(retos[1], historial[1]);
 });
+
+test("el grupo conserva pesos y separa los gastos de los pagos entre miembros", () => {
+  const miembros = ["Ana", "Beto", "Caro"];
+  const gastos = [
+    { tipo: "gasto", pagador: "Caro", monto: 100 },
+    { tipo: "gasto", pagador: "Ana", monto: 10, repartido: ["Ana", "Caro"] }
+  ];
+  const r = A.saldosGrupo(miembros, gastos);
+  assert.deepStrictEqual(r.filas.map(f => [f.nombre, f.pagado, f.parte, f.saldo]), [
+    ["Ana", 10, 39, -29], ["Beto", 0, 33, -33], ["Caro", 100, 38, 62]
+  ]);
+  assert.strictEqual(r.filas.reduce((s, f) => s + f.parte, 0), r.total);
+  const pagado = A.saldosGrupo(miembros, gastos.concat(r.transferencias.map(t => ({
+    tipo: "pago", pagador: t.de, repartido: [t.a], monto: t.monto
+  }))));
+  assert.strictEqual(pagado.total, 110);
+  assert.deepStrictEqual(pagado.filas.map(f => f.pagado), [10, 0, 100]);
+  assert.deepStrictEqual(pagado.transferencias, []);
+});
+
+test("grupo de una persona y grupo con montos cero", () => {
+  assert.deepStrictEqual(A.saldosGrupo(["Yo"], [{ monto: 91, pagador: "Yo" }]).filas,
+    [{ nombre: "Yo", pagado: 91, parte: 91, ajuste: 0, saldo: 0 }]);
+  const cero = A.saldosGrupo(["Yo", "Ana"], [{ monto: 0, pagador: "Ana" }]);
+  assert.deepStrictEqual(cero.saldos, { Yo: 0, Ana: 0 });
+  assert.deepStrictEqual(cero.transferencias, []);
+});
+
+test("la liquidación encuentra el mínimo aunque el reparto secuencial requiera más pagos", () => {
+  const r = A.saldosGrupo(["Ana", "Beto", "Caro", "Dani", "Eva", "Fran"], [
+    { tipo: "pago", pagador: "Eva", repartido: ["Ana"], monto: 1000 },
+    { tipo: "pago", pagador: "Eva", repartido: ["Dani"], monto: 4000 },
+    { tipo: "pago", pagador: "Fran", repartido: ["Beto"], monto: 3000 },
+    { tipo: "pago", pagador: "Fran", repartido: ["Caro"], monto: 2000 }
+  ]);
+  assert.strictEqual(r.transferencias.length, 4);
+  const netos = { ...r.saldos };
+  r.transferencias.forEach(({ de, a, monto }) => { netos[de] += monto; netos[a] -= monto; });
+  assert.ok(Object.values(netos).every(n => n === 0));
+});
+
+test("deducibles agrupa por año y tipo, cuenta cada gasto una sola vez y conserva otras etiquetas", () => {
+  const etiquetas = ["casa", "deducible-vivienda", "deducible-salud"];
+  const mov = { tipo: "gasto", monto: 800, fecha: "2026-01-01", etiquetas };
+  const filas = A.deduciblesDelAno([mov, { ...mov, tipo: "ingreso" }, { ...mov, transferencia: "1" },
+    { ...mov, fecha: "2025-12-31" }, { ...mov, etiquetas: ["deducible-salud"], monto: "20" }], 2026);
+  assert.deepStrictEqual(filas.map(f => f.total), [0, 800, 20, 0, 0]);
+  assert.deepStrictEqual(A.etiquetasDeducible(etiquetas, "deducible-otros"), ["casa", "deducible-otros"]);
+  assert.deepStrictEqual(A.etiquetasDeducible(etiquetas, ""), ["casa"]);
+  assert.strictEqual(etiquetas.length, 3);
+});
+
+test("recordatorio amable para me deben con saldo y vencimiento opcional", () => {
+  const deuda = { tipo: "me_deben", persona: "Ana", falta: 52000, vence: "2026-11-24" };
+  const texto = A.mensajeRecordatorioDeuda(deuda, "2026-11-23");
+  assert.match(texto, /^Hola Ana, ¿cómo estás\?/);
+  assert.match(texto, /52[.\s]000.*24 de noviembre de 2026 \(en 1 día\).*¡Gracias!/);
+  assert.match(A.mensajeRecordatorioDeuda(deuda, new Date(2026, 10, 22)), /en 2 días/);
+  assert.match(A.mensajeRecordatorioDeuda(deuda, "2026-11-25"), /hace 1 día/);
+  assert.match(A.mensajeRecordatorioDeuda(deuda, "2026-11-24"), /\(hoy\)/);
+  assert.doesNotMatch(A.mensajeRecordatorioDeuda({ ...deuda, vence: null }, "2026-11-23"), /vencimiento/);
+  assert.strictEqual(A.mensajeRecordatorioDeuda({ ...deuda, falta: 0 }, "2026-11-23"), "");
+  assert.strictEqual(A.mensajeRecordatorioDeuda({ ...deuda, tipo: "debo" }, "2026-11-23"), "");
+});
+
+test("los montos fraccionarios conservan el total redondeado de lo pagado y lo repartido", () => {
+  const miembros = ["Ana", "Beto"];
+  const r = A.saldosGrupo(miembros, [{ monto: 0.4, pagador: "Ana" }, { monto: 0.4, pagador: "Beto" }]);
+  assert.strictEqual(r.total, 1);
+  assert.strictEqual(r.filas.reduce((s, f) => s + f.pagado, 0), 1);
+  assert.strictEqual(r.filas.reduce((s, f) => s + f.parte, 0), 1);
+  assert.strictEqual(Object.values(r.saldos).reduce((s, v) => s + v, 0), 0);
+});

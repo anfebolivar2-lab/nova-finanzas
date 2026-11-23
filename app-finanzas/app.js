@@ -1081,6 +1081,8 @@
     pintarAnalisis();
     pintarEstadoPapelera();
     if (!$("pantalla-papelera").hidden) pintarPapelera();
+    if (!$("pantalla-deducibles").hidden) pintarDeducibles();
+    if (!$("pantalla-categorizar-lote").hidden) pintarLoteCategorias();
     if (!$("pantalla-simulacion").hidden) calcularSimulacion();
     if (!$("pantalla-notas-nova").hidden) pintarNotasNova();
   }
@@ -3293,13 +3295,184 @@
     etiqueta: "filtro-etiqueta", estado: "filtro-estado", desde: "filtro-desde", hasta: "filtro-hasta",
     cuentaId: "filtro-cuenta", montoMin: "filtro-monto-min", montoMax: "filtro-monto-max"
   };
+  function llenarTiposDeducibles(selector) {
+    var sinMarca = el("option", null, "Sin marcar");
+    sinMarca.value = "";
+    selector.replaceChildren(sinMarca);
+    A.tiposDeducibles.forEach(function (t) {
+      var opcion = el("option", null, t[1]);
+      opcion.value = t[0]; selector.append(opcion);
+    });
+  }
+
+  function pintarDeducibles() {
+    var selector = $("deducibles-ano"), anterior = selector.value, actual = new Date().getFullYear();
+    var anos = new Set([actual]);
+    datos.movimientos.forEach(function (m) {
+      var ano = A.anoDeducible(m.fecha);
+      if (Number.isInteger(ano)) anos.add(ano);
+    });
+    selector.replaceChildren();
+    Array.from(anos).sort(function (a, b) { return b - a; }).forEach(function (ano) {
+      var opcion = el("option", null, String(ano));
+      selector.append(opcion);
+    });
+    selector.value = anos.has(Number(anterior)) ? anterior : String(actual);
+    var clave = claveComodidad("deducibles:" + (espacioId || "principal") + ":" + selector.value);
+    var topes = leerLocal(clave, {}) || {}, cont = $("deducibles-tipos");
+    cont.replaceChildren();
+    A.deduciblesDelAno(datos.movimientos, selector.value).forEach(function (f) {
+      var caja = el("article", "tarjeta formulario"), entrada = el("input"), etiqueta = el("label", null, "Tope (UVT)");
+      entrada.id = f.tipo + "-tope";
+      etiqueta.htmlFor = entrada.id;
+      entrada.type = "number";
+      entrada.min = "0";
+      entrada.step = "any";
+      entrada.disabled = ocultos;
+      entrada.value = ocultos || topes[f.tipo] == null ? "" : topes[f.tipo];
+      entrada.addEventListener("change", function () {
+        if (ocultos || !entrada.checkValidity()) return;
+        topes[f.tipo] = entrada.value;
+        guardarLocal(clave, topes);
+      });
+      caja.append(el("strong", null, f.nombre), el("span", null, dinero(f.total)), etiqueta, entrada);
+      cont.append(caja);
+    });
+  }
+
+  $("btn-deducibles").addEventListener("click", function () { pintarDeducibles(); abrirCapa("pantalla-deducibles"); });
+  $("deducibles-ano").addEventListener("change", pintarDeducibles);
+
+  var loteCategorias = null;
+  function loteVigente(lote) {
+    return lote && fuente === lote.fuente && espacioId === lote.espacio;
+  }
+
+  function pintarLoteCategorias() {
+    var lote = loteCategorias, lista = $("categorizar-lista");
+    lista.replaceChildren();
+    var vigente = loteVigente(lote);
+    $("categorizar-preguntar").hidden = vigente && lote.revisado;
+    $("categorizar-preguntar").disabled = !vigente || ocultos || lote.ocupado;
+    $("categorizar-aplicar").hidden = !vigente || !lote.sugerencias.length;
+    $("categorizar-aplicar").disabled = !vigente || ocultos || lote.ocupado || !lote.aceptadas.size;
+    if (!vigente) return;
+    lote.movimientos.forEach(function (m, i) {
+      var fila = el("li", "tarjeta formulario");
+      fila.append(el("strong", null, (i + 1) + ". " + (m.descripcion || "Sin descripción")),
+        el("small", "nota", ocultos ? dinero(0) : "Rango aproximado · " + dinero(m.rango[0]) + " a menos de " + dinero(m.rango[1])));
+      if (lote.revisado) {
+        var s = lote.sugerencias.find(function (x) { return x.movimiento_id === m.id; });
+        var c = s && categoria(s.categoria_id);
+        var actual = datos.movimientos.find(function (x) { return x.id === m.id; });
+        if (c && actual && actual.categoria_id === c.id) fila.append(el("small", "nota", "Guardado · " + c.nombre));
+        else if (c && actual && sinCategoriaParaLote(actual)) {
+          var label = el("label", "chip-opcion"), aceptar = el("input");
+          aceptar.type = "checkbox";
+          aceptar.checked = lote.aceptadas.has(m.id);
+          aceptar.disabled = ocultos || lote.ocupado;
+          aceptar.addEventListener("change", function () {
+            if (aceptar.checked) lote.aceptadas.add(m.id); else lote.aceptadas.delete(m.id);
+            $("categorizar-aplicar").disabled = !lote.aceptadas.size;
+          });
+          label.append(aceptar, document.createTextNode(" Aceptar " + c.nombre));
+          fila.append(label);
+        } else fila.append(el("small", "nota", "Sin sugerencia válida"));
+      }
+      lista.append(fila);
+    });
+  }
+
+  $("btn-categorizar-lote").addEventListener("click", function () {
+    if (ocultos || !fuente) return;
+    var movimientos = datos.movimientos.filter(sinCategoriaParaLote);
+    if (!movimientos.length) return;
+    loteCategorias = NovaRespuestas.prepararLoteCategorias(movimientos, datos.movimientos, datos.categorias);
+    Object.assign(loteCategorias, { fuente: fuente, espacio: espacioId, sugerencias: [], aceptadas: new Set() });
+    mensaje("categorizar-mensaje", "");
+    pintarLoteCategorias();
+    abrirCapa("pantalla-categorizar-lote");
+  });
+
+  $("categorizar-preguntar").addEventListener("click", function () {
+    var lote = loteCategorias;
+    if (ocultos || !loteVigente(lote) || lote.ocupado || lote.revisado) return;
+    if (!lote.categorias.length) return mensaje("categorizar-mensaje", "Crea una categoría para pedir sugerencias.", true);
+    if (!cliente || fuente.demo) return mensaje("categorizar-mensaje", "Inicia sesión con tu cuenta para usar NOVA.", true);
+    lote.ocupado = true;
+    mensaje("categorizar-mensaje", "");
+    pintarLoteCategorias();
+    abrirChat(null);
+    var chat = chatActual;
+    function vigente() { return loteCategorias === lote && loteVigente(lote) && chat === chatActual && !ocultos; }
+    Promise.resolve(preguntarNova(lote.pregunta, { agregados: true, vigente: vigente })).then(function (texto) {
+      if (!vigente() || !texto) return;
+      lote.sugerencias = NovaRespuestas.leerSugerenciasCategoria(texto, lote.movimientos, lote.categorias);
+      lote.revisado = lote.sugerencias.length > 0;
+      mensaje("categorizar-mensaje", lote.revisado ? "Marca las sugerencias que quieras aceptar. Las demás quedan sin cambios." : "NOVA no encontró sugerencias válidas.");
+      if (pilaCapas[pilaCapas.length - 1] === "pantalla-chat") cerrarCapa();
+    }).finally(function () {
+      lote.ocupado = false;
+      if (loteCategorias === lote) pintarLoteCategorias();
+    });
+  });
+
+  function actualizarCategoriasLote(lote, cambios, deshacer) {
+    var hechos = [], fallos = [], omitidos = 0;
+    return cambios.reduce(function (cadena, cambio) {
+      return cadena.then(function () {
+        var m = loteVigente(lote) && datos.movimientos.find(function (x) { return x.id === cambio.movimiento_id; });
+        var c = categoria(cambio.categoria_id);
+        if (!m || (deshacer ? m.categoria_id !== cambio.categoria_id :
+          (!sinCategoriaParaLote(m) || !c || c.tipo !== m.tipo))) { omitidos++; return; }
+        var anterior = m.categoria_id;
+        return lote.fuente.actualizar("movimientos", m.id, { categoria_id: deshacer ? cambio.anterior : cambio.categoria_id }).then(function (n) {
+          Object.assign(m, n);
+          hechos.push(Object.assign({}, cambio, { anterior: anterior == null ? null : anterior }));
+        }).catch(function () { fallos.push(cambio.movimiento_id); });
+      });
+    }, Promise.resolve()).then(function () {
+      if (loteVigente(lote)) pintar();
+      var detalle = (fallos.length ? fallos.length + " sin guardar. " : "") + (omitidos ? omitidos + " omitidos porque cambiaron." : "");
+      var accion = !deshacer && hechos.length ? { texto: "↩ Deshacer", duracion: 12000, fn: function () {
+        actualizarCategoriasLote(lote, hechos, true);
+      } } : null;
+      toast(hechos.length ? hechos.length + (deshacer ? " cambios deshechos" : " movimientos categorizados") :
+        (fallos.length ? "No se pudo guardar el cambio" : "No había cambios disponibles"), detalle || null, null, accion);
+      return fallos;
+    });
+  }
+
+  $("categorizar-aplicar").addEventListener("click", function () {
+    var lote = loteCategorias;
+    if (ocultos || !loteVigente(lote) || lote.ocupado || !lote.aceptadas.size) return;
+    lote.ocupado = true;
+    var cambios = lote.sugerencias.filter(function (s) { return lote.aceptadas.has(s.movimiento_id); });
+    pintarLoteCategorias();
+    actualizarCategoriasLote(lote, cambios, false).then(function (fallos) {
+      lote.aceptadas = new Set(fallos);
+      lote.ocupado = false;
+      if (loteCategorias !== lote) return;
+      pintarLoteCategorias();
+      if (fallos.length) mensaje("categorizar-mensaje", "Puedes volver a aplicar los cambios que quedaron pendientes.", true);
+      else if (pilaCapas[pilaCapas.length - 1] === "pantalla-categorizar-lote") cerrarCapa();
+    });
+  });
+
   function filtrosActivos() {
     return ["categoriaId"].concat(Object.keys(camposFiltros)).filter(function (k) {
       return filtros[k] !== "" && filtros[k] != null;
     }).length;
   }
   function resultadosBusqueda() { return A.filtrarMovimientos(datos.movimientos, filtros, nombreCategoria); }
+  function sinCategoriaParaLote(m) {
+    var c = categoria(m.categoria_id);
+    return !m.transferencia && (m.tipo === "gasto" || m.tipo === "ingreso") && (!c || c.tipo !== m.tipo);
+  }
+
   function pintarBuscar() {
+    $("btn-categorizar-lote").hidden = !datos.movimientos.some(sinCategoriaParaLote);
+    $("btn-categorizar-lote").disabled = ocultos;
     document.querySelectorAll("#buscar-tipo button").forEach(function (b) { b.setAttribute("aria-checked", String(b.dataset.tipo === filtros.tipo)); });
     var selCat = $("filtro-categoria");
     selCat.replaceChildren(el("option", null, "Todas"));
@@ -4568,7 +4741,7 @@
     if (!x) return;
     var debo = d.tipo === "debo";
     $("abono-titulo").textContent = d.persona;
-    $("abono-whatsapp").hidden = debo || x.falta <= 0;
+    $("abono-whatsapp").hidden = ocultos || d.tipo !== "me_deben" || x.falta <= 0;
     var cajaFoto = $("abono-foto"); cajaFoto.replaceChildren();
     cajaFoto.append(pintarFotoDe(d, { tabla: "deudas", titulo: "📎 Foto o documento de la deuda", clave: "deuda", nombre: function (z) { return z.persona; }, repintar: function () { pintarAbonos(); } }));
     var r = $("abono-resumen");
@@ -5111,6 +5284,8 @@
     }
     if (!$("pantalla-registro").hidden) pintarRegistro();
     if (!$("pantalla-papelera").hidden) pintarPapelera();
+    if (!$("pantalla-deducibles").hidden) pintarDeducibles();
+    if (!$("pantalla-categorizar-lote").hidden) pintarLoteCategorias();
     if (pilaCapas.indexOf("pantalla-detalle") >= 0) pintarDetalle(); if (deudaAbierta && pilaCapas.indexOf("pantalla-abonos") >= 0) pintarAbonos();
   }
 
@@ -5520,6 +5695,8 @@
     pintarIcono($("reg-cat-icono"), c || { icono: "otro", color: "#64748b" });
     $("reg-bloque-viajes").hidden = !A.esGanancia(c);
     $("reg-cat-nombre").textContent = c ? c.nombre : "Seleccionar categoría";
+    $("reg-bloque-deducible").hidden = reg.tipo !== "gasto";
+    $("reg-deducible").value = A.tipoDeducible(reg.etiquetas);
     var tags = $("reg-etiquetas");
     tags.replaceChildren();
     reg.etiquetas.forEach(function (t) {
@@ -5540,6 +5717,11 @@
     $("reg-btn-recurrente").classList.toggle("activo", !$("reg-bloque-recurrente").hidden);
   }
   document.querySelectorAll("#reg-tipo button").forEach(function (b) { b.addEventListener("click", function () { reg.tipo = b.dataset.tipo; pintarRegistro(); }); });
+  llenarTiposDeducibles($("reg-deducible"));
+  $("reg-deducible").addEventListener("change", function () {
+    reg.etiquetas = A.etiquetasDeducible(reg.etiquetas, this.value);
+    pintarRegistro();
+  });
   $("reg-monto").addEventListener("click", function () { $("teclado").hidden = false; });
   document.querySelectorAll("[data-monto-rapido]").forEach(function (b) {
     b.addEventListener("click", function () {
@@ -5632,7 +5814,7 @@
       var fila = {
         cuenta_id: Number($("reg-cuenta").value) || datos.cuentas[0].id, categoria_id: c.id, tipo: reg.tipo,
         descripcion: $("reg-desc").value.trim() || c.nombre, monto: monto, fecha: fecha.toISOString(),
-        etiquetas: reg.etiquetas, estado: $("reg-estado").value, nota: $("reg-nota").value.trim() || null,
+        etiquetas: reg.tipo === "gasto" ? reg.etiquetas : A.etiquetasDeducible(reg.etiquetas, ""), estado: $("reg-estado").value, nota: $("reg-nota").value.trim() || null,
         moneda: reg.moneda, monto_original: ext ? montoOriginal : null, tasa: ext ? reg.tasa : null,
         viajes: A.esGanancia(c) && parseInt($("reg-viajes").value, 10) > 0 ? Math.min(1000, parseInt($("reg-viajes").value, 10)) : null
       };
@@ -5832,10 +6014,10 @@
     ul.replaceChildren();
     if (!datos.grupos.length) ul.append(el("li", "vacio", "Sin grupos. Para un viaje o una cuenta entre amigos, toca «+ Nuevo grupo»."));
     datos.grupos.forEach(function (g) {
-      var r = A.saldosGrupo(g.miembros, gastosDelGrupo(g)), yo = r.saldos.Yo || 0;
+      var r = A.saldosGrupo(g.miembros, gastosDelGrupo(g), true), yo = r.saldos.Yo || 0;
       var li = el("li", "mov"), txt = el("div", "mov-texto");
       txt.append(el("strong", null, g.nombre), el("small", null, g.miembros.join(", ")));
-      var est = el("span", "mov-monto" + (yo >= 0 ? " positivo" : ""), yo === 0 ? "A mano" : (yo > 0 ? "Te deben " : "Debes ") + pesos.format(Math.abs(yo)));
+      var est = el("span", "mov-monto" + (yo >= 0 ? " positivo" : ""), ocultos ? dinero(0) : yo === 0 ? "A mano" : (yo > 0 ? "Te deben " : "Debes ") + dinero(Math.abs(yo)));
       li.append(el("span", "mov-icono", "👥"), txt, est);
       li.tabIndex = 0;
       li.addEventListener("click", function () { abrirGrupo(g); });
@@ -5847,22 +6029,26 @@
   function pintarGrupo() {
     var g = grupoAbierto(); if (!g) return;
     $("grupo-titulo").textContent = g.nombre;
+    $("grupo-compartir").disabled = ocultos;
     var gastos = gastosDelGrupo(g).sort(function (a, b) { return String(b.fecha).localeCompare(String(a.fecha)) || b.id - a.id; });
-    var r = A.saldosGrupo(g.miembros, gastos);
-    var total = gastos.filter(function (x) { return x.tipo !== "pago"; }).reduce(function (s, x) { return s + num(x.monto); }, 0);
+    var r = A.saldosGrupo(g.miembros, gastos, ocultos);
     var caja = $("grupo-balance"); caja.replaceChildren();
-    caja.append(el("span", "etiqueta", "Total gastado en el grupo"), el("strong", "saldo-valor", pesos.format(total)));
+    caja.append(el("span", "etiqueta", "Total gastado en el grupo"), el("strong", "saldo-valor", dinero(r.total)),
+      el("h2", null, "Cuánto ha puesto cada persona y cuánto le toca"));
     var cuentas = el("ul", "lista-simple");
-    g.miembros.forEach(function (n) {
-      var v = r.saldos[n] || 0;
-      cuentas.append(el("li", null, n + ": " + (v === 0 ? "a mano" : v > 0 ? "le deben " + pesos.format(v) : "debe " + pesos.format(-v))));
+    r.filas.forEach(function (f) {
+      var v = f.saldo, fila = el("li");
+      var balance = ocultos ? dinero(0) : v === 0 ? "a mano" : (v > 0 ? "le deben " : "debe ") + dinero(Math.abs(v));
+      fila.append(el("strong", null, f.nombre),
+        el("div", "nota", "Pagó " + dinero(f.pagado) + " · Le toca " + dinero(f.parte) + " · Saldo: " + balance));
+      cuentas.append(fila);
     });
     caja.append(cuentas);
-    if (r.transferencias.length) {
+    if (!ocultos && r.transferencias.length) {
       caja.append(el("strong", null, "Para quedar a mano"));
       r.transferencias.forEach(function (t) {
         var fila = el("div", "meta-abono");
-        fila.append(el("span", null, t.de + " le paga " + pesos.format(t.monto) + " a " + t.a));
+        fila.append(el("span", null, t.de + " le paga " + dinero(t.monto) + " a " + t.a));
         var b = el("button", "mini", "✓ Ya pagó"); b.type = "button";
         b.addEventListener("click", function () {
           b.disabled = true;
@@ -5872,7 +6058,7 @@
         });
         fila.append(b); caja.append(fila);
       });
-    } else if (gastos.length) caja.append(el("span", "nota", "✅ Todos están a mano."));
+    } else if (!ocultos && gastos.length) caja.append(el("span", "nota", "✅ Todos están a mano."));
     pintarMetaGrupo(g);
     // formulario: quién pagó y entre quiénes
     var sel = $("gg-pagador"), previo = sel.value;
@@ -5892,7 +6078,7 @@
       var li = el("li", "mov"), txt = el("div", "mov-texto");
       var quien = x.tipo === "pago" ? x.pagador + " le pagó a " + (x.repartido[0] || "") : "Pagó " + x.pagador + " · entre " + ((x.repartido && x.repartido.length) || g.miembros.length);
       txt.append(el("strong", null, (x.tipo === "pago" ? "💸 " : "") + x.descripcion), el("small", null, fechaCorta.format(parteFechaLocal(x.fecha)) + " · " + quien));
-      li.append(txt, el("span", "mov-monto", pesos.format(num(x.monto))));
+      li.append(txt, el("span", "mov-monto", dinero(num(x.monto))));
       li.tabIndex = 0;
       li.addEventListener("click", function () {
         abrirEditor({
@@ -5938,10 +6124,11 @@
     }).catch(function (err) { mensaje("gg-mensaje", "No se pudo guardar: " + err.message, true); }).finally(function () { b.disabled = false; });
   });
   $("grupo-compartir").addEventListener("click", function () {
+    if (ocultos) return;
     var g = grupoAbierto(); if (!g) return;
-    var r = A.saldosGrupo(g.miembros, gastosDelGrupo(g)), total = gastosDelGrupo(g).filter(function (x) { return x.tipo !== "pago"; }).reduce(function (s, x) { return s + num(x.monto); }, 0);
-    var lineas = ["Cuentas de «" + g.nombre + "» · total " + pesos.format(total)];
-    if (r.transferencias.length) r.transferencias.forEach(function (t) { lineas.push("• " + t.de + " le paga " + pesos.format(t.monto) + " a " + (t.a === "Yo" ? "mí" : t.a)); });
+    var r = A.saldosGrupo(g.miembros, gastosDelGrupo(g));
+    var lineas = ["Cuentas de «" + g.nombre + "» · total " + dinero(r.total)];
+    if (r.transferencias.length) r.transferencias.forEach(function (t) { lineas.push("• " + t.de + " le paga " + dinero(t.monto) + " a " + (t.a === "Yo" ? "mí" : t.a)); });
     else lineas.push("✅ Todos estamos a mano.");
     lineas.push("— NOVA · OPITA-DIGITAL");
     compartirTexto("Cuentas de " + g.nombre, lineas.join("\n"));
@@ -7718,7 +7905,7 @@
     // Etiquetas: se quitan con la x y se agregan escribiéndolas o tocando una sugerencia
     var tagCaja = el("article", "tarjeta det-etiquetas"), actuales = m.etiquetas || [];
     function guardarEtiquetas(lista) {
-      fuente.actualizar("movimientos", m.id, { etiquetas: lista }).then(function (n) { Object.assign(m, n); pintar(); }).catch(function (err) { toast("No se pudo guardar: " + err.message); });
+      return fuente.actualizar("movimientos", m.id, { etiquetas: lista }).then(function (n) { Object.assign(m, n); pintar(); }).catch(function (err) { pintarDetalle(); toast("No se pudo guardar: " + err.message); });
     }
     actuales.forEach(function (t) {
       var chip = el("span", "etiqueta-chip activa", "#" + t), x = el("button", null, "✕"); x.type = "button"; x.setAttribute("aria-label", "Quitar #" + t);
@@ -7740,6 +7927,19 @@
       b.addEventListener("click", function () { guardarEtiquetas(actuales.concat([t])); });
       tagCaja.append(b);
     });
+    if (m.tipo === "gasto" && !m.transferencia) {
+      var ded = el("div", "formulario"), selector = el("select"), label = el("label", null, "Deducible");
+      selector.id = "det-deducible";
+      label.htmlFor = selector.id;
+      llenarTiposDeducibles(selector);
+      selector.value = A.tipoDeducible(actuales);
+      selector.addEventListener("change", function () {
+        selector.disabled = true;
+        guardarEtiquetas(A.etiquetasDeducible(m.etiquetas, selector.value)).finally(function () { selector.disabled = false; });
+      });
+      ded.append(label, selector);
+      tagCaja.append(ded);
+    }
     cont.append(tagCaja);
 
     // Presupuesto del periodo (solo para gastos)
@@ -7849,11 +8049,12 @@
       : estado === 429 ? "Se acabó el cupo gratis de la IA por hoy. Intenta mañana."
       : "La IA no pudo responder. Intenta otra vez en un momento." + (detalle ? " (" + detalle + ")" : "");
   }
-  function preguntarEnFlujo(cuerpo, alTexto, externo) {
+  function preguntarEnFlujo(cuerpo, alTexto, externo, vigente) {
     if (!enLinea()) return Promise.reject(new Error("Sin internet: la IA necesita conexión. Todo lo demás de NOVA sigue funcionando sin internet."));
     return cliente.auth.getSession().then(function (s) {
       var token = s.data && s.data.session && s.data.session.access_token;
       if (!token) throw new Error("Vuelve a iniciar sesión para usar la IA.");
+      if ((externo && externo.signal.aborted) || (vigente && !vigente())) return "";
       var control = new AbortController(), aviso = setTimeout(function () { control.abort(); }, 50000);
       if (externo) externo.signal.addEventListener("abort", function () { control.abort(); });
       return fetch(cfg.supabaseUrl + "/functions/v1/nova-ia", {
@@ -8297,7 +8498,7 @@
     if (!pregunta) return;
     opciones = opciones || {};
     var soloCifras = opciones.grafico || opciones.agregados;
-    if (ocultos && soloCifras) return;
+    if ((ocultos && soloCifras) || (opciones.vigente && !opciones.vigente())) return;
     var imagen = opciones.imagen;
     var textoVisible = (opciones.porVoz ? "🎤 " : "") + pregunta;
     if (!cliente || !fuente || fuente.demo) {
@@ -8313,7 +8514,7 @@
     if (cargaConfigNube) {
       var origen = fuente, conversacion = chatActual;
       return cargaConfigNube.then(function () {
-        if (fuente === origen && chatActual === conversacion && !$("pantalla-chat").hidden) preguntarNova(pregunta, opciones);
+        if (fuente === origen && chatActual === conversacion && !$("pantalla-chat").hidden) return preguntarNova(pregunta, opciones);
       });
     }
     if (Nube.mensajePausaIA(configNube)) {
@@ -8334,16 +8535,17 @@
     // La pregunta se guarda de una vez: aunque la IA falle o tarde, queda en tu historial.
     chat.mensajes.push({ rol: "usuario", texto: (imagen ? "📷 " : "") + textoVisible });
     var guardada = guardarConversacion().catch(function () { mensaje("chat-mensaje", "La pregunta no se pudo guardar en tu historial, pero puedes seguir chateando.", true); });
-    Promise.resolve().then(function () {
-      if (soloCifras && ocultos) return "";
+    return Promise.resolve().then(function () {
+      if ((soloCifras && ocultos) || (opciones.vigente && !opciones.vigente())) return "";
       return preguntarEnFlujo({ pregunta: pregunta, historial: historial, contexto: soloCifras ? { hoy: hoyLocal() } : contextoFinanzas(), imagen: imagen, mime: opciones.mime }, function (texto) {
         if (mio !== chatToken) return;
         pintarTextoIA(espera, texto);
         espera.classList.remove("pensando");
         espera.scrollIntoView({ block: "nearest" });
-      }, control);
+      }, control, opciones.vigente);
     }).then(function (respuesta) {
       if (mio !== chatToken) return;
+      if (opciones.vigente && !opciones.vigente()) { espera.remove(); return; }
       respuesta = (respuesta || "").trim();
       if (!respuesta) throw new Error("La IA no pudo responder. Intenta otra vez en un momento.");
       pintarTextoIA(espera, respuesta);
@@ -8352,7 +8554,7 @@
       if (tar) { espera.after(tar); tar.scrollIntoView({ block: "nearest" }); }
       chat.mensajes.push({ rol: "nova", texto: respuesta });
       if (chat === chatActual) actualizarBotonNota();
-      return guardada.then(function () { return guardarConversacion(); }).catch(function () { mensaje("chat-mensaje", "La respuesta no se pudo guardar en tu historial, pero puedes seguir chateando.", true); }).then(pintarIA);
+      return guardada.then(function () { if (chat === chatActual) return guardarConversacion(); }).catch(function () { mensaje("chat-mensaje", "La respuesta no se pudo guardar en tu historial, pero puedes seguir chateando.", true); }).then(function () { pintarIA(); return respuesta; });
     }).catch(function (e) {
       if (mio !== chatToken) return;
       espera.remove();
@@ -9783,7 +9985,9 @@
   $("abono-whatsapp").addEventListener("click", function () {
     var d = deudaAbierta; if (!d) return;
     var x = datosDeDeuda(d); if (!x) return;
-    compartirTexto("Recordatorio de pago", "Hola " + d.persona + ", te escribo para recordarte lo que me debes" + (d.concepto ? " (" + d.concepto + ")" : "") + ": faltan " + pesos.format(x.falta) + ". ¡Gracias! 🙏");
+    if (ocultos) return;
+    var texto = A.mensajeRecordatorioDeuda({ tipo: d.tipo, persona: d.persona, falta: x.falta, vence: d.vence, moneda: monedaBase() }, hoyLocal());
+    if (texto) window.open("https://wa.me/?text=" + encodeURIComponent(texto), "_blank", "noopener,noreferrer");
   });
 
   // ---------- Pruebas con un toque (en el celular real) ----------

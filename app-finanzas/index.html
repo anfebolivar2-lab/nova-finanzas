@@ -534,6 +534,10 @@
         </select>
         <button type="button" id="btn-exportar-busqueda" class="icono-btn" aria-label="Exportar estos movimientos a CSV"><svg viewBox="0 0 24 24"><path d="M12 3v12M7 10l5 5 5-5M5 21h14"/></svg></button>
       </div>
+      <div class="buscar-resumen">
+        <button type="button" class="mini" id="btn-deducibles">Deducibles del año</button>
+        <button type="button" class="mini" id="btn-categorizar-lote" hidden>Ordenar movimientos sin categoría</button>
+      </div>
       <div id="lista-buscar" class="dias"></div>
     </section>
 
@@ -960,6 +964,10 @@
       <span id="reg-etiquetas" class="etiquetas"></span>
       <input id="reg-etiqueta" placeholder="+ #" maxlength="30" enterkeyhint="done">
     </div>
+    <div id="reg-bloque-deducible" hidden>
+      <label for="reg-deducible">Deducible</label>
+      <select id="reg-deducible"></select>
+    </div>
     <div id="reg-sugerencias" class="etiquetas sugeridas"></div>
     <div class="chips-opciones">
       <button type="button" id="reg-btn-estado" class="chip-opcion">+ Estado</button>
@@ -1105,7 +1113,7 @@
     <button type="button" id="abono-editar-icono" class="icono-btn" aria-label="Editar la deuda"><svg viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16zM13.5 6.5l4 4"/></svg></button>
     <button type="button" id="abono-borrar-icono" class="icono-btn" aria-label="Borrar la deuda"><svg viewBox="0 0 24 24"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg></button></div>
   <article id="abono-resumen" class="tarjeta"></article>
-  <button type="button" id="abono-whatsapp" class="mini" hidden>📲 Recordarle por WhatsApp</button>
+  <button type="button" id="abono-whatsapp" class="mini" hidden>Recordar por WhatsApp</button>
   <div id="abono-foto"></div>
   <form id="form-abono" class="formulario" autocomplete="off">
     <label for="abono-monto" class="centro" id="abono-et">Registrar un abono</label>
@@ -1125,7 +1133,25 @@
   <button type="button" id="abono-borrar" class="peligro">🗑 Borrar esta deuda</button>
 </section>
 
-<!-- Nuevo o editar vencimiento (SOAT, tecnomecánica…) -->
+<section id="pantalla-deducibles" class="capa" hidden>
+  <div class="sub-cabecera"><button type="button" class="icono-btn" data-cerrar aria-label="Volver"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button><h1>Deducibles del año</h1></div>
+  <div class="formulario">
+    <label for="deducibles-ano">Año</label>
+    <select id="deducibles-ano"></select>
+    <div id="deducibles-tipos"></div>
+    <p class="nota">Esto es una guía; confirma topes y requisitos con la DIAN o un contador.</p>
+  </div>
+</section>
+<section id="pantalla-categorizar-lote" class="capa" hidden>
+  <div class="sub-cabecera"><button type="button" class="icono-btn" data-cerrar aria-label="Volver"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button><h1>Ordenar movimientos sin categoría</h1></div>
+  <div class="formulario">
+    <p class="nota">NOVA recibe rangos y recuentos históricos por código de categoría. Las descripciones se quedan en tu dispositivo.</p>
+    <ul class="lista-simple" id="categorizar-lista"></ul>
+    <p class="mensaje" id="categorizar-mensaje" role="status"></p>
+    <button type="button" class="primario" id="categorizar-preguntar">Pedir sugerencias a NOVA</button>
+    <button type="button" class="primario" id="categorizar-aplicar" hidden>Aplicar</button>
+  </div>
+</section>
 <section id="pantalla-grupo-nuevo" class="capa" hidden>
   <div class="sub-cabecera"><button type="button" class="icono-btn" data-cerrar aria-label="Volver"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button><h1>Nuevo grupo</h1></div>
   <form id="form-grupo" class="formulario" autocomplete="off">
