@@ -10,7 +10,8 @@
       mas moneda notas-nova papelera pasar pruebas registro respaldo
       simulacion sugerencia tarjeta tab_inicio tab_planes tab_analisis tab_buscar`,
     anotar: "texto voz foto banco manual rapido",
-    ia: "pregunta_texto pregunta_foto pregunta_voz error_cupo error_tiempo error_otro busqueda_web",
+    ia: `pregunta_texto pregunta_foto pregunta_voz error_cupo error_tiempo error_otro busqueda_web respuesta_ms
+      tema_gastos tema_ahorro tema_deudas tema_presupuesto tema_impuestos tema_inversion tema_ingresos tema_otro`,
     sesion: "duracion",
     ajuste: "tema_oscuro tema_claro pin_on pin_off huella_on huella_off modo_conductor_on modo_conductor_off",
     recuadro: `
@@ -31,7 +32,9 @@
     tipo = normalizar(tipo);
     nombre = normalizar(nombre);
     if (!nombres[tipo] || !/^[a-z0-9_.:-]{1,40}$/.test(nombre) || nombres[tipo].indexOf(nombre) < 0) return null;
-    if (valor != null && (tipo !== "sesion" || !Number.isInteger(valor) || valor < 0 || valor > 86400)) return null;
+    if (tipo === "ia" && nombre === "respuesta_ms") {
+      if (!Number.isInteger(valor) || valor < 1 || valor > 86400) return null;
+    } else if (valor != null && (tipo !== "sesion" || !Number.isInteger(valor) || valor < 0 || valor > 86400)) return null;
     return { tipo: tipo, nombre: nombre, valor: valor == null ? null : valor };
   }
 
@@ -45,7 +48,33 @@
     return lotes;
   }
 
-  var api = { eventoSeguro: eventoSeguro, encolar: encolar, lotesParaEnviar: lotesParaEnviar };
+  function decimasRespuesta(ms) {
+    return Math.max(1, Math.min(86400, Math.round(ms / 100)));
+  }
+
+  var temas = [
+    ["impuestos", /\b(impuestos?|tribut\w*|dian|iva|declaraci\w* de renta|deducibles?)\b/],
+    ["presupuesto", /\b(presupuest\w*|plan mensual por categoria|limite de gasto|balance futuro)\b/],
+    ["deudas", /\b(deudas?|prestamos?|creditos?|hipotecas?|intereses de mora)\b/],
+    ["inversion", /\b(invert\w*|inversion\w*|cdt|acciones|fondos de inversion|patrimonio)\b/],
+    ["ahorro", /\b(ahorr\w*|alcancias?|fondo de emergencia)\b/],
+    ["gastos", /\b(gast\w*|compras?|suscripci\w*|cobros recurrentes|arriendo|egresos?)\b/],
+    ["ingresos", /\b(ingresos?|sueldos?|salarios?|ganancias?|gane|ganar|nomina|ventas?|me pagaron)\b/]
+  ];
+
+  function temaPregunta(texto) {
+    var normalizado = (typeof texto === "string" ? texto : "").toLowerCase()
+      .normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+    if (/^sugiere categorias con estos datos agregados\./.test(normalizado)) return "otro";
+    var grafico = normalizado.match(/^explicame en palabras sencillas el grafico «([^»]*)»/);
+    var escenario = normalizado.match(/^analiza este escenario: (.*?)\. cifras en /);
+    var tema = grafico ? grafico[1] : escenario ? escenario[1] : normalizado;
+    var coincidencia = temas.find(function (par) { return par[1].test(tema); });
+    return coincidencia ? coincidencia[0] : "otro";
+  }
+
+  var api = { eventoSeguro: eventoSeguro, encolar: encolar, lotesParaEnviar: lotesParaEnviar,
+    decimasRespuesta: decimasRespuesta, temaPregunta: temaPregunta };
   if (typeof module === "object" && module.exports) module.exports = api;
   else raiz.NovaEventos = api;
 })(typeof window !== "undefined" ? window : this);

@@ -338,15 +338,51 @@
     return { correos: correos.slice(0, 20), restantes: Math.max(0, correos.length - 20) };
   }
 
+  function barras(filas) {
+    var maximo = filas.reduce(function (max, fila) { return Math.max(max, fila.total); }, 0);
+    return filas.map(function (fila) { return Object.assign({}, fila, { porcentaje: porcentaje(fila.total, maximo) }); });
+  }
+
+  var temasIA = Object.assign(Object.create(null), {
+    tema_gastos: "Gastos", tema_ahorro: "Ahorro", tema_deudas: "Deudas", tema_presupuesto: "Presupuesto",
+    tema_impuestos: "Impuestos", tema_inversion: "Inversiones", tema_ingresos: "Ingresos", tema_otro: "Otros"
+  });
+
+  function prepararIA(uso) {
+    uso = uso || {};
+    var rapidez = uso.iaRapidez || {};
+    var tiempos = [rapidez.promedioMs, rapidez.medianaMs, rapidez.p90Ms];
+    var tieneRapidez = cantidad(rapidez.n) > 0 && tiempos.every(function (ms) { return Number.isFinite(ms) && ms > 0; });
+    return {
+      rapidez: tieneRapidez ? { n: rapidez.n, promedioSeg: tiempos[0] / 1000, medianaSeg: tiempos[1] / 1000,
+        p90Seg: tiempos[2] / 1000 } : null,
+      temas: barras(lista(uso.iaTemas).filter(function (fila) {
+        return typeof fila.nombre === "string" && temasIA[fila.nombre] && cantidad(fila.total) > 0;
+      }).map(function (fila) {
+        return { nombre: temasIA[fila.nombre], total: fila.total };
+      }).sort(function (a, b) { return b.total - a.total; })),
+      top: lista(uso.iaTop).filter(function (fila) {
+        return typeof fila.correo === "string" && fila.correo && !/@example\.com$/i.test(fila.correo) && cantidad(fila.preguntas) > 0;
+      }).map(function (fila) {
+        return { nombre: fila.correo, total: fila.preguntas };
+      }).sort(function (a, b) { return b.total - a.total || a.nombre.localeCompare(b.nombre); }).slice(0, 5)
+    };
+  }
+
+  function cupoIAPorDia(porDia, ahora, rango) {
+    var hoy = Math.floor(instante(ahora) / DIA);
+    if (!porDia || !Number.isFinite(hoy)) return [];
+    rango = [7, 14, 30].includes(rango) ? rango : 30;
+    return Array.from({ length: rango }, function (_, i) {
+      var dia = fecha(hoy - rango + 1 + i);
+      return { dia: dia, total: cantidad(porDia[dia]) || 0 };
+    });
+  }
+
   function prepararUso(uso, ahora) {
     if (!uso) return null;
     var total = cantidad(uso.totalEventos) || 0;
     if (!total) return { total: 0 };
-
-    function barras(filas) {
-      var maximo = filas.reduce(function (max, fila) { return Math.max(max, fila.total); }, 0);
-      return filas.map(function (fila) { return Object.assign({}, fila, { porcentaje: porcentaje(fila.total, maximo) }); });
-    }
     function conteos(datos, etiquetas) {
       return barras(etiquetas.map(function (par) {
         return { nombre: par[1], total: cantidad((datos || {})[par[0]]) || 0 };
@@ -384,7 +420,8 @@
   }
 
   var api = {
-    prepararUso: prepararUso, nuevosPor: nuevosPor, crecimientoAcumulado: crecimientoAcumulado, usoActivo: usoActivo,
+    prepararUso: prepararUso, prepararIA: prepararIA, cupoIAPorDia: cupoIAPorDia,
+    nuevosPor: nuevosPor, crecimientoAcumulado: crecimientoAcumulado, usoActivo: usoActivo,
     retencion: retencion, cohortes: cohortes, segmentos: segmentos, etiquetasSemana: etiquetasSemana,
     picoDe: picoDe, embudo: embudo, adopcion: adopcion, porcentajeUltimaVersion: porcentajeUltimaVersion,
     repartoApk: repartoApk, usuariosACsv: usuariosACsv, fichaUsuario: fichaUsuario,
