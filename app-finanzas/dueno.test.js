@@ -1,6 +1,7 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const { filtrarPersonas, contarFiltros, ultimos30Dias, barrasVersiones, registrosParaMeta, porcentaje, validarAviso, sugerenciasPendientes, recientes, recortarTexto } = require("./dueno.js");
+const { filtrarPersonas, contarFiltros, ultimos30Dias, barrasVersiones, registrosParaMeta, porcentaje, validarAviso, sugerenciasPendientes, recientes, recortarTexto,
+  bytesAMegabytes, formatearTamano, tablasMasGrandes, accionesDeCuenta, confirmaCorreo } = require("./dueno.js");
 
 const ahora = new Date("2026-11-22T12:00:00Z");
 const DIA = 24 * 60 * 60 * 1000;
@@ -121,4 +122,37 @@ test("programa el inicio del aviso en hora local y lo envía como ISO", () => {
   assert.equal(programar("2026-02-30T10:30", ""), null);
   assert.equal(programar("2026-11-23T24:00", ""), null);
   assert.equal(programar("2026-11-23", ""), null);
+});
+
+test("convierte bytes a MB decimales y muestra un decimal con coma", () => {
+  assert.equal(bytesAMegabytes(500000000), 500);
+  assert.equal(formatearTamano(12345678), "12,3 MB");
+  assert.equal(formatearTamano("1200000"), "1,2 MB");
+  assert.equal(formatearTamano(0), "0,0 MB");
+  assert.equal(formatearTamano(-1000000), "0,0 MB");
+  assert.equal(formatearTamano(undefined), "0,0 MB");
+});
+
+test("devuelve las ocho tablas más grandes sin cambiar la lista original", () => {
+  const tablas = Object.freeze(Array.from({ length: 10 }, (_, i) => ({ tabla: "tabla" + i, bytes: i * 10 })));
+  assert.deepEqual(tablasMasGrandes(tablas).map(fila => fila.bytes), [90, 80, 70, 60, 50, 40, 30, 20]);
+  assert.equal(tablas[0].bytes, 0);
+  assert.deepEqual(tablasMasGrandes(null), []);
+});
+
+test("ofrece acciones según el estado y excluye dueños, cuentas de prueba y datos antiguos", () => {
+  const persona = { id: "287feed1-23bc-4771-9851-b858d248559c", correo: "Ana@correo.test" };
+  assert.deepEqual(accionesDeCuenta(persona), ["cuenta_bloquear", "cuenta_reenviar_confirmacion"]);
+  assert.deepEqual(accionesDeCuenta({ ...persona, confirmado: true, bloqueado: true }), ["cuenta_desbloquear"]);
+  assert.deepEqual(accionesDeCuenta({ ...persona, dueno: true }), []);
+  assert.deepEqual(accionesDeCuenta({ ...persona, prueba: true }), []);
+  assert.deepEqual(accionesDeCuenta({ correo: persona.correo }), []);
+  assert.deepEqual(accionesDeCuenta({ ...persona, correo: "(sin correo)" }), []);
+});
+
+test("la confirmación exige el correo exacto", () => {
+  assert.equal(confirmaCorreo("Ana@correo.test", "Ana@correo.test"), true);
+  assert.equal(confirmaCorreo("Ana@correo.test", "ana@correo.test"), false);
+  assert.equal(confirmaCorreo("Ana@correo.test", "Ana@correo.test "), false);
+  assert.equal(confirmaCorreo("", ""), false);
 });

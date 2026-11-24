@@ -1400,6 +1400,23 @@
     <h3>Descargas desde GitHub</h3>
     <div id="dueno-reparto-apk" class="dueno-lista"></div>
   </details>
+  <article class="tarjeta formulario">
+    <h2 class="titulo-tarjeta">Salud técnica</h2>
+    <h3>Base de datos</h3>
+    <p id="dueno-bd-tamano" class="nota"></p>
+    <progress id="dueno-bd-barra" max="500" aria-label="Uso de la base de datos respecto al límite de 500 MB" hidden></progress>
+    <ol id="dueno-bd-tablas"></ol>
+    <h3>Fotos de recibos</h3>
+    <p id="dueno-salud-fotos" class="nota"></p>
+    <h3>Últimas acciones sobre cuentas</h3>
+    <ul id="dueno-salud-acciones" class="lista-banco"></ul>
+    <div class="dueno-filtros">
+      <button type="button" class="mini" id="dueno-probar-tasas">Probar tasas ahora</button>
+      <button type="button" class="mini" id="dueno-probar-ia">Probar IA (gasta 1 consulta)</button>
+    </div>
+    <p id="dueno-tasas-resultado" class="mensaje" role="status" hidden></p>
+    <p id="dueno-ia-resultado" class="mensaje" role="status" hidden></p>
+  </article>
   <article class="tarjeta dueno-grafico">
     <h2 class="titulo-tarjeta">Uso de la app</h2>
     <p class="nota" id="dueno-eventos-mensaje" role="status"></p>
@@ -1477,8 +1494,22 @@
   <dialog id="dueno-ficha" class="tarjeta dueno-ficha" aria-labelledby="dueno-ficha-correo">
     <h2 id="dueno-ficha-correo" class="titulo-tarjeta"></h2>
     <dl id="dueno-ficha-datos"></dl>
+    <div id="dueno-ficha-acciones" class="dueno-filtros"></div>
     <form method="dialog"><button class="mini" autofocus>Cerrar</button></form>
   </dialog>
+  <dialog id="dueno-confirmar-cuenta" class="tarjeta dueno-ficha" aria-labelledby="dueno-confirmar-titulo">
+    <form id="dueno-confirmar-form" class="formulario">
+      <h2 id="dueno-confirmar-titulo" class="titulo-tarjeta"></h2>
+      <label for="dueno-confirmar-correo">Escribe el correo exacto <strong id="dueno-confirmar-objetivo"></strong></label>
+      <input id="dueno-confirmar-correo" type="text" inputmode="email" autocomplete="off" autocapitalize="off" spellcheck="false" autofocus>
+      <p id="dueno-confirmar-mensaje" class="mensaje" role="status"></p>
+      <div class="dueno-filtros">
+        <button type="button" class="mini" id="dueno-confirmar-cancelar">Cancelar</button>
+        <button type="submit" class="mini" id="dueno-confirmar-enviar" disabled></button>
+      </div>
+    </form>
+  </dialog>
+  <p id="dueno-cuenta-mensaje" class="mensaje" role="status" hidden></p>
   <input id="dueno-buscar" type="search" placeholder="Buscar por correo" autocomplete="off" aria-label="Buscar por correo">
   <div id="dueno-filtros" class="dueno-filtros" role="group" aria-label="Filtrar personas"></div>
   <select id="dueno-orden" aria-label="Ordenar">

@@ -1,4 +1,4 @@
-// nova-dueno: panel del dueño de NOVA. Cuenta cuántas personas se registraron, cuántas la usan, cuántas veces se
+// nova-dueno v7: panel del dueño de NOVA. Cuenta cuántas personas se registraron, cuántas la usan, cuántas veces se
 // descargó la APK y qué funciones usan. Solo responde a la cuenta del dueño (DUENOS).
 // Por privacidad NO devuelve montos ni movimientos de nadie: solo cuántos hay y cuándo se usó la app.
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
@@ -20,7 +20,7 @@ const responder = (estado: number, cuerpo: unknown) =>
 
 const adm = { Authorization: `Bearer ${SERVICIO}`, apikey: SERVICIO };
 
-type Usuario = { id: string; email?: string; created_at?: string; last_sign_in_at?: string | null; email_confirmed_at?: string | null; user_metadata?: Record<string, unknown> };
+type Usuario = { id: string; email?: string; created_at?: string; last_sign_in_at?: string | null; email_confirmed_at?: string | null; banned_until?: string | null; user_metadata?: Record<string, unknown> };
 
 async function usuarios(): Promise<Usuario[]> {
   const todos: Usuario[] = [];
@@ -78,7 +78,51 @@ const texto = (v: unknown, max: number) => String(v ?? "").trim().slice(0, max);
 const AUDIENCIAS = ["todos", "android", "web"];
 const CLAVES_CONFIG = ["ia_pausada", "ia_mensaje", "version_minima", "notas_version"];
 
+const ACCIONES_CUENTA = ["cuenta_bloquear", "cuenta_desbloquear", "cuenta_reenviar_confirmacion"];
+
+async function actuarSobreCuenta(accion: string, objetivo: unknown, dueno: string) {
+  if (typeof objetivo !== "string" || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(objetivo)) {
+    return responder(400, { error: "El identificador de la cuenta no es válido." });
+  }
+  const id = objetivo.toLowerCase();
+  if (DUENOS.includes(id)) return responder(400, { error: "No puedes cambiar la cuenta de un dueño." });
+  const url = `${URL_SB}/auth/v1/admin/users/${id}`;
+  const consulta = await fetch(url, { headers: adm });
+  if (consulta.status === 404) return responder(404, { error: "La cuenta ya no existe." });
+  if (!consulta.ok) return responder(502, { error: "No se pudo consultar la cuenta." });
+  const usuario: Usuario = await consulta.json();
+
+  let cambio: Response;
+  if (accion === "cuenta_reenviar_confirmacion") {
+    if (usuario.email_confirmed_at) return responder(400, { error: "Esta cuenta ya confirmó su correo." });
+    if (!usuario.email) return responder(400, { error: "La cuenta no tiene correo." });
+    cambio = await fetch(`${URL_SB}/auth/v1/resend`, {
+      method: "POST",
+      headers: { apikey: ANON, "Content-Type": "application/json" },
+      body: JSON.stringify({ type: "signup", email: usuario.email }),
+    });
+    if (!cambio.ok) return responder(502, { error: "No se pudo reenviar el correo de confirmación." });
+  } else {
+    const bloquear = accion === "cuenta_bloquear";
+    cambio = await fetch(url, {
+      method: "PUT",
+      headers: { ...adm, "Content-Type": "application/json" },
+      body: JSON.stringify({ ban_duration: bloquear ? "876000h" : "none" }),
+    });
+    if (!cambio.ok) return responder(502, { error: bloquear ? "No se pudo bloquear la cuenta." : "No se pudo desbloquear la cuenta." });
+  }
+
+  const auditoria = await rest("fin_dueno_acciones", {
+    method: "POST",
+    headers: { Prefer: "return=minimal" },
+    signal: AbortSignal.timeout(6000),
+    body: JSON.stringify({ dueno_id: dueno, accion, objetivo_id: id }),
+  }).then((r) => r.ok).catch(() => false);
+  return responder(200, { ok: true, auditoria });
+}
+
 async function accionDueno(accion: string, cuerpo: Record<string, unknown>, dueno: string): Promise<Response | null> {
+  if (ACCIONES_CUENTA.includes(accion)) return actuarSobreCuenta(accion, cuerpo.id, dueno);
   if (accion === "aviso_crear") {
     const titulo = texto(cuerpo.titulo, 80), mensaje = texto(cuerpo.mensaje, 500);
     const audiencia = AUDIENCIAS.includes(String(cuerpo.audiencia)) ? String(cuerpo.audiencia) : "todos";
@@ -320,6 +364,54 @@ async function estadoPanel() {
   return { servicios, corridaApk: corrida, lanzamiento, config };
 }
 
+// Storage lista un nivel por llamada. Los recibos se guardan bajo carpetas de usuario.
+async function tamanoRecibos() {
+  const signal = AbortSignal.timeout(10_000);
+  const pendientes = [""];
+  const tope = 5000, limite = 100;
+  let archivos = 0, bytes = 0;
+  while (pendientes.length && archivos < tope) {
+    const prefix = pendientes.pop()!;
+    for (let offset = 0; archivos < tope; offset += limite) {
+      const r = await fetch(`${URL_SB}/storage/v1/object/list/recibos`, {
+        method: "POST", signal,
+        headers: { ...adm, "Content-Type": "application/json" },
+        body: JSON.stringify({ prefix, limit: limite, offset, sortBy: { column: "name", order: "asc" } }),
+      });
+      if (!r.ok) throw new Error("No se pudieron listar los recibos.");
+      const lote: { id: string | null; name: string; metadata?: { size?: number } | null }[] = await r.json();
+      for (const objeto of lote) {
+        if (!objeto.id) {
+          pendientes.push(prefix + objeto.name + "/");
+          continue;
+        }
+        archivos++;
+        bytes += Number(objeto.metadata?.size) || 0;
+        if (archivos === tope) break;
+      }
+      if (lote.length < limite) break;
+    }
+  }
+  return { archivos, bytes };
+}
+
+async function saludPanel(correoDe: Record<string, string>) {
+  const leer = async (ruta: string, init: RequestInit = {}) => {
+    const r = await rest(ruta, { ...init, signal: AbortSignal.timeout(10_000) });
+    if (!r.ok) throw new Error("No se pudo consultar la salud técnica.");
+    return r.json();
+  };
+  const [bd, fotos, acciones] = await Promise.all([
+    leer("rpc/fin_tamano_db", { method: "POST", body: "{}" }).catch(() => null),
+    tamanoRecibos().catch(() => null),
+    leer("fin_dueno_acciones?select=accion,objetivo_id,creado_en&order=creado_en.desc,id.desc&limit=10")
+      .then((lista: { accion: string; objetivo_id: string; creado_en: string }[]) => lista.map((a) => ({
+        accion: a.accion, correo: correoDe[a.objetivo_id] || "(sin correo)", creado_en: a.creado_en,
+      }))).catch(() => null),
+  ]);
+  return { bd, fotos, acciones };
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: CORS });
   if (req.method !== "POST") return responder(405, { error: "Usa POST" });
@@ -384,6 +476,7 @@ Deno.serve(async (req) => {
       const visto = String(md.nova_visto || "");
       const ultimoUso = [u.last_sign_in_at || "", visto, porUsuario[u.id]?.ultimo || ""].sort().pop() || "";
       return {
+        id: u.id, bloqueado: Date.parse(u.banned_until || "") > ahora,
         correo: u.email || "(sin correo)", prueba: /@example\.com$/i.test(u.email || ""), dueno: DUENOS.includes(u.id),
         registro: u.created_at || "", confirmado: !!u.email_confirmed_at, ultimoUso,
         plataforma: String(md.nova_plataforma || ""), version: String(md.nova_version || ""),
@@ -403,6 +496,8 @@ Deno.serve(async (req) => {
     const versiones: Record<string, number> = {};
     reales.forEach((p) => { if (p.version) versiones[p.version] = (versiones[p.version] || 0) + 1; });
 
+    const correoDe = Object.fromEntries(lista.map((u) => [u.id, u.email || ""]));
+    const salud = saludPanel(correoDe);
     const uso = usoPanel(ahora).catch(() => null);
     return responder(200, {
       generado: new Date().toISOString(),
@@ -421,8 +516,8 @@ Deno.serve(async (req) => {
       horas, semana, monedas, fotos: { total: fotos, personas: usuariosConFoto.size },
       adopcion: await adopcionPanel(),
       ...(await estadoPanel().then((e) => ({ estado: e })).catch(() => ({ estado: null }))),
-      ...(await extrasPanel(Object.fromEntries(lista.map((u) => [u.id, u.email || ""])), ahora)),
-      uso: await uso,
+      ...(await extrasPanel(correoDe, ahora)),
+      uso: await uso, salud: await salud,
     });
   } catch (e) {
     console.error("nova-dueno", String(e));
