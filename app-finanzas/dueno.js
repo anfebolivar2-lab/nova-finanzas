@@ -62,13 +62,104 @@
     return Number.isSafeInteger(n) && n > 0 ? n : 0;
   }
 
-  function ultimos30Dias(porDia, ahora) {
+  function rangoDias(rango) {
+    return [7, 14, 30].includes(rango) ? rango : 30;
+  }
+
+  function serieDiaria(serie, ahora, rango, campos) {
     var fin = new Date(ahora);
     fin.setUTCHours(0, 0, 0, 0);
-    return Array.from({ length: 30 }, function (_, i) {
-      var dia = new Date(fin.getTime() - (29 - i) * DIA).toISOString().slice(0, 10);
-      return { dia: dia, total: cantidad(porDia && porDia[dia]) };
+    if (!Number.isFinite(fin.getTime())) return [];
+    var filas = Array.isArray(serie) ? new Map(serie.filter(Boolean).map(function (fila) {
+      return [fila.dia, fila];
+    })) : null;
+    var dias = rangoDias(rango);
+    return Array.from({ length: dias }, function (_, i) {
+      var dia = new Date(fin.getTime() - (dias - 1 - i) * DIA).toISOString().slice(0, 10);
+      var fila = filas ? filas.get(dia) : { total: serie && serie[dia] };
+      var resultado = { dia: dia };
+      campos.forEach(function (campo) { resultado[campo] = cantidad(fila && fila[campo]); });
+      return resultado;
     });
+  }
+
+  function ultimos30Dias(porDia, ahora) {
+    return serieDiaria(porDia, ahora, 30, ["total"]);
+  }
+
+  function nuevosDesdeVisita(personas, visita, ahora) {
+    var anterior = fecha(visita), hasta = fecha(ahora);
+    if (!Number.isFinite(anterior) || hasta <= anterior) return 0;
+    return personasVisibles(personas, true).filter(function (persona) {
+      var registro = fecha(persona.registro);
+      return registro > anterior && registro <= hasta;
+    }).length;
+  }
+
+  var ayudaNumeros = Object.freeze({
+    registrados: "Personas que han creado una cuenta en NOVA.",
+    activos7: "Personas que abrieron NOVA en los últimos 7 días.",
+    activos30: "Personas que abrieron NOVA en los últimos 30 días.",
+    apk: "Descargas del instalador Android registradas en GitHub.",
+    android: "Personas que abrieron NOVA desde la app de Android.",
+    movimientos: "Cantidad de movimientos que se han anotado.",
+    chats: "Conversaciones iniciadas con NOVA IA.",
+    metas: "Cantidad de metas de ahorro creadas en NOVA.",
+    espacios: "Cantidad de espacios creados para separar anotaciones.",
+    conductores: "Personas que usan el modo conductor.",
+    nuevosHoy: "Personas que se registraron hoy.",
+    nuevosSemana: "Personas que se registraron en lo que va de esta semana.",
+    nuevosMes: "Personas que se registraron en lo que va de este mes.",
+    dau: "Personas que abrieron NOVA hoy.",
+    wau: "Personas que abrieron NOVA en los últimos 7 días.",
+    mau: "Personas que abrieron NOVA en los últimos 30 días.",
+    dauMau: "De quienes usaron NOVA en 30 días, qué porcentaje la abrió hoy.",
+    retencion: "De quienes ya alcanzaron este tiempo desde su registro, qué porcentaje volvió a usar NOVA a partir de ese día.",
+    eventos: "Acciones de uso que NOVA registró en los últimos 30 días.",
+    sesiones: "Sesiones en las que se pudo medir cuánto duraron.",
+    promedio: "Duración media de las sesiones medidas.",
+    mediana: "La mitad de las sesiones medidas duró este tiempo o menos.",
+    modoConductor: "Personas con actividad registrada en el modo conductor.",
+    seguridad: "Personas con actividad registrada en las opciones de seguridad."
+  });
+
+  var ejemplosPlantillas = [
+    { titulo: "Nueva versión", mensaje: "Ya está disponible una nueva versión de NOVA. Actualiza la app para ver las novedades." },
+    { titulo: "Mantenimiento programado", mensaje: "Haremos un mantenimiento programado. Durante ese tiempo, algunas funciones podrían estar disponibles con interrupciones." },
+    { titulo: "Gracias por usar NOVA", mensaje: "Gracias por usar NOVA y compartir tus sugerencias. Tus comentarios nos ayudan a mejorar la app." }
+  ];
+  var maximoPlantillas = 10;
+
+  function validarPlantilla(titulo, mensaje) {
+    if (typeof titulo !== "string" || typeof mensaje !== "string") return null;
+    titulo = titulo.trim();
+    mensaje = mensaje.trim();
+    if (!titulo || Array.from(titulo).length > 80 || !mensaje || Array.from(mensaje).length > 500) return null;
+    return { titulo: titulo, mensaje: mensaje };
+  }
+
+  function plantillasGuardadas(datos) {
+    return (Array.isArray(datos) ? datos : []).map(function (fila) {
+      return fila && validarPlantilla(fila.titulo, fila.mensaje);
+    }).filter(Boolean).slice(0, maximoPlantillas - ejemplosPlantillas.length);
+  }
+
+  function listarPlantillas(datos) {
+    return ejemplosPlantillas.map(function (fila) {
+      return Object.assign({ fabrica: true }, fila);
+    }).concat(plantillasGuardadas(datos));
+  }
+
+  function agregarPlantilla(datos, titulo, mensaje) {
+    var guardadas = plantillasGuardadas(datos), plantilla = validarPlantilla(titulo, mensaje);
+    return plantilla && guardadas.length < maximoPlantillas - ejemplosPlantillas.length ?
+      guardadas.concat(plantilla) : null;
+  }
+
+  function borrarPlantilla(datos, indice) {
+    var guardadas = plantillasGuardadas(datos);
+    var posicion = indice - ejemplosPlantillas.length;
+    return guardadas.filter(function (_, i) { return i !== posicion; });
   }
 
   function barrasVersiones(versiones) {
@@ -99,10 +190,8 @@
   }
 
   function validarAviso(titulo, mensaje, audiencia, fechaFinal, ahora, fechaInicial) {
-    titulo = titulo.trim();
-    mensaje = mensaje.trim();
-    if (!titulo || Array.from(titulo).length > 80 || !mensaje || Array.from(mensaje).length > 500 ||
-        !["todos", "android", "web"].includes(audiencia)) return null;
+    var contenido = validarPlantilla(titulo, mensaje);
+    if (!contenido || !["todos", "android", "web"].includes(audiencia)) return null;
     var hasta = null;
     if (fechaFinal) {
       if (!/^\d{4}-\d{2}-\d{2}$/.test(fechaFinal)) return null;
@@ -113,7 +202,7 @@
       if (fin.getTime() <= ahora) return null;
       hasta = fin.toISOString();
     }
-    var aviso = { accion: "aviso_crear", titulo: titulo, mensaje: mensaje, audiencia: audiencia, hasta: hasta };
+    var aviso = { accion: "aviso_crear", titulo: contenido.titulo, mensaje: contenido.mensaje, audiencia: audiencia, hasta: hasta };
     if (fechaInicial) {
       if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(fechaInicial)) return null;
       var inicioUtc = new Date(fechaInicial + "Z");
@@ -177,6 +266,9 @@
   }
 
   var api = {
+    rangoDias: rangoDias, serieDiaria: serieDiaria, nuevosDesdeVisita: nuevosDesdeVisita, ayudaNumeros: ayudaNumeros,
+    validarPlantilla: validarPlantilla, listarPlantillas: listarPlantillas, agregarPlantilla: agregarPlantilla,
+    borrarPlantilla: borrarPlantilla, maximoPlantillas: maximoPlantillas,
     porcentajesEncuesta: porcentajesEncuesta, validarEncuesta: validarEncuesta,
     bytesAMegabytes: bytesAMegabytes, formatearTamano: formatearTamano, tablasMasGrandes: tablasMasGrandes,
     accionesDeCuenta: accionesDeCuenta, confirmaCorreo: confirmaCorreo,

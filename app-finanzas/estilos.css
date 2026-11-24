@@ -1111,3 +1111,33 @@ button.mini { padding: 6px 12px; border-radius: 999px; font-size: .8rem; }
 }
 
 .nota-nova-texto { white-space: pre-wrap; overflow-wrap: anywhere; }
+
+/* Controles del panel del dueño */
+#pantalla-dueno.dueno-resumen > :not(.dueno-en-resumen) { display: none; }
+.dueno-controles { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
+.dueno-controles select { width: auto; }
+.dueno-controles .dueno-interruptor { margin: 0; }
+.dueno-kpi { position: relative; }
+.dueno-ayuda-btn {
+  position: absolute; top: 4px; right: 4px; min-width: 28px; min-height: 28px;
+  padding: 0; border: 0; border-radius: 6px; background: transparent; cursor: pointer;
+}
+.dueno-ayuda-btn[aria-pressed="true"] { background: var(--line); }
+.dueno-ayuda-texto { margin: 4px 0 0; }
+.dueno-grafico-diario { position: relative; }
+.dueno-barras button {
+  position: relative; flex: 1; min-width: 0; align-self: stretch;
+  padding: 0; border: 0; background: transparent; cursor: pointer;
+}
+.dueno-barras button::after {
+  content: ""; position: absolute; inset: auto 0 0; height: var(--altura-barra); min-height: 2px;
+  background: var(--accent); border-radius: 3px 3px 0 0; opacity: .9;
+}
+.dueno-barras button.cero::after { background: var(--barra-vacia); }
+.dueno-barras button[aria-pressed="true"], .dueno-barras button:focus-visible { outline: 2px solid var(--ink); }
+.dueno-etiqueta-barra {
+  position: absolute; top: 0; left: 4px; z-index: 1; margin: 0; padding: 4px 8px;
+  border: 1px solid var(--line); border-radius: 6px; background: var(--surface); color: var(--ink);
+  pointer-events: none;
+}
+.dueno-plantillas summary { cursor: pointer; }

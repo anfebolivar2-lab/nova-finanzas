@@ -1304,11 +1304,27 @@
   </div>
 </div>
 <section id="pantalla-dueno" class="capa" aria-labelledby="pantalla-dueno-titulo" role="dialog" hidden>
-  <div class="sub-cabecera"><button type="button" class="icono-btn" data-cerrar aria-label="Volver"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button><h1 id="pantalla-dueno-titulo" tabindex="-1">👑 Panel del dueño</h1></div>
-  <p class="nota">Solo tu cuenta puede ver esto. <span id="dueno-hora"></span></p>
-  <p class="mensaje" id="dueno-mensaje" role="status"></p>
+  <div class="sub-cabecera dueno-en-resumen"><button type="button" class="icono-btn" data-cerrar aria-label="Volver"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button><h1 id="pantalla-dueno-titulo" tabindex="-1">👑 Panel del dueño</h1></div>
+  <p class="nota dueno-en-resumen">Solo tu cuenta puede ver esto. <span id="dueno-hora"></span></p>
+  <div class="dueno-controles dueno-en-resumen">
+    <label for="dueno-rango">Rango de los gráficos</label>
+    <select id="dueno-rango">
+      <option value="7">Últimos 7 días</option>
+      <option value="14">Últimos 14 días</option>
+      <option value="30" selected>Últimos 30 días</option>
+    </select>
+    <div class="dueno-filtros" role="group" aria-label="Vista del panel">
+      <button type="button" id="dueno-modo-resumen" aria-label="Resumen" aria-pressed="false">Resumen</button>
+      <button type="button" id="dueno-modo-detalle" aria-label="Detalle" aria-pressed="true">Detalle</button>
+    </div>
+    <label class="dueno-interruptor"><input id="dueno-auto" type="checkbox"> Actualizar cada minuto</label>
+    <button type="button" class="mini" id="dueno-copiar" aria-label="Copiar enlace directo">Copiar enlace directo</button>
+    <span id="dueno-actualizado" class="nota"></span>
+  </div>
+  <p id="dueno-nuevas-visita" class="tarjeta nota dueno-en-resumen" role="status" hidden></p>
+  <p class="mensaje dueno-en-resumen" id="dueno-mensaje" role="status"></p>
   <label class="dueno-interruptor"><input id="dueno-ocultar-prueba" type="checkbox"> Ocultar cuentas de prueba</label>
-  <article class="tarjeta formulario dueno-seccion">
+  <article class="tarjeta formulario dueno-seccion dueno-en-resumen">
     <h2 class="titulo-tarjeta">Estado</h2>
     <ul id="dueno-servicios" class="lista-banco"></ul>
     <div id="dueno-corrida" class="dueno-lista"></div>
@@ -1339,7 +1355,7 @@
     </div>
     <p id="dueno-config-mensaje" class="mensaje" role="status"></p>
   </article>
-  <details class="tarjeta dueno-seccion" open>
+  <details id="dueno-negocio" class="tarjeta dueno-seccion dueno-en-resumen" open>
     <summary>Negocio</summary>
     <div id="dueno-negocio-datos"></div>
     <h3>Costo mensual y por usuario activo</h3>
@@ -1440,8 +1456,8 @@
       <div id="dueno-eventos-recuadros" class="dueno-lista"></div>
     </div>
   </article>
-  <div id="dueno-kpis" class="dueno-kpis"></div>
-  <article class="tarjeta dueno-grafico"><h2 class="titulo-tarjeta">Personas que anotaron algo · últimos 30 días</h2><div id="dueno-activos"></div></article>
+  <div id="dueno-kpis" class="dueno-kpis dueno-en-resumen"></div>
+  <article class="tarjeta dueno-grafico"><h2 class="titulo-tarjeta">Personas que anotaron algo · últimos <span id="dueno-rango-activos">30</span> días</h2><div id="dueno-activos"></div></article>
   <article class="tarjeta dueno-grafico"><h2 class="titulo-tarjeta">Movimientos anotados por día</h2><div id="dueno-movs"></div></article>
   <article class="tarjeta dueno-grafico"><h2 class="titulo-tarjeta">Registros nuevos por día</h2><div id="dueno-registros"></div></article>
   <article class="tarjeta dueno-grafico"><h2 class="titulo-tarjeta">Chats con la IA por día</h2><div id="dueno-chats"></div></article>
@@ -1467,6 +1483,13 @@
       <input id="dueno-aviso-titulo" type="text" maxlength="80" required>
       <label for="dueno-aviso-texto">Mensaje</label>
       <textarea id="dueno-aviso-texto" rows="3" maxlength="500" required></textarea>
+      <details class="dueno-plantillas">
+        <summary>Plantillas de mensajes</summary>
+        <p class="nota">Hasta 10 plantillas en este navegador, incluidos los tres ejemplos.</p>
+        <button type="button" class="mini" id="dueno-plantilla-guardar" aria-label="Guardar como plantilla">Guardar como plantilla</button>
+        <p id="dueno-plantilla-mensaje" class="mensaje" role="status"></p>
+        <ul id="dueno-plantillas" class="lista-banco"></ul>
+      </details>
       <label for="dueno-aviso-audiencia">Quién lo verá</label>
       <select id="dueno-aviso-audiencia">
         <option value="todos">Todos</option><option value="android">Android</option><option value="web">Web</option>
@@ -1544,7 +1567,7 @@
     <a id="dueno-apk-avanzada" class="boton-apk" href="#" target="_blank" rel="noopener"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M7 10l5 5 5-5M5 21h14"/></svg><span><strong>Descargar NOVA avanzada</strong><small>Misma app, con lectura de avisos del banco</small></span></a>
   </article>
   <p class="nota centro">🔒 Por privacidad aquí no se ven los gastos, el dinero ni los movimientos de nadie: solo cuántos anotó y cuándo usó NOVA.<br>«Abrieron la app Android» y la versión se cuentan desde la 1.66, cuando cada persona abra la app.</p>
-  <button type="button" class="mini centro-bloque" id="dueno-recargar">↻ Actualizar</button>
+  <button type="button" class="mini centro-bloque dueno-en-resumen" id="dueno-recargar" aria-label="Recargar datos">↻ Actualizar</button>
 </section>
 <section id="pantalla-banco" class="capa" aria-labelledby="pantalla-banco-titulo" role="dialog" hidden>
   <div class="sub-cabecera"><button type="button" class="icono-btn" data-cerrar aria-label="Volver"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button><h1 id="pantalla-banco-titulo" tabindex="-1">Mensajes del banco</h1></div>

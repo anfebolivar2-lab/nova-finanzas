@@ -172,3 +172,82 @@ test("la confirmación exige el correo exacto", () => {
   assert.equal(confirmaCorreo("Ana@correo.test", "Ana@correo.test "), false);
   assert.equal(confirmaCorreo("", ""), false);
 });
+
+const { serieDiaria, rangoDias, nuevosDesdeVisita, ayudaNumeros, validarPlantilla,
+  listarPlantillas, agregarPlantilla, borrarPlantilla, maximoPlantillas } = require("./dueno.js");
+
+test("recorta y rellena series diarias sin modificar los datos originales", () => {
+  const ahora = "2026-11-24T00:30:00Z";
+  const filas = [
+    { dia: "2026-11-23", registros: 5, activos: 3 },
+    { dia: "2026-11-17", registros: 8, activos: 1 },
+    { dia: "2026-11-25", registros: 99, activos: 99 }
+  ].map(Object.freeze);
+  const siete = serieDiaria(Object.freeze(filas), ahora, 7, ["registros", "activos"]);
+  assert.equal(siete.length, 7);
+  assert.deepEqual(siete[0], { dia: "2026-11-18", registros: 0, activos: 0 });
+  assert.deepEqual(siete[5], filas[0]);
+  assert.notEqual(siete[5], filas[0]);
+  assert.deepEqual(siete[6], { dia: "2026-11-24", registros: 0, activos: 0 });
+  const catorce = serieDiaria({ "2026-11-23": 5, "2026-11-24": -2 }, ahora, 14, ["total"]);
+  assert.equal(catorce.length, 14);
+  assert.deepEqual(catorce.slice(-2), [{ dia: "2026-11-23", total: 5 }, { dia: "2026-11-24", total: 0 }]);
+  assert.equal(serieDiaria(null, ahora, 90, ["total"]).length, 30);
+  assert.deepEqual(serieDiaria(null, "fecha inválida", 7, ["total"]), []);
+  assert.equal(rangoDias("7"), 30);
+});
+
+test("cuenta registros reales posteriores a la visita y hasta la apertura", () => {
+  const visita = Date.parse("2026-11-20T12:00:00Z");
+  const apertura = "2026-11-24T00:00:00Z";
+  const personas = [
+    { registro: "2026-11-20T12:00:00Z" },
+    { registro: "2026-11-21T12:00:00Z" },
+    { registro: apertura },
+    { registro: "2026-11-22T12:00:00Z", prueba: true },
+    { registro: "2026-11-24T00:00:01Z" },
+    { registro: "sin fecha" },
+    null
+  ];
+  assert.equal(nuevosDesdeVisita(personas, visita, apertura), 2);
+  assert.equal(nuevosDesdeVisita(personas, null, apertura), 0);
+  assert.equal(nuevosDesdeVisita(personas, apertura, apertura), 0);
+  assert.equal(nuevosDesdeVisita([personas[0], personas[3]], visita, apertura), 0);
+});
+
+test("cada indicador tiene una explicación breve y con contenido", () => {
+  assert.equal(Object.keys(ayudaNumeros).length, 24);
+  Object.values(ayudaNumeros).forEach((texto) => {
+    assert.equal(typeof texto, "string");
+    assert.ok(texto.trim().length > 0 && texto.length <= 160);
+  });
+});
+
+test("valida plantillas con los mismos límites que los avisos", () => {
+  const titulo = "á".repeat(80), mensaje = "🚀".repeat(500);
+  assert.deepEqual(validarPlantilla(" " + titulo, mensaje + " "), { titulo, mensaje });
+  assert.equal(validarPlantilla(titulo + "x", mensaje), null);
+  assert.equal(validarPlantilla(titulo, mensaje + "x"), null);
+  assert.equal(validarPlantilla(" ", mensaje), null);
+  assert.equal(validarPlantilla(titulo, " "), null);
+  assert.equal(validarPlantilla(null, mensaje), null);
+});
+
+test("protege los ejemplos y limita el total de plantillas a diez", () => {
+  const ejemplos = listarPlantillas(null);
+  assert.equal(ejemplos.length, 3);
+  assert.ok(ejemplos.every((fila) => fila.fabrica && validarPlantilla(fila.titulo, fila.mensaje)));
+  let guardadas = [];
+  for (let i = ejemplos.length; i < maximoPlantillas; i++) {
+    guardadas = agregarPlantilla(Object.freeze(guardadas), "Aviso " + i, "Mensaje");
+  }
+  assert.equal(listarPlantillas(guardadas).length, 10);
+  assert.equal(agregarPlantilla(guardadas, "Una más", "Mensaje"), null);
+  assert.deepEqual(borrarPlantilla(guardadas, 0), guardadas);
+  const restantes = borrarPlantilla(guardadas, 3);
+  assert.equal(restantes.length, 6);
+  assert.equal(restantes[0].titulo, "Aviso 4");
+  assert.deepEqual(listarPlantillas([null, {}, { titulo: "", mensaje: "Inválido" }]), ejemplos);
+  ejemplos[0].titulo = "Cambiado";
+  assert.equal(listarPlantillas(null)[0].titulo, "Nueva versión");
+});
