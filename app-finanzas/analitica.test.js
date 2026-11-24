@@ -313,3 +313,25 @@ test("agrupa el cupo en el rango elegido según UTC y completa días sin errores
     assert.equal(serie.reduce((suma, fila) => suma + fila.total, 0), 9);
   }
 });
+
+test("prepara atribución vacía para respuestas sin datos", () => {
+  assert.deepEqual(A.prepararAtribucion(), { origenes: [], total: 0, top: [] });
+  assert.deepEqual(A.prepararAtribucion({ origenes: [], referidos: {} }), A.prepararAtribucion());
+});
+
+test("muestra un solo origen con barra completa y el referido en la ficha", () => {
+  const top = [{ correo: "ana@nova.test", invitados: 1 }];
+  assert.deepEqual(A.prepararAtribucion({ origenes: [{ nombre: "qr", total: 2 }], referidos: { total: 1, top } }), {
+    origenes: [{ nombre: "Código QR", total: 2, porcentaje: 100 }],
+    total: 1,
+    top
+  });
+  const ficha = A.fichaUsuario({ origen: "whatsapp", referidoPor: top[0].correo }, ahora);
+  assert.equal(ficha.origen, "WhatsApp");
+  assert.equal(ficha.referidoPor, top[0].correo);
+  assert.equal(A.fichaUsuario({ origen: "constructor" }, ahora).origen, "constructor");
+  assert.deepEqual(A.enlacesOrigen("https://nova.test/").map((fila) => fila.url), [
+    "https://nova.test/?o=qr", "https://nova.test/?o=whatsapp", "https://nova.test/?o=instagram",
+    "https://nova.test/?o=facebook", "https://nova.test/?o=tiktok", "https://nova.test/?o=amigos"
+  ]);
+});

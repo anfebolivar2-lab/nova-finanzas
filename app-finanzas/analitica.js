@@ -328,6 +328,8 @@
     camposCsv.forEach(function (campo) { ficha[campo] = p[campo]; });
     var dias = diasAnotados(p, ahora), hoy = diaLocal(ahora);
     ficha.diasActivos30 = Array.isArray(p.dias) ? ultimos(dias, hoy, 30) : null;
+    ficha.origen = p.origen ? nombreOrigen(p.origen) : "";
+    ficha.referidoPor = p.referidoPor || "";
     ficha.racha = Array.isArray(p.dias) ? 0 : null;
     var dia = dias.has(hoy) ? hoy : hoy - 1;
     while (dias.has(dia)) { ficha.racha++; dia--; }
@@ -341,6 +343,33 @@
   function barras(filas) {
     var maximo = filas.reduce(function (max, fila) { return Math.max(max, fila.total); }, 0);
     return filas.map(function (fila) { return Object.assign({}, fila, { porcentaje: porcentaje(fila.total, maximo) }); });
+  }
+
+  var nombresOrigen = Object.assign(Object.create(null), {
+    qr: "Código QR", whatsapp: "WhatsApp", instagram: "Instagram", facebook: "Facebook",
+    tiktok: "TikTok", amigos: "Amigos", descarga: "Página de descarga", directo: "Directo"
+  });
+
+  function nombreOrigen(clave) { return nombresOrigen[clave] || clave; }
+
+  function prepararAtribucion(datos) {
+    datos = datos || {};
+    var referidos = datos.referidos || {};
+    var origenes = lista(datos.origenes).filter(function (fila) {
+      return typeof fila.nombre === "string" && fila.nombre && cantidad(fila.total) > 0;
+    }).map(function (fila) {
+      return { nombre: nombreOrigen(fila.nombre), total: fila.total };
+    }).sort(function (a, b) { return b.total - a.total; });
+    var top = lista(referidos.top).filter(function (fila) {
+      return typeof fila.correo === "string" && fila.correo && cantidad(fila.invitados) > 0;
+    }).sort(function (a, b) { return b.invitados - a.invitados; }).slice(0, 5);
+    return { origenes: barras(origenes), total: cantidad(referidos.total) || 0, top: top };
+  }
+
+  function enlacesOrigen(base) {
+    return ["qr", "whatsapp", "instagram", "facebook", "tiktok", "amigos"].map(function (clave) {
+      return { clave: clave, nombre: nombreOrigen(clave), url: base + "?o=" + clave };
+    });
   }
 
   var temasIA = Object.assign(Object.create(null), {
@@ -420,6 +449,7 @@
   }
 
   var api = {
+    prepararAtribucion: prepararAtribucion, enlacesOrigen: enlacesOrigen,
     prepararUso: prepararUso, prepararIA: prepararIA, cupoIAPorDia: cupoIAPorDia,
     nuevosPor: nuevosPor, crecimientoAcumulado: crecimientoAcumulado, usoActivo: usoActivo,
     retencion: retencion, cohortes: cohortes, segmentos: segmentos, etiquetasSemana: etiquetasSemana,

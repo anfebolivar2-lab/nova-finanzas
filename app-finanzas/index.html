@@ -614,6 +614,7 @@
 
       <h2 class="grupo-ajustes">Sobre NOVA</h2>
       <div class="menu">
+        <button type="button" id="btn-invitar" data-ir="ajustes-invitar" hidden><span class="menu-icono">↗</span><span><strong>Invita a un amigo</strong></span></button>
         <button type="button" id="btn-sugerencia"><span class="menu-icono" aria-hidden="true">💬</span><strong>Enviar una sugerencia</strong></button>
         <a class="menu-fila" href="ayuda.html" target="_blank" rel="noopener"><span class="menu-icono" aria-hidden="true">❔</span><span>Ayuda y preguntas frecuentes</span></a>
         <a class="menu-fila" href="inicio.html" target="_blank" rel="noopener"><span class="menu-icono" aria-hidden="true">✦</span><span>Sobre NOVA</span></a>
@@ -742,6 +743,19 @@
       </details>
       <p class="nota centro creditos">NOVA · Creada por <strong>OPITA-DIGITAL</strong><br>© 2026. Todos los derechos reservados.</p>
       <button type="button" id="btn-salir" class="peligro">Cerrar sesión</button>
+    </section>
+
+    <section class="vista" data-vista="ajustes-invitar" hidden>
+      <div class="sub-cabecera"><button type="button" class="icono-btn" data-ir="ajustes" aria-label="Volver"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button><h1>Invita a un amigo</h1></div>
+      <article class="tarjeta formulario">
+        <label for="invitar-enlace">Tu enlace de invitación</label>
+        <input id="invitar-enlace" type="text" readonly>
+        <div>
+          <button type="button" id="invitar-compartir" class="mini" disabled>Compartir</button>
+          <button type="button" id="invitar-copiar" class="mini" disabled>Copiar</button>
+        </div>
+        <p class="mensaje" id="invitar-mensaje" role="status"></p>
+      </article>
     </section>
 
     <!-- Configuración: periodo de presupuesto -->
@@ -1379,6 +1393,20 @@
     <div id="dueno-crecimiento"></div>
   </details>
   <details class="tarjeta dueno-seccion" open>
+    <summary>De dónde llegan</summary>
+    <div id="dueno-origenes" class="dueno-lista"></div>
+  </details>
+  <details class="tarjeta dueno-seccion" open>
+    <summary>Referidos</summary>
+    <p id="dueno-referidos-total"></p>
+    <ol id="dueno-referidos-top"></ol>
+  </details>
+  <details class="tarjeta dueno-seccion" open>
+    <summary>Enlaces para compartir</summary>
+    <p class="nota">Pon cada enlace donde corresponda para saber de dónde llegan las personas</p>
+    <div id="dueno-enlaces-origen" class="dueno-lista"></div>
+  </details>
+  <details class="tarjeta dueno-seccion" open>
     <summary>Uso</summary>
     <div id="dueno-uso" class="dueno-kpis"></div>
     <h3>Horas con más uso (Colombia)</h3>
@@ -1865,6 +1893,7 @@
 <script src="calculadoras.js"></script>
 <script src="inversiones.js"></script>
 <script src="eventos.js"></script>
+<script src="origen.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

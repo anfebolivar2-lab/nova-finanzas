@@ -329,8 +329,8 @@ Ideas para el panel del dueño. El panel muestra cómo se usa la app, nunca los 
 - ✅ Costo mensual estimado (Supabase, Vercel, IA).
 - ✅ Costo por usuario activo.
 - ✅ Proyección de usuarios a 3 y 6 meses.
-- De dónde llegan los usuarios (enlace, QR, referido).
-- Programa de referidos: quién invitó a quién.
+- ✅ De dónde llegan los usuarios (enlace, QR, referido).
+- ✅ Programa de referidos: quién invitó a quién.
 - ✅ Comparar este mes con el mes pasado en todo.
 - ✅ Informe mensual en PDF para compartir.
 - ✅ Exportar todas las estadísticas a Excel.

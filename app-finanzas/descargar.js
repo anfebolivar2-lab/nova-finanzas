@@ -1,6 +1,9 @@
 // Página de descarga: elige qué APK ofrecer y avisa cuando empieza la descarga. Sin datos de nadie.
 (function () {
   "use strict";
+  document.querySelectorAll("[data-atribucion]").forEach(function (enlace) {
+    enlace.href = window.NovaOrigen.enlaceConAtribucion(enlace.href, window.location.href, "descarga");
+  });
   var base = "https://github.com/anfebolivar2-lab/nova-finanzas/releases/download/nova-android/";
   var boton = document.getElementById("descargar-boton");
   var estado = document.getElementById("descarga-estado");

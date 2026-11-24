@@ -1,4 +1,4 @@
-// nova-dueno v9: panel del dueño de NOVA. Cuenta cuántas personas se registraron, cuántas la usan, cuántas veces se
+// nova-dueno v10: panel del dueño de NOVA. Cuenta cuántas personas se registraron, cuántas la usan, cuántas veces se
 // descargó la APK y qué funciones usan. Solo responde a la cuenta del dueño (DUENOS).
 // Por privacidad NO devuelve montos ni movimientos de nadie: solo cuántos hay y cuándo se usó la app.
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
@@ -21,6 +21,50 @@ const responder = (estado: number, cuerpo: unknown) =>
 const adm = { Authorization: `Bearer ${SERVICIO}`, apikey: SERVICIO };
 
 type Usuario = { id: string; email?: string; created_at?: string; last_sign_in_at?: string | null; email_confirmed_at?: string | null; banned_until?: string | null; user_metadata?: Record<string, unknown> };
+
+async function codigoRef(id: string): Promise<string> {
+  const hash = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(id));
+  return Array.from(new Uint8Array(hash).slice(0, 4), (byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+
+function esPrueba(u: Usuario): boolean {
+  return /@example\.com$/i.test(u.email || "");
+}
+
+async function atribucionUsuarios(lista: Usuario[]) {
+  const porCodigo = new Map<string, Usuario | null>();
+  const codigos = await Promise.all(lista.map((u) => codigoRef(u.id)));
+  lista.forEach((u, i) => {
+    const codigo = codigos[i];
+    porCodigo.set(codigo, porCodigo.has(codigo) ? null : u);
+  });
+
+  const porUsuario = new Map<string, { origen: string; referidoPor: string }>();
+  const porOrigen = new Map<string, number>();
+  const porPersona = new Map<Usuario, number>();
+  let total = 0;
+  for (const u of lista) {
+    const md = u.user_metadata || {};
+    const origen = typeof md.nova_origen === "string" && /^[a-z0-9_-]{1,30}$/.test(md.nova_origen) ? md.nova_origen : "";
+    const codigo = md.nova_referido_por;
+    const quien = typeof codigo === "string" && /^[0-9a-f]{8}$/.test(codigo) ? porCodigo.get(codigo) : null;
+    const invitador = quien && quien.id !== u.id ? quien : null;
+    porUsuario.set(u.id, { origen, referidoPor: invitador?.email || "" });
+    if (esPrueba(u)) continue;
+
+    const nombre = origen || "directo";
+    porOrigen.set(nombre, (porOrigen.get(nombre) || 0) + 1);
+    if (invitador?.email && !esPrueba(invitador)) {
+      total++;
+      porPersona.set(invitador, (porPersona.get(invitador) || 0) + 1);
+    }
+  }
+  const origenes = Array.from(porOrigen, ([nombre, total]) => ({ nombre, total }))
+    .sort((a, b) => b.total - a.total || a.nombre.localeCompare(b.nombre));
+  const top = Array.from(porPersona, ([u, invitados]) => ({ correo: u.email, invitados }))
+    .sort((a, b) => b.invitados - a.invitados || (a.correo || "").localeCompare(b.correo || "")).slice(0, 5);
+  return { porUsuario, origenes, referidos: { total, top } };
+}
 
 async function usuarios(): Promise<Usuario[]> {
   const todos: Usuario[] = [];
@@ -565,6 +609,8 @@ Deno.serve(async (req) => {
     const chatsU = contar(chats), metasU = contar(metas), espaciosU = contar(espacios);
     const conductores = new Set(perfiles.filter((p) => p.modo_conductor).map((p) => String(p.user_id)));
 
+    const { porUsuario: atribucion, origenes, referidos } = await atribucionUsuarios(lista);
+
     // Último uso: lo más reciente entre entrar, abrir la app (lo anota la app) y anotar un movimiento.
     const personas = lista.map((u) => {
       const md = u.user_metadata || {};
@@ -572,7 +618,8 @@ Deno.serve(async (req) => {
       const ultimoUso = [u.last_sign_in_at || "", visto, porUsuario[u.id]?.ultimo || ""].sort().pop() || "";
       return {
         id: u.id, bloqueado: Date.parse(u.banned_until || "") > ahora,
-        correo: u.email || "(sin correo)", prueba: /@example\.com$/i.test(u.email || ""), dueno: DUENOS.includes(u.id),
+        correo: u.email || "(sin correo)", prueba: esPrueba(u), dueno: DUENOS.includes(u.id),
+        ...atribucion.get(u.id),
         registro: u.created_at || "", confirmado: !!u.email_confirmed_at, ultimoUso,
         plataforma: String(md.nova_plataforma || ""), version: String(md.nova_version || ""),
         movimientos: porUsuario[u.id]?.movs || 0, chats: chatsU[u.id] || 0, metas: metasU[u.id] || 0, espacios: espaciosU[u.id] || 0,
@@ -607,7 +654,7 @@ Deno.serve(async (req) => {
         movimientos: movs.length, chats: chats.length, metas: metas.length, espacios: espacios.length, conductores: conductores.size,
         pruebas: personas.length - reales.length,
       },
-      versiones, dias, personas,
+      versiones, dias, personas, origenes, referidos,
       horas, semana, monedas, fotos: { total: fotos, personas: usuariosConFoto.size },
       adopcion: await adopcionPanel(),
       ...(await estadoPanel().then((e) => ({ estado: e })).catch(() => ({ estado: null }))),
