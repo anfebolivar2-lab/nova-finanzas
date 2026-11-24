@@ -2,6 +2,27 @@
   "use strict";
 
   var cfg = window.NOVA_CONFIG || {};
+  var Origen = window.NovaOrigen;
+  var clavesAtribucion = { o: "nova-origen", r: "nova-referido-por" };
+  function leerAtribucion() {
+    try {
+      return { o: localStorage.getItem(clavesAtribucion.o), r: localStorage.getItem(clavesAtribucion.r) };
+    } catch (e) { return {}; }
+  }
+  function capturarAtribucion() {
+    var url = new URL(location.href);
+    if (!url.searchParams.has("o") && !url.searchParams.has("r")) return;
+    var guardada = leerAtribucion();
+    var primera = Origen.primeraAtribucion(guardada, { o: url.searchParams.get("o"), r: url.searchParams.get("r") });
+    ["o", "r"].forEach(function (clave) {
+      if (primera[clave] && primera[clave] !== guardada[clave]) {
+        try { localStorage.setItem(clavesAtribucion[clave], primera[clave]); } catch (e) { /* almacenamiento bloqueado */ }
+      }
+      url.searchParams.delete(clave);
+    });
+    try { history.replaceState(history.state, "", url.href); } catch (e) { /* historial bloqueado */ }
+  }
+  capturarAtribucion();
   var Parser = window.NovaParser;
   var A = window.NovaAnalisis;
   var Inv = window.NovaInversiones;
@@ -5369,6 +5390,7 @@
   // ---------- Navegación ----------
   var PRINCIPALES = ["inicio", "planes", "ia", "analisis", "buscar", "ajustes"];
   function ir(vista) {
+    if (vista === "ajustes-invitar" && (!fuente || fuente.demo)) vista = "ajustes";
     document.querySelectorAll(".vista").forEach(function (v) { v.hidden = v.dataset.vista !== vista; });
     var principal = PRINCIPALES.indexOf(vista) >= 0 ? vista : vista === "trabajo" ? "inicio" : "ajustes";
     document.querySelectorAll(".nav-inferior button").forEach(function (b) {
@@ -5382,6 +5404,7 @@
     if (vista === "buscar") pintarBuscar();
     if (vista === "ia") pintarIA();
     if (vista === "ajustes-tasas") abrirTasas();
+    if (vista === "ajustes-invitar") pintarInvitacion();
     window.scrollTo(0, 0);
   }
   // El botón + se esconde donde estorba: en pantallas de configuración y mientras se ve la entrada rápida del inicio.
@@ -6913,7 +6936,7 @@
     return cliente.auth.getSession().then(function (r) {
       var s = r.data && r.data.session;
       if (origen !== fuente || !s || !s.user || s.user.id !== id) return null;
-      return tarea();
+      return tarea(s);
     });
   }
 
@@ -7236,15 +7259,60 @@
     }).finally(function () { boton.disabled = false; });
   });
 
+  function copiarEnlace(url) {
+    Promise.resolve().then(function () { return navigator.clipboard.writeText(url); }).then(function () {
+      toast("Enlace copiado");
+    }).catch(function () { window.prompt("Copia el enlace", url); });
+  }
+
+  async function pintarInvitacion() {
+    var cuenta = fuente;
+    var enlace = $("invitar-enlace"), compartir = $("invitar-compartir"), copiar = $("invitar-copiar");
+    enlace.value = "";
+    compartir.disabled = copiar.disabled = true;
+    mensaje("invitar-mensaje", "");
+    var codigo = await Origen.codigoRef(idUsuario()).catch(function () { return null; });
+    if (cuenta !== fuente || enVista !== "ajustes-invitar") return;
+    if (!codigo) return mensaje("invitar-mensaje", "No se pudo generar el enlace en este dispositivo.", true);
+    enlace.value = location.origin + location.pathname + "?r=" + codigo;
+    compartir.disabled = copiar.disabled = false;
+  }
+  $("invitar-compartir").addEventListener("click", function () {
+    var url = $("invitar-enlace").value;
+    if (!fuente || fuente.demo || !url) return;
+    var texto = "Te invito a probar NOVA.";
+    if (navigator.share) navigator.share({ text: texto, url: url }).catch(function () { /* cancelado */ });
+    else window.open("https://wa.me/?text=" + encodeURIComponent(texto + " " + url), "_blank", "noopener");
+  });
+  $("invitar-copiar").addEventListener("click", function () {
+    var url = $("invitar-enlace").value;
+    if (fuente && !fuente.demo && url) copiarEnlace(url);
+  });
+
   function marcarUso() {
     if (!permitirEventos || !cliente || !fuente || fuente.demo || !idUsuario()) return;
-    var origen = fuente, claveUso = "nova-uso-" + idUsuario(), hoyK = A.claveDia(new Date());
-    if (leerLocal(claveUso, "") === hoyK) return;
-    versionParaNube().then(function (v) {
-      return conSesionNube(origen, function () {
-        if (permitirEventos) return cliente.auth.updateUser({ data: { nova_visto: new Date().toISOString(), nova_plataforma: plataformaNova, nova_version: v } });
+    var origen = fuente, id = idUsuario(), claveUso = "nova-uso-" + id, hoyK = A.claveDia(new Date());
+    var vistoHoy = leerLocal(claveUso, "") === hoyK;
+    var guardada = leerAtribucion();
+    if (vistoHoy && !guardada.o && !guardada.r) return;
+    var codigo = guardada.r ? Origen.codigoRef(id).catch(function () { return null; }) : Promise.resolve(null);
+    Promise.all([versionParaNube(), codigo]).then(function (resultados) {
+      return conSesionNube(origen, async function (sesion) {
+        var propio = resultados[1];
+        var cambios = Origen.metadataAtribucion(sesion.user.user_metadata || {}, guardada, propio);
+        if (Object.keys(cambios).length) {
+          var actual = await cliente.auth.getUser();
+          if (actual.error || !actual.data.user || actual.data.user.id !== id) return null;
+          cambios = Origen.metadataAtribucion(actual.data.user.user_metadata || {}, guardada, propio);
+        }
+        if (!permitirEventos || origen !== fuente || id !== idUsuario() ||
+            (vistoHoy && !Object.keys(cambios).length)) return null;
+        cambios.nova_visto = new Date().toISOString();
+        cambios.nova_plataforma = plataformaNova;
+        cambios.nova_version = resultados[0];
+        return cliente.auth.updateUser({ data: cambios });
       });
-    }).then(function (r) { if (r && !r.error) guardarLocal(claveUso, hoyK); }).catch(function () { /* se intenta mañana */ });
+    }).then(function (r) { if (r && !r.error) guardarLocal(claveUso, hoyK); }).catch(function () { /* se intenta al volver a entrar */ });
   }
   var numDueno = new Intl.NumberFormat("es-CO");
   var personasDueno = null;
@@ -7834,6 +7902,36 @@
     if (soyDueno()) window.print();
   });
 
+  function pintarAtribucionDueno(d) {
+    var datos = Analitica.prepararAtribucion(d);
+    barrasHorizontalesDueno("dueno-origenes", datos.origenes);
+    if (!datos.origenes.length) $("dueno-origenes").append(el("p", "nota", "Todavía no hay datos de origen."));
+    $("dueno-referidos-total").textContent = pl(datos.total, "persona invitada por amigos", "personas invitadas por amigos");
+    var top = $("dueno-referidos-top");
+    top.replaceChildren();
+    datos.top.forEach(function (fila) {
+      top.append(el("li", null, fila.correo + " · " + pl(fila.invitados, "persona invitada", "personas invitadas")));
+    });
+    var enlaces = $("dueno-enlaces-origen");
+    if (enlaces.childElementCount) return;
+    Analitica.enlacesOrigen(location.origin + location.pathname).forEach(function (fila) {
+      var grupo = el("div");
+      var etiqueta = el("label", null, fila.nombre);
+      var campo = el("input");
+      campo.type = "text";
+      campo.readOnly = true;
+      campo.value = fila.url;
+      campo.id = "dueno-enlace-" + fila.clave;
+      etiqueta.htmlFor = campo.id;
+      var boton = el("button", "mini", "Copiar");
+      boton.type = "button";
+      boton.setAttribute("aria-label", "Copiar enlace de " + fila.nombre);
+      boton.addEventListener("click", function () { copiarEnlace(fila.url); });
+      grupo.append(etiqueta, campo, boton);
+      enlaces.append(grupo);
+    });
+  }
+
   function pintarAnaliticaDueno(d, ahora) {
     var todas = Dueno.personasVisibles(d.personas, false);
     var personas = Dueno.personasVisibles(todas, ocultarPruebaDueno.checked);
@@ -8012,6 +8110,8 @@
     ].forEach(function (fila) {
       datos.append(el("dt", null, fila[0]), el("dd", null, fila[1] == null || fila[1] === "" ? "Sin dato" : String(fila[1])));
     });
+    if (ficha.origen) datos.append(el("dt", null, "Llegó desde"), el("dd", null, ficha.origen));
+    if (ficha.referidoPor) datos.append(el("dt", null, "Invitada por"), el("dd", null, ficha.referidoPor));
     var acciones = $("dueno-ficha-acciones");
     acciones.replaceChildren();
     Dueno.accionesDeCuenta(persona).forEach(function (accion) {
@@ -8207,6 +8307,7 @@
     registrosMetaDueno = Dueno.registrosParaMeta(r.nuevos30, Array.isArray(d.dias) ? d.dias : []);
     pintarMetaDueno();
     pintarEstadoDueno(d.estado);
+    pintarAtribucionDueno(d);
     pintarSaludDueno(d.salud);
     pintarListasDueno(d, errores);
     pintarUsoEventos(d.uso, d.generado || ahora);
@@ -10310,6 +10411,7 @@
     reiniciarChat();
     desfaseInicio = 0; desfaseAnalisis = 0;
     $("aviso-demo").hidden = !fuente.demo;
+    $("btn-invitar").hidden = fuente.demo || !idUsuario();
     $("cargando").hidden = false;
     return fuente.cargar().then(function (d) {
       datos = Object.assign(datosVacios(), d);
