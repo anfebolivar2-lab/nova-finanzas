@@ -1044,6 +1044,12 @@ button.mini { padding: 6px 12px; border-radius: 999px; font-size: .8rem; }
 .dueno-abrir-ficha { background: none; border: 0; padding: 0; text-align: left; color: var(--ink); cursor: pointer; }
 .dueno-correo { text-decoration: underline; }
 #pantalla-dueno .dueno-ficha { width: min(420px, calc(100% - 32px)); max-height: 85dvh; margin: auto; color: var(--ink); background: var(--surface); }
+#dueno-ficha-acciones { margin-bottom: 12px; }
+#dueno-confirmar-objetivo { overflow-wrap: anywhere; }
+#dueno-confirmar-enviar.peligro { background: #ad2922; border-color: #ad2922; color: #fff; }
+#dueno-bd-barra { width: 100%; accent-color: var(--accent); }
+#dueno-bd-tablas { margin: 0; padding-inline-start: 1.5em; overflow-wrap: anywhere; }
+#dueno-bd-tablas:empty { display: none; }
 .dueno-ficha::backdrop { background: #0008; }
 .dueno-ficha dl { display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); gap: 8px; }
 .dueno-ficha dd { margin: 0; text-align: right; }

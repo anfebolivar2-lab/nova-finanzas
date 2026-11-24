@@ -7618,6 +7618,79 @@
     if (!apk) $("dueno-reparto-apk").append(el("p", "nota", "Todavía no hay descargas por archivo."));
     pintarPersonasDueno();
   }
+  var textosCuentaDueno = {
+    cuenta_bloquear: ["Bloquear cuenta", "Sí, bloquear", "Cuenta bloqueada.", "Bloqueo de cuenta"],
+    cuenta_desbloquear: ["Desbloquear cuenta", "Sí, desbloquear", "Cuenta desbloqueada.", "Desbloqueo de cuenta"],
+    cuenta_reenviar_confirmacion: ["Reenviar correo de confirmación", "Sí, reenviar", "Correo de confirmación reenviado.", "Reenvío de confirmación"]
+  };
+  var confirmacionCuenta = $("dueno-confirmar-cuenta"), correoCuenta = $("dueno-confirmar-correo");
+  var enviarCuenta = $("dueno-confirmar-enviar"), cancelarCuenta = $("dueno-confirmar-cancelar");
+  var cuentaPendiente = null, actuandoCuenta = false;
+
+  function validarCorreoCuenta() {
+    enviarCuenta.disabled = actuandoCuenta || !cuentaPendiente ||
+      !Dueno.confirmaCorreo(cuentaPendiente.persona.correo, correoCuenta.value);
+  }
+
+  function confirmarCuentaDueno(persona, accion) {
+    if (!soyDueno() || actuandoCuenta) return;
+    var textos = textosCuentaDueno[accion];
+    cuentaPendiente = { persona: persona, accion: accion };
+    $("dueno-confirmar-titulo").textContent = textos[0];
+    $("dueno-confirmar-objetivo").textContent = persona.correo;
+    enviarCuenta.textContent = textos[1];
+    enviarCuenta.classList.toggle("peligro", accion === "cuenta_bloquear");
+    correoCuenta.value = "";
+    mensaje("dueno-confirmar-mensaje", "");
+    validarCorreoCuenta();
+    confirmacionCuenta.showModal();
+  }
+
+  function datosDeFuncionDueno(res, fallo) {
+    if (!res.error && res.data) return res.data;
+    var contexto = res.error && res.error.context;
+    if (contexto && typeof contexto.json === "function") {
+      return contexto.json().catch(function () { return null; }).then(function (cuerpo) {
+        throw new Error(cuerpo && typeof cuerpo.error === "string" ? cuerpo.error : fallo);
+      });
+    }
+    throw new Error(fallo);
+  }
+
+  correoCuenta.addEventListener("input", validarCorreoCuenta);
+  cancelarCuenta.addEventListener("click", function () { confirmacionCuenta.close(); });
+  confirmacionCuenta.addEventListener("cancel", function (e) { if (actuandoCuenta) e.preventDefault(); });
+  $("dueno-confirmar-form").addEventListener("submit", function (e) {
+    e.preventDefault();
+    validarCorreoCuenta();
+    if (enviarCuenta.disabled || !soyDueno()) return;
+    var cambio = cuentaPendiente, origen = fuente;
+    var fallo = "No se pudo completar la acción.";
+    actuandoCuenta = true;
+    enviarCuenta.disabled = cancelarCuenta.disabled = correoCuenta.disabled = true;
+    mensaje("dueno-confirmar-mensaje", "Aplicando el cambio…");
+    cliente.functions.invoke("nova-dueno", { body: { accion: cambio.accion, id: cambio.persona.id } })
+      .then(function (res) { return datosDeFuncionDueno(res, fallo); })
+      .then(function (res) {
+        if (!res.ok) throw new Error(fallo);
+        confirmacionCuenta.close();
+        $("dueno-ficha").close();
+        if (origen !== fuente || !soyDueno()) return;
+        $("dueno-cuenta-mensaje").hidden = false;
+        var exito = textosCuentaDueno[cambio.accion][2];
+        if (res.auditoria === false) exito += " No se pudo guardar en el historial.";
+        mensaje("dueno-cuenta-mensaje", exito);
+        toast(exito);
+        return cargarDueno();
+      }).catch(function (error) {
+        if (origen === fuente && soyDueno()) mensaje("dueno-confirmar-mensaje", error.message || fallo, true);
+      }).finally(function () {
+        actuandoCuenta = false;
+        cancelarCuenta.disabled = correoCuenta.disabled = false;
+        validarCorreoCuenta();
+      });
+  });
+
   function abrirFichaDueno(persona) {
     var ficha = Analitica.fichaUsuario(persona, Date.now());
     $("dueno-ficha-correo").textContent = ficha.correo || "Sin correo";
@@ -7631,6 +7704,14 @@
       ["Racha actual de días anotando", ficha.racha]
     ].forEach(function (fila) {
       datos.append(el("dt", null, fila[0]), el("dd", null, fila[1] == null || fila[1] === "" ? "Sin dato" : String(fila[1])));
+    });
+    var acciones = $("dueno-ficha-acciones");
+    acciones.replaceChildren();
+    Dueno.accionesDeCuenta(persona).forEach(function (accion) {
+      var boton = el("button", accion === "cuenta_bloquear" ? "mini peligro" : "mini", textosCuentaDueno[accion][0]);
+      boton.type = "button";
+      boton.addEventListener("click", function () { confirmarCuentaDueno(persona, accion); });
+      acciones.append(boton);
     });
     $("dueno-ficha").showModal();
   }
@@ -7682,6 +7763,65 @@
     if (!recuadros.length) $("dueno-eventos-recuadros").append(el("p", "nota", "Sin recuadros ocultados."));
   }
 
+  function pintarSaludDueno(salud) {
+    salud = salud || {};
+    var bd = salud.bd, fotos = salud.fotos, acciones = salud.acciones;
+    var barra = $("dueno-bd-barra"), tablas = $("dueno-bd-tablas");
+    barra.hidden = !bd;
+    $("dueno-bd-tamano").textContent = bd ? Dueno.formatearTamano(bd.bytes) + " de 500 MB del plan gratis" : "Tamaño de la base de datos no disponible.";
+    tablas.replaceChildren();
+    if (bd) {
+      barra.value = Dueno.bytesAMegabytes(bd.bytes);
+      Dueno.tablasMasGrandes(bd.tablas).forEach(function (tabla) {
+        tablas.append(el("li", null, tabla.tabla + " · " + Dueno.formatearTamano(tabla.bytes)));
+      });
+    }
+    $("dueno-salud-fotos").textContent = fotos ? pl(fotos.archivos, "archivo", "archivos") + " · " +
+      Dueno.formatearTamano(fotos.bytes) + (fotos.archivos >= 5000 ? " (conteo limitado a 5.000 archivos)" : "") : "Datos de fotos no disponibles.";
+    listaDueno("dueno-salud-acciones", acciones || [], acciones ? "Todavía no hay acciones registradas." : "Historial no disponible.", function (li, fila) {
+      var textos = textosCuentaDueno[fila.accion];
+      li.append(el("strong", null, textos ? textos[3] : "Acción sobre cuenta"),
+        el("p", "banco-texto", fila.correo + " · " + fechaDueno(fila.creado_en)));
+    });
+  }
+
+  function probarServicioDueno(boton, idMensaje, etiqueta, prueba) {
+    if (boton.disabled || !soyDueno()) return;
+    var origen = fuente, inicio = performance.now();
+    boton.disabled = true;
+    $(idMensaje).hidden = false;
+    mensaje(idMensaje, etiqueta + " · Probando…");
+    function mostrar(texto, error) {
+      if (origen !== fuente || !soyDueno()) return;
+      mensaje(idMensaje, etiqueta + " · " + texto + ", " + Math.round(performance.now() - inicio) + " ms", error);
+    }
+    Promise.resolve().then(prueba).then(function (detalle) {
+      mostrar("OK" + (detalle ? ", " + detalle : ""));
+    }).catch(function (error) {
+      mostrar("Falló. " + (error.message || "Intenta de nuevo."), true);
+    }).finally(function () { boton.disabled = false; });
+  }
+
+  $("dueno-probar-tasas").addEventListener("click", function () {
+    probarServicioDueno(this, "dueno-tasas-resultado", "Tasas", function () {
+      return cliente.functions.invoke("nova-ia", { body: { tasas: true } }).then(function (res) {
+        return datosDeFuncionDueno(res, "No se pudieron consultar las tasas.");
+      }).then(function (datos) {
+        var monedas = datos.rates && Object.keys(datos.rates).length;
+        if (!monedas) throw new Error("La función no devolvió tasas.");
+        return pl(monedas, "moneda", "monedas");
+      });
+    });
+  });
+  $("dueno-probar-ia").addEventListener("click", function () {
+    if (!soyDueno() || !confirm("Esta prueba de IA gasta 1 consulta. ¿Continuar?")) return;
+    probarServicioDueno(this, "dueno-ia-resultado", "IA", function () {
+      return preguntarEnFlujo({ pregunta: "Escribe únicamente la palabra OK." }, function () {}).then(function (respuesta) {
+        if (!/^ok[.!]?$/i.test(respuesta.trim())) throw new Error("La IA no devolvió la respuesta esperada.");
+      });
+    });
+  });
+
   function pintarDueno(d) {
     var r = d.resumen || {};
     $("dueno-hora").textContent = d.generado ? "Datos de " + fechaDueno(d.generado) + "." : "";
@@ -7714,6 +7854,7 @@
     registrosMetaDueno = Dueno.registrosParaMeta(r.nuevos30, dias);
     pintarMetaDueno();
     pintarEstadoDueno(d.estado);
+    pintarSaludDueno(d.salud);
     pintarListasDueno(d, errores);
     pintarUsoEventos(d.uso, d.generado || ahora);
     datosAnaliticaDueno = d;
@@ -7744,7 +7885,7 @@
       cab.append(app, el("small", null, p.ultimoUso ? "usó " + cuandoBanco(Date.parse(p.ultimoUso)) : "nunca entró"));
       var det = "Se registró el " + fechaDueno(p.registro) + (p.confirmado ? "" : " · no ha confirmado el correo") + (p.prueba ? " · cuenta de prueba" : "");
       var chips = el("div", "dueno-chips");
-      [p.plataforma === "android" ? "📱 Android" + (p.version ? " " + p.version : "") : p.plataforma === "web" ? "🌐 Navegador" : "",
+      [p.bloqueado ? "Bloqueada" : "", p.plataforma === "android" ? "📱 Android" + (p.version ? " " + p.version : "") : p.plataforma === "web" ? "🌐 Navegador" : "",
         pl(p.movimientos, "movimiento", "movimientos"), p.chats ? pl(p.chats, "chat IA", "chats IA") : "", p.metas ? pl(p.metas, "meta", "metas") : "", p.espacios ? pl(p.espacios, "espacio", "espacios") : "", p.conductor ? "🚖 conductor" : ""]
         .filter(Boolean).forEach(function (t) { chips.append(el("span", null, t)); });
       li.append(cab, el("p", "banco-texto", det), chips);

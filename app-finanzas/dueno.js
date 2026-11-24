@@ -134,7 +134,39 @@
     });
   }
 
+  var bytesPorMB = 1000000;
+  var formatoMB = new Intl.NumberFormat("es-CO", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+
+  function bytesAMegabytes(bytes) {
+    return cantidad(bytes) / bytesPorMB;
+  }
+
+  function formatearTamano(bytes) {
+    return formatoMB.format(bytesAMegabytes(bytes)) + " MB";
+  }
+
+  function tablasMasGrandes(tablas) {
+    return (Array.isArray(tablas) ? tablas : []).filter(function (tabla) {
+      return tabla && typeof tabla.tabla === "string";
+    }).sort(function (a, b) {
+      return cantidad(b.bytes) - cantidad(a.bytes) || a.tabla.localeCompare(b.tabla);
+    }).slice(0, 8);
+  }
+
+  function accionesDeCuenta(persona) {
+    if (!persona || !persona.id || persona.dueno || persona.prueba || !persona.correo || persona.correo === "(sin correo)") return [];
+    var acciones = [persona.bloqueado ? "cuenta_desbloquear" : "cuenta_bloquear"];
+    if (!persona.confirmado) acciones.push("cuenta_reenviar_confirmacion");
+    return acciones;
+  }
+
+  function confirmaCorreo(correo, escrito) {
+    return Boolean(correo) && correo === escrito;
+  }
+
   var api = {
+    bytesAMegabytes: bytesAMegabytes, formatearTamano: formatearTamano, tablasMasGrandes: tablasMasGrandes,
+    accionesDeCuenta: accionesDeCuenta, confirmaCorreo: confirmaCorreo,
     personasVisibles: personasVisibles,
     filtrarPersonas: filtrarPersonas, contarFiltros: contarFiltros, ultimos30Dias: ultimos30Dias,
     barrasVersiones: barrasVersiones, cantidad: cantidad, registrosParaMeta: registrosParaMeta, porcentaje: porcentaje, validarAviso: validarAviso,

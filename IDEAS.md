@@ -288,14 +288,14 @@ Ideas para el panel del dueño. El panel muestra cómo se usa la app, nunca los 
 
 - ⭐ Errores de la app (los que se registran) por día.
 - ✅ Lista de los últimos errores, con versión y pantalla.
-- Estado de Supabase (base de datos y funciones).
+- ✅ Estado de Supabase (base de datos y funciones).
 - Estado de Vercel (la página web) y de la última publicación.
 - Tiempo de carga de la app.
 - Funciones de Supabase: llamadas, errores y tiempo de respuesta.
-- Espacio usado en la base de datos y en el almacenamiento.
-- Fotos de recibos guardadas y su tamaño total.
+- ✅ Espacio usado en la base de datos y en el almacenamiento.
+- ✅ Fotos de recibos guardadas y su tamaño total.
 - Fuente de las tasas de cambio que está funcionando (Fawaz, TRM, respaldo).
-- Prueba rápida de un botón: ¿la IA responde? ¿las tasas cargan?
+- ✅ Prueba rápida de un botón: ¿la IA responde? ¿las tasas cargan?
 
 ## Comunicación con usuarios
 
@@ -313,15 +313,15 @@ Ideas para el panel del dueño. El panel muestra cómo se usa la app, nunca los 
 ## Seguridad y control
 
 - ⭐ Registro de accesos al panel (quién entró y cuándo).
-- Bloquear o desbloquear una cuenta.
-- Reenviar el correo de confirmación a un usuario.
+- ✅ Bloquear o desbloquear una cuenta.
+- ✅ Reenviar el correo de confirmación a un usuario.
 - Ver inicios de sesión sospechosos (muchos intentos fallidos).
 - Cerrar la sesión de un usuario en todos sus dispositivos.
 - Varios administradores con permisos distintos (solo ver, o ver y actuar).
 - Doble verificación para entrar al panel.
 - Respaldo de la base de datos con un botón y la fecha del último.
-- Que borrar algo pida doble confirmación, y que siempre haya papelera.
-- Pedir PIN otra vez antes de las acciones delicadas.
+- ✅ Que borrar algo pida doble confirmación, y que siempre haya papelera.
+- ✅ Pedir PIN otra vez antes de las acciones delicadas.
 
 ## Negocio y metas
 
