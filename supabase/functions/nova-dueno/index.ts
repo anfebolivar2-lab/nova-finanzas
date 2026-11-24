@@ -1,4 +1,4 @@
-// nova-dueno v7: panel del dueño de NOVA. Cuenta cuántas personas se registraron, cuántas la usan, cuántas veces se
+// nova-dueno v8: panel del dueño de NOVA. Cuenta cuántas personas se registraron, cuántas la usan, cuántas veces se
 // descargó la APK y qué funciones usan. Solo responde a la cuenta del dueño (DUENOS).
 // Por privacidad NO devuelve montos ni movimientos de nadie: solo cuántos hay y cuándo se usó la app.
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
@@ -123,6 +123,29 @@ async function actuarSobreCuenta(accion: string, objetivo: unknown, dueno: strin
 
 async function accionDueno(accion: string, cuerpo: Record<string, unknown>, dueno: string): Promise<Response | null> {
   if (ACCIONES_CUENTA.includes(accion)) return actuarSobreCuenta(accion, cuerpo.id, dueno);
+  if (accion === "encuesta_crear") {
+    const pregunta = typeof cuerpo.pregunta === "string" ? cuerpo.pregunta.trim() : "";
+    const opciones: unknown[] = Array.isArray(cuerpo.opciones) ? cuerpo.opciones : [];
+    if (!opciones.every((opcion): opcion is string => typeof opcion === "string")) {
+      return responder(400, { error: "Las opciones deben ser textos." });
+    }
+    const limpias = opciones.map((opcion) => opcion.trim()).filter(Boolean);
+    if (!pregunta || Array.from(pregunta).length > 200 || limpias.length < 2 || limpias.length > 6 ||
+        limpias.some((opcion) => Array.from(opcion).length > 60)) {
+      return responder(400, { error: "Escribe una pregunta de hasta 200 caracteres y de 2 a 6 opciones de hasta 60 caracteres." });
+    }
+    const r = await rest("fin_encuestas", {
+      method: "POST", body: JSON.stringify({ pregunta, opciones: limpias, activa: true }),
+    });
+    return r.ok ? responder(200, { ok: true }) : responder(502, { error: "No se pudo crear la encuesta." });
+  }
+  if (accion === "encuesta_cerrar") {
+    const id = typeof cuerpo.id === "number" && Number.isSafeInteger(cuerpo.id) || typeof cuerpo.id === "string"
+      ? String(cuerpo.id) : "";
+    if (!/^[1-9]\d{0,18}$/.test(id)) return responder(400, { error: "Encuesta no válida." });
+    const r = await rest(`fin_encuestas?id=eq.${id}`, { method: "PATCH", body: JSON.stringify({ activa: false }) });
+    return r.ok ? responder(200, { ok: true }) : responder(502, { error: "No se pudo cerrar la encuesta." });
+  }
   if (accion === "aviso_crear") {
     const titulo = texto(cuerpo.titulo, 80), mensaje = texto(cuerpo.mensaje, 500);
     const audiencia = AUDIENCIAS.includes(String(cuerpo.audiencia)) ? String(cuerpo.audiencia) : "todos";
@@ -279,6 +302,40 @@ async function usoPanel(ahora: number) {
   };
 }
 
+async function conteoExacto(ruta: string): Promise<number> {
+  const r = await rest(ruta, {
+    method: "HEAD", headers: { Prefer: "count=exact" }, signal: AbortSignal.timeout(10_000),
+  });
+  const total = r.headers.get("Content-Range")?.match(/\/(\d+)$/);
+  if (!r.ok || !total) throw new Error("Conteo no disponible");
+  return Number(total[1]);
+}
+
+type Encuesta = { id: number; pregunta: string; opciones: string[]; activa: boolean; creado_en: string };
+type ComentarioEncuesta = { comentario: string; creado_en: string };
+
+async function encuestasPanel() {
+  const r = await rest("fin_encuestas?select=id,pregunta,opciones,activa,creado_en&order=creado_en.desc,id.desc&limit=10",
+    { signal: AbortSignal.timeout(10_000) });
+  if (!r.ok) throw new Error("Encuestas no disponibles");
+  const encuestas: Encuesta[] = await r.json();
+  return Promise.all(encuestas.map(async (encuesta) => {
+    const filtro = `encuesta_id=eq.${encuesta.id}`;
+    const conteo = `fin_respuestas?select=opcion&${filtro}&limit=1`;
+    const [conteos, total, comentarios] = await Promise.all([
+      Promise.all(encuesta.opciones.map((_opcion, i) => conteoExacto(`${conteo}&opcion=eq.${i}`))),
+      conteoExacto(conteo),
+      rest(`fin_respuestas?select=comentario,creado_en&${filtro}&comentario=not.is.null&comentario=neq.&order=creado_en.desc,id.desc&limit=20`,
+        { signal: AbortSignal.timeout(10_000) }).then(async (respuesta) => {
+        if (!respuesta.ok) throw new Error("Comentarios no disponibles");
+        const filas: ComentarioEncuesta[] = await respuesta.json();
+        return filas.map(({ comentario, creado_en }) => ({ comentario, creado_en }));
+      }),
+    ]);
+    return { ...encuesta, conteos, total, comentarios };
+  }));
+}
+
 // Datos extra del panel. Cada bloque falla por separado: si algo no responde, el panel sigue con lo demás.
 async function extrasPanel(correoDe: Record<string, string>, ahora: number) {
   const desde30 = new Date(ahora - 30 * DIA).toISOString();
@@ -298,8 +355,13 @@ async function extrasPanel(correoDe: Record<string, string>, ahora: number) {
   } catch (_e) { extra.errores = { total30: 0, porDia: {}, recientes: [] }; }
   try {
     const r = await rest("fin_avisos?select=id,titulo,mensaje,audiencia,activo,desde,hasta,creado_en&order=creado_en.desc&limit=30");
-    extra.avisos = r.ok ? await r.json() : [];
+    const avisos: Record<string, unknown>[] = r.ok ? await r.json() : [];
+    extra.avisos = await Promise.all(avisos.map(async (aviso) => ({
+      ...aviso,
+      vistos: await conteoExacto(`fin_avisos_vistos?select=aviso_id&aviso_id=eq.${aviso.id}&limit=1`).catch(() => null),
+    })));
   } catch (_e) { extra.avisos = []; }
+  extra.encuestas = await encuestasPanel().catch(() => []);
   try {
     const r = await rest("fin_sugerencias?select=id,user_id,mensaje,version,plataforma,atendida,respuesta,respondida_en,creado_en&order=creado_en.desc&limit=50");
     const lista: Record<string, unknown>[] = r.ok ? await r.json() : [];

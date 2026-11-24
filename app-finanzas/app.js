@@ -5377,6 +5377,7 @@
     });
     if (vista !== enVista && ["inicio", "planes", "analisis", "buscar"].indexOf(vista) >= 0) registrarEvento("pantalla", "tab_" + vista);
     enVista = vista;
+    if (vista === "inicio") pintarAvisoInicio();
     actualizarFab();
     if (vista === "buscar") pintarBuscar();
     if (vista === "ia") pintarIA();
@@ -6787,6 +6788,9 @@
   var versionNova;
   var avisosNube = [];
   var avisosVistos = leerLocal("nova-avisos-vistos", []);
+  var registrosAviso = new Map();
+  var observadorAviso;
+  var encuestaInicio = null;
   var erroresEnviados = [];
   var archivosNova = Array.from(document.scripts).filter(function (script) {
     return script.src && new URL(script.src).origin === location.origin;
@@ -6938,10 +6942,40 @@
     } catch (e) { /* Algunas promesas rechazan con objetos que no se pueden leer. */ }
   });
 
+  function registrarAvisoVisto(avisoId) {
+    var origen = fuente;
+    if (!origen || origen.demo || enVista !== "inicio" || document.hidden || $("pantalla-app").hidden) return;
+    var clave = "nova-aviso-registrado:" + idUsuario() + ":" + avisoId;
+    if (registrosAviso.has(clave) || leerLocal(clave, false)) return;
+    registrosAviso.set(clave, true);
+    conSesionNube(origen, function () {
+      return cliente.from("fin_avisos_vistos").insert({ aviso_id: avisoId });
+    }).then(function (r) {
+      if (r && (!r.error || r.error.code === "23505")) guardarLocal(clave, true);
+      else registrosAviso.delete(clave);
+    }).catch(function () { registrosAviso.delete(clave); });
+  }
+
+  function observarAviso(art) {
+    if (observadorAviso) observadorAviso.disconnect();
+    if (!art.dataset.avisoId) return;
+    var origen = fuente;
+    if (!("IntersectionObserver" in window)) {
+      registrarAvisoVisto(art.dataset.avisoId);
+      return;
+    }
+    observadorAviso = new IntersectionObserver(function (entradas) {
+      if (origen === fuente && art.isConnected && entradas[0].isIntersecting) registrarAvisoVisto(art.dataset.avisoId);
+    });
+    observadorAviso.observe(art);
+  }
+
   function pintarAvisoDueno(art) {
+    delete art.dataset.avisoId;
     if (!fuente || fuente.demo) return;
     var aviso = Nube.avisosParaMostrar(avisosNube, plataformaNova, avisosVistos, Date.now())[0];
     if (!aviso) return;
+    art.dataset.avisoId = aviso.id;
     art.append(el("h2", "titulo-tarjeta aviso-dueno-texto", aviso.titulo),
       el("p", "aviso-dueno-texto", aviso.mensaje),
       botonHabito("Entendido", function () {
@@ -6950,6 +6984,7 @@
         art.replaceChildren();
         pintarAvisoDueno(art);
         if (!art.childNodes.length) art.remove();
+        observarAviso(art);
       }));
   }
 
@@ -6958,7 +6993,12 @@
     var art = crearWidget("aviso-dueno", null, null, null, null, true);
     cont.replaceChildren();
     if (art.childNodes.length) cont.append(art);
+    observarAviso(art);
   }
+
+  document.addEventListener("visibilitychange", function () {
+    if (!document.hidden && enVista === "inicio" && !$("pantalla-app").hidden) pintarAvisoInicio();
+  });
 
   function cargarAvisosNube() {
     var origen = fuente;
@@ -6967,6 +7007,84 @@
       avisosNube = r.data;
       pintarAvisoInicio();
     }).catch(function () { /* Si no hay conexión, se intentará al volver a abrir NOVA. */ });
+  }
+
+  function pintarEncuestaInicio() {
+    var cont = $("encuesta-nube-inicio"), encuesta = encuestaInicio, origen = fuente;
+    cont.replaceChildren();
+    if (!origen || origen.demo || !encuesta) return;
+    var art = el("article", "tarjeta formulario");
+    var comentario = el("textarea"), contador = el("small", "nota", "0 / 300");
+    comentario.id = "encuesta-comentario";
+    comentario.rows = 2;
+    comentario.maxLength = 300;
+    contador.id = "encuesta-contador";
+    comentario.setAttribute("aria-describedby", contador.id);
+    comentario.addEventListener("input", function () {
+      contador.textContent = comentario.value.length + " / 300";
+    });
+    var etiqueta = el("label", null, "Comentario (opcional)");
+    etiqueta.htmlFor = comentario.id;
+    var opciones = el("div", "encuesta-opciones");
+    opciones.setAttribute("role", "group");
+    opciones.setAttribute("aria-labelledby", "encuesta-pregunta");
+    var pregunta = el("h2", "titulo-tarjeta aviso-dueno-texto", encuesta.pregunta);
+    pregunta.id = "encuesta-pregunta";
+    var estado = el("p", "mensaje");
+    estado.setAttribute("role", "status");
+    var descartar = botonHabito("Ahora no", function () {
+      guardarLocal("nova-encuesta-descartada:" + encuesta.id, true);
+      encuestaInicio = null;
+      pintarEncuestaInicio();
+    });
+    var botones = encuesta.opciones.map(function (opcion, indice) {
+      return botonHabito(opcion, function () {
+        botones.concat(descartar, comentario).forEach(function (campo) { campo.disabled = true; });
+        estado.textContent = "Guardando…";
+        conSesionNube(origen, function () {
+          return cliente.from("fin_respuestas").insert({
+            encuesta_id: encuesta.id, opcion: indice, comentario: comentario.value.trim() || null
+          });
+        }).then(function (r) {
+          if (origen !== fuente) return;
+          if (!r || (r.error && r.error.code !== "23505")) throw new Error("No se guardó");
+          encuestaInicio = null;
+          art.replaceChildren(el("p", null, "¡Gracias!"));
+        }).catch(function () {
+          if (origen !== fuente) return;
+          estado.textContent = "No se pudo registrar tu respuesta. Intenta de nuevo.";
+          botones.concat(descartar, comentario).forEach(function (campo) { campo.disabled = false; });
+        });
+      });
+    });
+    opciones.append.apply(opciones, botones);
+    art.append(pregunta, etiqueta, comentario, contador, opciones, descartar, estado);
+    cont.append(art);
+  }
+
+  function cargarEncuestaNube() {
+    var origen = fuente, pagina = 50;
+    function buscar(desde) {
+      return conSesionNube(origen, function () {
+        return cliente.from("fin_encuestas").select("id,pregunta,opciones,activa,creado_en").eq("activa", true)
+          .order("creado_en", { ascending: false }).order("id", { ascending: false }).range(desde, desde + pagina - 1);
+      }).then(function (r) {
+        if (origen !== fuente || !r || r.error || !r.data.length) return;
+        var encuestas = r.data;
+        var ids = encuestas.map(function (encuesta) { return encuesta.id; });
+        var descartadas = ids.filter(function (id) { return leerLocal("nova-encuesta-descartada:" + id, false); });
+        return conSesionNube(origen, function () {
+          return cliente.from("fin_respuestas").select("encuesta_id").in("encuesta_id", ids);
+        }).then(function (respuestas) {
+          if (origen !== fuente || !respuestas || respuestas.error) return;
+          var respondidas = respuestas.data.map(function (fila) { return fila.encuesta_id; });
+          encuestaInicio = Nube.encuestaParaMostrar(encuestas, respondidas, descartadas);
+          if (encuestaInicio) pintarEncuestaInicio();
+          else if (encuestas.length === pagina) return buscar(desde + pagina);
+        });
+      });
+    }
+    return buscar(0).catch(function () { /* La encuesta es opcional. */ });
   }
 
   var configNube = Nube.configDesdeFilas(), cargaConfigNube = null;
@@ -7316,12 +7434,42 @@
       var inicio = aviso.desde ? " · Desde " + fechaDueno(aviso.desde) : "";
       var fin = aviso.hasta ? " · Hasta " + fechaDueno(aviso.hasta) : "";
       li.append(el("strong", null, aviso.titulo), el("p", null, aviso.mensaje),
-        el("small", "nota", [aviso.audiencia, aviso.activo ? "Activo" : "Apagado"].filter(Boolean).join(" · ") + inicio + fin));
+        el("small", "nota", [aviso.audiencia, aviso.activo ? "Activo" : "Apagado"].filter(Boolean).join(" · ") + inicio + fin),
+        el("small", "nota", aviso.vistos != null ? "Lo vieron " + aviso.vistos : "Conteo de vistas no disponible."));
       if (aviso.activo && aviso.id != null) {
         var boton = botonHabito("Apagar", function () {
           if (confirm("¿Apagar este aviso?")) actuarDueno(boton, { accion: "aviso_apagar", id: aviso.id }, "dueno-aviso-mensaje", "Aviso apagado");
         });
         li.append(boton);
+      }
+    });
+    listaDueno("dueno-encuestas", Dueno.recientes(d.encuestas, 10), "No hay encuestas disponibles.", function (li, encuesta) {
+      li.append(el("strong", null, encuesta.pregunta),
+        el("small", "nota", (encuesta.activa ? "Activa" : "Cerrada") + " · " + fechaDueno(encuesta.creado_en)),
+        el("p", null, pl(encuesta.total, "respuesta", "respuestas")));
+      var porcentajes = Dueno.porcentajesEncuesta(encuesta.conteos, encuesta.total);
+      var resultados = el("div", "encuesta-resultados");
+      encuesta.opciones.forEach(function (opcion, indice) {
+        var texto = opcion + " · " + encuesta.conteos[indice] + " (" + porcentajes[indice] + "%)";
+        var barra = el("meter");
+        barra.max = 100;
+        barra.value = porcentajes[indice];
+        barra.setAttribute("aria-label", texto);
+        resultados.append(el("p", null, texto), barra);
+      });
+      li.append(resultados);
+      if (encuesta.comentarios.length) {
+        li.append(el("strong", null, "Comentarios"));
+        encuesta.comentarios.forEach(function (comentario) {
+          li.append(el("p", null, comentario.comentario), el("small", "nota", fechaDueno(comentario.creado_en)));
+        });
+      }
+      if (encuesta.activa) {
+        var cerrar = botonHabito("Cerrar encuesta", function () {
+          if (confirm("¿Cerrar esta encuesta?")) actuarDueno(cerrar, { accion: "encuesta_cerrar", id: encuesta.id },
+            "dueno-encuesta-mensaje", "Encuesta cerrada");
+        });
+        li.append(cerrar);
       }
     });
     var sugerencias = Dueno.recientes(d.sugerencias);
@@ -7372,6 +7520,36 @@
       $("dueno-aviso-audiencia").value, $("dueno-aviso-hasta").value, Date.now(), $("dueno-aviso-desde").value);
     if (!aviso) return mensaje("dueno-aviso-mensaje", "Revisa el título (hasta 80 caracteres), el mensaje (hasta 500) y las fechas. El último día debe ser hoy o después y el inicio debe quedar dentro del plazo.", true);
     actuarDueno($("dueno-aviso-crear"), aviso, "dueno-aviso-mensaje", "Aviso creado", function () { form.reset(); });
+  });
+
+  var opcionesEncuestaDueno = $("dueno-encuesta-opciones");
+  function anadirOpcionEncuestaDueno() {
+    var numero = opcionesEncuestaDueno.querySelectorAll("input").length + 1;
+    var campo = el("input"), etiqueta = el("label", null, "Opción " + numero);
+    campo.type = "text";
+    campo.id = "dueno-encuesta-opcion-" + numero;
+    campo.maxLength = 60;
+    etiqueta.htmlFor = campo.id;
+    opcionesEncuestaDueno.append(etiqueta, campo);
+    $("dueno-encuesta-anadir").disabled = numero >= 6;
+    return campo;
+  }
+
+  function reiniciarFormularioEncuestaDueno() {
+    $("form-dueno-encuesta").reset();
+    opcionesEncuestaDueno.replaceChildren();
+    anadirOpcionEncuestaDueno();
+    anadirOpcionEncuestaDueno();
+  }
+
+  reiniciarFormularioEncuestaDueno();
+  $("dueno-encuesta-anadir").addEventListener("click", function () { anadirOpcionEncuestaDueno().focus(); });
+  $("form-dueno-encuesta").addEventListener("submit", function (e) {
+    e.preventDefault();
+    var opciones = Array.from(opcionesEncuestaDueno.querySelectorAll("input"), function (campo) { return campo.value; });
+    var encuesta = Dueno.validarEncuesta($("dueno-encuesta-pregunta").value, opciones);
+    if (!encuesta) return mensaje("dueno-encuesta-mensaje", "Escribe una pregunta de hasta 200 caracteres y de 2 a 6 opciones de hasta 60 caracteres.", true);
+    actuarDueno($("dueno-encuesta-crear"), encuesta, "dueno-encuesta-mensaje", "Encuesta creada", reiniciarFormularioEncuestaDueno);
   });
 
   var Analitica = window.NovaAnalitica;
@@ -9816,6 +9994,8 @@
     reiniciarEventos();
     fuente = nuevaFuente;
     avisosNube = []; erroresEnviados = [];
+    encuestaInicio = null;
+    pintarEncuestaInicio();
     reiniciarConfigNube();
     espacioId = leerLocal(claveEspacio(), null);
     fuente = Esp.envolver(nuevaFuente, { activo: function () { return espacioId; }, alPerder: function () { espacioId = null; guardarLocal(claveEspacio(), null); } });
@@ -9836,7 +10016,7 @@
       if (!fuente.demo) bloquearSiHayPin();
       revisarInactividad();
       pintarEstadoPapelera(); tutorialSiHaceFalta(); novedadesSiHaceFalta();
-      $("btn-dueno").hidden = !soyDueno(); marcarUso(); cargarAvisosNube(); cargarConfigNube();
+      $("btn-dueno").hidden = !soyDueno(); marcarUso(); cargarAvisosNube(); cargarEncuestaNube(); cargarConfigNube();
       while (accionesPendientes.length) anotarTeclaRapida(accionesPendientes.shift());
       programarAvisos();
       if (!fuente.demo) revisarBanco().then(function () { if (abrirBancoAlEntrar) { abrirBancoAlEntrar = false; abrirBanco(); } }).catch(function () { /* sin lista del banco */ });
@@ -10532,6 +10712,8 @@
       try { var PW = enApp && window.Capacitor.Plugins && window.Capacitor.Plugins.Preferences; if (PW) { ultimoWidget = ""; PW.remove({ key: "nova-widget" }); } } catch (e) { /* nada */ }
       fuente = null; datos = datosVacios();
       avisosNube = []; erroresEnviados = [];
+      encuestaInicio = null;
+      pintarEncuestaInicio();
       reiniciarConfigNube();
       $("form-sugerencia").reset(); pintarContadorSugerencia();
       $("form-auth").reset(); mensaje("auth-mensaje", ""); mostrar("auth");

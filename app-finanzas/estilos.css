@@ -1009,6 +1009,10 @@ button.mini { padding: 6px 12px; border-radius: 999px; font-size: .8rem; }
 .dueno-lista, .dueno-detalle { display: grid; gap: 8px; }
 .dueno-detalle { justify-items: start; }
 .dueno-detalle p, .aviso-dueno-texto { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+.encuesta-opciones { display: flex; flex-wrap: wrap; gap: 8px; }
+.encuesta-opciones button { white-space: normal; overflow-wrap: anywhere; }
+.encuesta-resultados { width: 100%; max-width: 28rem; }
+.encuesta-resultados meter { display: block; width: 100%; margin-bottom: 8px; }
 #pantalla-dueno progress { width: 100%; accent-color: var(--accent); }
 #sugerencia-texto, #dueno-aviso-texto { width: 100%; resize: vertical; }
 #sugerencia-contador { text-align: right; }

@@ -1,7 +1,21 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const { avisosParaMostrar, validarSugerencia, enviosDeLaHora, errorSeguro, puedeRegistrarError,
-  validarVersion, versionMenor, configDesdeFilas, mensajePausaIA, sugerenciasRespondidas } = require("./nube.js");
+  validarVersion, versionMenor, configDesdeFilas, mensajePausaIA, sugerenciasRespondidas, encuestaParaMostrar } = require("./nube.js");
+
+test("elige la encuesta activa más reciente entre las pendientes sin reordenar el original", () => {
+  const encuestas = Object.freeze([
+    { id: 1, activa: true, creado_en: "2026-11-19" },
+    { id: 4, activa: false, creado_en: "2026-11-24" },
+    { id: 3, activa: true, creado_en: "2026-11-23" },
+    { id: 2, activa: true, creado_en: "2026-11-22" }
+  ]);
+  assert.equal(encuestaParaMostrar(encuestas, [], []).id, 3);
+  assert.equal(encuestaParaMostrar(encuestas, ["3"], []).id, 2);
+  assert.equal(encuestaParaMostrar(encuestas, ["3"], [2]).id, 1);
+  assert.equal(encuestaParaMostrar(encuestas, ["3", 1], [2]), null);
+  assert.equal(encuestaParaMostrar([], [], []), null);
+});
 
 test("muestra avisos vigentes, de la plataforma y sin leer, con el más reciente primero", () => {
   const ahora = Date.parse("2026-11-22T12:00:00Z");

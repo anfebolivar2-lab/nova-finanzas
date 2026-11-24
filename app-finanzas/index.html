@@ -165,6 +165,7 @@
     <!-- INICIO -->
     <section class="vista" data-vista="inicio">
       <div id="aviso-nube-inicio" class="widgets"></div>
+      <div id="encuesta-nube-inicio" class="widgets" aria-live="polite"></div>
       <p id="saludo" class="saludo"></p>
       <div class="periodo-nav">
         <button type="button" class="icono-btn" data-periodo-inicio="-1" aria-label="Periodo anterior"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button>
@@ -1478,6 +1479,18 @@
       <button type="submit" id="dueno-aviso-crear" class="primario">Crear aviso</button>
     </form>
     <ul id="dueno-avisos" class="lista-banco"></ul>
+  </article>
+  <article class="tarjeta formulario">
+    <h2 class="titulo-tarjeta">Encuestas</h2>
+    <form id="form-dueno-encuesta" class="formulario">
+      <label for="dueno-encuesta-pregunta">Pregunta</label>
+      <input id="dueno-encuesta-pregunta" type="text" maxlength="200" required>
+      <div id="dueno-encuesta-opciones" class="formulario"></div>
+      <button type="button" id="dueno-encuesta-anadir" class="mini">Añadir opción</button>
+      <button type="submit" id="dueno-encuesta-crear" class="primario">Crear encuesta</button>
+    </form>
+    <p id="dueno-encuesta-mensaje" class="mensaje" role="status"></p>
+    <ul id="dueno-encuestas" class="lista-banco"></ul>
   </article>
   <article class="tarjeta formulario">
     <h2 class="titulo-tarjeta">Sugerencias</h2>

@@ -78,7 +78,17 @@
     });
   }
 
+  function encuestaParaMostrar(encuestas, respondidas, descartadas) {
+    var omitidas = new Set((respondidas || []).concat(descartadas || []).map(String));
+    return (encuestas || []).filter(function (encuesta) {
+      return encuesta && encuesta.activa === true && !omitidas.has(String(encuesta.id));
+    }).sort(function (a, b) {
+      return Date.parse(b.creado_en) - Date.parse(a.creado_en);
+    })[0] || null;
+  }
+
   var api = {
+    encuestaParaMostrar: encuestaParaMostrar,
     validarVersion: validarVersion, versionMenor: versionMenor, configDesdeFilas: configDesdeFilas,
     mensajePausaIA: mensajePausaIA, sugerenciasRespondidas: sugerenciasRespondidas,
     avisosParaMostrar: avisosParaMostrar, validarSugerencia: validarSugerencia, enviosDeLaHora: enviosDeLaHora,
