@@ -5424,7 +5424,12 @@
     var foco = pilaFocos.pop();
     if (id) $(id).hidden = true;
     if (id === "hoja-respaldo") limpiarClaveRespaldo();
-    if (id === "pantalla-dueno" && $("dueno-ficha").open) $("dueno-ficha").close();
+    if (id === "pantalla-dueno") {
+      detenerRelojDueno();
+      cerrarEtiquetaDueno();
+      cerrarAyudaDueno();
+      if ($("dueno-ficha").open) $("dueno-ficha").close();
+    }
     if (!pilaCapas.length) document.body.classList.remove("con-capa");
     if (foco && foco.isConnected && !foco.closest("[hidden], [inert]")) foco.focus({ preventScroll: true });
   }
@@ -6782,7 +6787,7 @@
   // navegador y qué versión tiene (sin datos de su plata), para que el dueño sepa cuánta gente la usa.
   var DUENOS = ["e84fedff-8279-4a12-9ff7-4992dae4cbbf", "92bfcc78-ebac-47ab-8171-2683d624c721"];
   function idUsuario() { return (leerLocal("nova-identidad", {}) || {}).id || ""; }
-  function soyDueno() { return !!fuente && !fuente.demo && DUENOS.indexOf(idUsuario()) >= 0; }
+  function soyDueno() { return !!fuente && !fuente.demo && DUENOS.indexOf(fuente.usuarioEventos) >= 0; }
   var Nube = window.NovaNube;
   var plataformaNova = enApp ? "android" : "web";
   var versionNova;
@@ -7254,7 +7259,25 @@
     pintarPersonasDueno();
   }
   function pl(n, uno, varios) { return numDueno.format(n) + " " + (n === 1 ? uno : varios); }
+  var etiquetaBarraDueno, barraElegidaDueno;
+  function cerrarEtiquetaDueno() {
+    if (!barraElegidaDueno) return;
+    barraElegidaDueno.setAttribute("aria-pressed", "false");
+    etiquetaBarraDueno.hidden = true;
+    barraElegidaDueno = null;
+  }
+  document.addEventListener("pointerdown", function (e) {
+    if (barraElegidaDueno && e.target !== barraElegidaDueno) cerrarEtiquetaDueno();
+  });
+  document.addEventListener("keydown", function (e) {
+    if (e.key === "Escape" && barraElegidaDueno && !document.querySelector("dialog[open]")) {
+      e.preventDefault();
+      cerrarEtiquetaDueno();
+    }
+  }, true);
+
   function barrasDueno(cont, dias, campo, opciones) {
+    if (cont.contains(barraElegidaDueno)) cerrarEtiquetaDueno();
     cont.replaceChildren();
     if (!dias.length) {
       cont.append(el("p", "nota", "Todavía no hay datos."));
@@ -7263,12 +7286,38 @@
     var max = Math.max.apply(null, dias.map(function (d) { return Dueno.cantidad(d[campo]); }));
     var escala = max || 1;
     var fila = el("div", "dueno-barras");
+    var unidad = opciones && opciones.unidad;
+    var etiqueta;
+    if (unidad) {
+      cont.classList.add("dueno-grafico-diario");
+      etiqueta = el("p", "dueno-etiqueta-barra");
+      etiqueta.hidden = true;
+    }
     dias.forEach(function (d) {
       var cantidad = Dueno.cantidad(d[campo]);
-      var b = el("i", cantidad ? null : "cero");
-      b.style.height = Math.max(2, Dueno.porcentaje(cantidad, escala)) + "%";
+      var b = el(unidad ? "button" : "i", cantidad ? null : "cero");
+      var altura = Math.max(2, Dueno.porcentaje(cantidad, escala)) + "%";
+      if (unidad) b.style.setProperty("--altura-barra", altura);
+      else b.style.height = altura;
       if (d.pico) b.classList.add("dueno-pico");
-      b.title = (d.etiqueta || fechaCorta.format(new Date(d.dia + "T12:00:00"))) + ": " + cantidad;
+      var fecha = d.etiqueta || fechaCorta.format(new Date(d.dia + "T12:00:00"));
+      if (unidad) {
+        var texto = fecha + " · " + pl(cantidad, unidad[0], unidad[1]);
+        b.type = "button";
+        b.setAttribute("aria-label", texto);
+        b.setAttribute("aria-pressed", "false");
+        function mostrarEtiqueta() {
+          cerrarEtiquetaDueno();
+          etiquetaBarraDueno = etiqueta;
+          barraElegidaDueno = b;
+          etiqueta.textContent = texto;
+          etiqueta.hidden = false;
+          b.setAttribute("aria-pressed", "true");
+        }
+        b.addEventListener("focus", mostrarEtiqueta);
+        b.addEventListener("click", mostrarEtiqueta);
+        b.addEventListener("blur", function () { if (barraElegidaDueno === b) cerrarEtiquetaDueno(); });
+      } else b.title = fecha + ": " + cantidad;
       fila.append(b);
     });
     var ejes = el("div", "dueno-ejes");
@@ -7276,15 +7325,45 @@
       ejes.classList.add("dueno-marcas");
       opciones.marcas.forEach(function (marca) { ejes.append(el("span", null, marca)); });
     } else {
-      var total = opciones ? null : dias.reduce(function (s, d) { return s + Dueno.cantidad(d[campo]); }, 0);
+      var total = opciones && opciones.resumen ? null : dias.reduce(function (s, d) { return s + Dueno.cantidad(d[campo]); }, 0);
       ejes.append(el("span", null, fechaCorta.format(new Date(dias[0].dia + "T12:00:00"))));
-      if (!opciones) ejes.append(el("span", null, "Total: " + numDueno.format(total) + " · máximo " + max + " en un día"));
+      if (total !== null) ejes.append(el("span", null, "Total: " + numDueno.format(total) + " · máximo " + max + " en un día"));
       ejes.append(el("span", null, "Hoy"));
     }
     cont.append(fila, ejes);
-    if (opciones) cont.append(el("p", "nota", opciones.resumen));
+    if (etiqueta) cont.append(etiqueta);
+    if (opciones && opciones.resumen) cont.append(el("p", "nota", opciones.resumen));
   }
   var Dueno = window.NovaDueno;
+  var rangoDueno = Dueno.rangoDias(leerLocal("nova-dueno-rango", 30));
+  var panelDueno = $("pantalla-dueno");
+  var botonAyudaDueno, textoAyudaDueno;
+  function cerrarAyudaDueno() {
+    if (!botonAyudaDueno) return;
+    botonAyudaDueno.setAttribute("aria-pressed", "false");
+    textoAyudaDueno.hidden = true;
+    botonAyudaDueno = null;
+  }
+  function agregarAyudaDueno(tarjeta, clave, nombre, id) {
+    var boton = el("button", "dueno-ayuda-btn", "ℹ️");
+    var texto = el("small", "dueno-ayuda-texto", Dueno.ayudaNumeros[clave]);
+    boton.type = "button";
+    boton.setAttribute("aria-label", "Ayuda sobre " + nombre);
+    boton.setAttribute("aria-pressed", "false");
+    boton.setAttribute("aria-controls", id);
+    texto.id = id;
+    texto.hidden = true;
+    boton.addEventListener("click", function () {
+      var abrir = texto.hidden;
+      cerrarAyudaDueno();
+      if (!abrir) return;
+      botonAyudaDueno = boton;
+      textoAyudaDueno = texto;
+      boton.setAttribute("aria-pressed", "true");
+      texto.hidden = false;
+    });
+    tarjeta.append(boton, texto);
+  }
   var registrosMetaDueno = 0;
   var metaDueno = Dueno.cantidad(leerLocal("nova-dueno-meta", 0));
   $("dueno-meta").value = metaDueno || "";
@@ -7349,7 +7428,7 @@
       if (alGuardar) alGuardar();
       mensaje(idMensaje, "");
       toast(exito);
-      return cargarDueno();
+      return recargarTrasCambioDueno();
     }).catch(function () {
       if (fuente === origen) mensaje(idMensaje, "No se pudo guardar el cambio. Intenta otra vez.", true);
     }).finally(function () { boton.disabled = false; });
@@ -7513,6 +7592,53 @@
     });
   }
 
+  var clavePlantillasDueno = "nova-dueno-plantillas";
+  var plantillasDueno = leerLocal(clavePlantillasDueno, []);
+  function guardarPlantillasDueno(lista) {
+    plantillasDueno = lista;
+    var guardadas = guardarLocal(clavePlantillasDueno, lista);
+    pintarPlantillasDueno();
+    mensaje("dueno-plantilla-mensaje", guardadas ? "Plantillas actualizadas." :
+      "El cambio se mantendrá hasta que cierres o recargues la app.");
+  }
+  function pintarPlantillasDueno() {
+    var lista = $("dueno-plantillas");
+    lista.replaceChildren();
+    Dueno.listarPlantillas(plantillasDueno).forEach(function (plantilla, indice) {
+      var fila = el("li", "banco-item");
+      var usar = el("button", "mini", "Usar");
+      usar.type = "button";
+      usar.setAttribute("aria-label", "Usar plantilla " + plantilla.titulo);
+      usar.addEventListener("click", function () {
+        $("dueno-aviso-titulo").value = plantilla.titulo;
+        $("dueno-aviso-texto").value = plantilla.mensaje;
+        $("dueno-aviso-titulo").focus();
+      });
+      fila.append(el("strong", null, plantilla.titulo), el("p", "banco-texto", plantilla.mensaje), usar);
+      if (!plantilla.fabrica) {
+        var borrar = el("button", "mini", "Borrar");
+        borrar.type = "button";
+        borrar.setAttribute("aria-label", "Borrar plantilla " + plantilla.titulo);
+        borrar.addEventListener("click", function () {
+          if (!confirm("¿Borrar la plantilla «" + plantilla.titulo + "»?")) return;
+          guardarPlantillasDueno(Dueno.borrarPlantilla(plantillasDueno, indice));
+          $("dueno-plantilla-guardar").focus();
+        });
+        fila.append(borrar);
+      }
+      lista.append(fila);
+    });
+  }
+  $("dueno-plantilla-guardar").addEventListener("click", function () {
+    var titulo = $("dueno-aviso-titulo").value, texto = $("dueno-aviso-texto").value;
+    if (!Dueno.validarPlantilla(titulo, texto)) {
+      return mensaje("dueno-plantilla-mensaje", "Escribe un título de hasta 80 caracteres y un mensaje de hasta 500.", true);
+    }
+    var lista = Dueno.agregarPlantilla(plantillasDueno, titulo, texto);
+    if (!lista) return mensaje("dueno-plantilla-mensaje", "Ya tienes 10 plantillas. Borra una guardada para agregar otra.", true);
+    guardarPlantillasDueno(lista);
+  });
+
   $("form-dueno-aviso").addEventListener("submit", function (e) {
     e.preventDefault();
     var form = e.currentTarget;
@@ -7562,11 +7688,13 @@
   }
   function kpisAnaliticaDueno(id, filas) {
     var cont = $(id);
+    if (cont.contains(botonAyudaDueno)) cerrarAyudaDueno();
     cont.replaceChildren();
-    filas.forEach(function (fila) {
+    filas.forEach(function (fila, i) {
       var tarjeta = el("div", "dueno-kpi");
       tarjeta.append(el("strong", null, fila[1]), el("span", null, fila[0]));
       if (fila[2]) tarjeta.append(el("small", null, fila[2]));
+      agregarAyudaDueno(tarjeta, fila[3], fila[0], id + "-ayuda-" + i);
       cont.append(tarjeta);
     });
   }
@@ -7728,13 +7856,14 @@
     pintarCostosDueno(false);
 
     var nuevos = Analitica.nuevosPor(personas, ahora);
-    kpisAnaliticaDueno("dueno-nuevos", [["Hoy", nuevos.dia], ["Esta semana", nuevos.semana], ["Este mes", nuevos.mes]]);
-    var crecimiento = Array.isArray(d.personas) ? Analitica.crecimientoAcumulado(personas, ahora, 30) : [];
-    barrasDueno($("dueno-crecimiento"), crecimiento, "total", { resumen: "Total acumulado: " + numDueno.format(crecimiento.length ? crecimiento[crecimiento.length - 1].total : 0) });
+    kpisAnaliticaDueno("dueno-nuevos", [["Hoy", nuevos.dia, "", "nuevosHoy"],
+      ["Esta semana", nuevos.semana, "", "nuevosSemana"], ["Este mes", nuevos.mes, "", "nuevosMes"]]);
+    pintarCrecimientoDueno(d, ahora);
 
     var uso = Analitica.usoActivo(personas, ahora);
-    kpisAnaliticaDueno("dueno-uso", [["Hoy (DAU)", uso.dau], ["Últimos 7 días (WAU)", uso.wau],
-      ["Últimos 30 días (MAU)", uso.mau], ["DAU/MAU", textoPorcentajeDueno(uso.porcentaje), "De quienes usaron NOVA en 30 días, cuántos volvieron hoy."]]);
+    kpisAnaliticaDueno("dueno-uso", [["Hoy (DAU)", uso.dau, "", "dau"], ["Últimos 7 días (WAU)", uso.wau, "", "wau"],
+      ["Últimos 30 días (MAU)", uso.mau, "", "mau"], ["DAU/MAU", textoPorcentajeDueno(uso.porcentaje),
+        "De quienes usaron NOVA en 30 días, cuántos volvieron hoy.", "dauMau"]]);
     barrasHorarioDueno("dueno-horas", d.horas, Array.from({ length: 24 }, function (_, i) {
       return String(i).padStart(2, "0") + ":00";
     }), filtrado);
@@ -7756,7 +7885,7 @@
 
     kpisAnaliticaDueno("dueno-retencion", Analitica.retencion(personas, ahora).map(function (fila) {
       return ["A " + pl(fila.dias, "día", "días"), textoPorcentajeDueno(fila.porcentaje),
-        fila.volvieron + " de " + fila.elegibles + " volvieron"];
+        fila.volvieron + " de " + fila.elegibles + " volvieron", "retencion"];
     }));
     var tabla = $("dueno-cohortes");
     tabla.replaceChildren();
@@ -7859,7 +7988,7 @@
         if (res.auditoria === false) exito += " No se pudo guardar en el historial.";
         mensaje("dueno-cuenta-mensaje", exito);
         toast(exito);
-        return cargarDueno();
+        return recargarTrasCambioDueno();
       }).catch(function (error) {
         if (origen === fuente && soyDueno()) mensaje("dueno-confirmar-mensaje", error.message || fallo, true);
       }).finally(function () {
@@ -7917,19 +8046,19 @@
 
     var s = uso.sesion;
     kpisAnaliticaDueno("dueno-eventos-kpis", [
-      ["Eventos registrados", numDueno.format(uso.total)],
-      ["Sesiones con duración registrada", numDueno.format(s.n)],
-      ["Duración promedio", s.n ? numDueno.format(s.promedioSeg) + " s" : "Sin dato"],
-      ["Duración mediana", s.n ? numDueno.format(s.medianaSeg) + " s" : "Sin dato"],
-      ["Personas en modo conductor", numDueno.format(uso.conductor)],
-      ["Personas con datos de seguridad", numDueno.format(uso.personasSeguridad)]
+      ["Eventos registrados", numDueno.format(uso.total), "", "eventos"],
+      ["Sesiones con duración registrada", numDueno.format(s.n), "", "sesiones"],
+      ["Duración promedio", s.n ? numDueno.format(s.promedioSeg) + " s" : "Sin dato", "", "promedio"],
+      ["Duración mediana", s.n ? numDueno.format(s.medianaSeg) + " s" : "Sin dato", "", "mediana"],
+      ["Personas en modo conductor", numDueno.format(uso.conductor), "", "modoConductor"],
+      ["Personas con datos de seguridad", numDueno.format(uso.personasSeguridad), "", "seguridad"]
     ]);
     barrasHorizontalesDueno("dueno-eventos-pantallas", uso.pantallas, null, function (fila) {
       return pl(fila.personas, "persona", "personas");
     });
     barrasHorizontalesDueno("dueno-eventos-anotar", uso.anotar, null);
     barrasHorizontalesDueno("dueno-eventos-ia", uso.ia, null);
-    barrasDueno($("dueno-eventos-ia-dias"), uso.dias, "total");
+    pintarDiasIaDueno(uso.dias, ahora);
     barrasHorizontalesDueno("dueno-eventos-tema", uso.tema, null);
     barrasHorizontalesDueno("dueno-eventos-seguridad", uso.seguridad, null);
     var recuadros = uso.recuadros.map(function (fila) {
@@ -8000,36 +8129,59 @@
     });
   });
 
+  function pintarCrecimientoDueno(d, ahora) {
+    var crecimiento = Array.isArray(d.personas) ? Analitica.crecimientoAcumulado(personasDueno, ahora, rangoDueno) : [];
+    barrasDueno($("dueno-crecimiento"), crecimiento, "total", {
+      unidad: ["persona registrada", "personas registradas"],
+      resumen: "Total acumulado: " + numDueno.format(crecimiento.length ? crecimiento[crecimiento.length - 1].total : 0)
+    });
+  }
+  function pintarDiasIaDueno(dias, ahora) {
+    var serie = dias.length ? Dueno.serieDiaria(dias, ahora, rangoDueno, ["total"]) : [];
+    barrasDueno($("dueno-eventos-ia-dias"), serie, "total", { unidad: ["consulta", "consultas"] });
+  }
+  function pintarSeriesDueno(d, ahora) {
+    var fechaDatos = Date.parse(d.generado);
+    if (!Number.isFinite(fechaDatos)) fechaDatos = ahora;
+    var dias = Dueno.serieDiaria(d.dias, fechaDatos, rangoDueno, ["activos", "movimientos", "registros"]);
+    $("dueno-rango-activos").textContent = rangoDueno;
+    barrasDueno($("dueno-activos"), dias, "activos", { unidad: ["persona", "personas"] });
+    barrasDueno($("dueno-movs"), dias, "movimientos", { unidad: ["movimiento", "movimientos"] });
+    barrasDueno($("dueno-registros"), dias, "registros", { unidad: ["registro", "registros"] });
+    barrasDueno($("dueno-chats"), Dueno.serieDiaria(d.chatsPorDia, fechaDatos, rangoDueno, ["total"]),
+      "total", { unidad: ["chat", "chats"] });
+    barrasDueno($("dueno-errores"), Dueno.serieDiaria(d.errores && d.errores.porDia, fechaDatos, rangoDueno, ["total"]),
+      "total", { unidad: ["error", "errores"] });
+  }
+
   function pintarDueno(d) {
     var r = d.resumen || {};
     $("dueno-hora").textContent = d.generado ? "Datos de " + fechaDueno(d.generado) + "." : "";
     var kpis = [
-      ["👥", r.registrados, "Personas registradas", "+" + r.nuevos7 + " esta semana · " + r.confirmados + " confirmaron el correo"],
-      ["🔥", r.activos7, "Usaron NOVA (7 días)", r.hoy + " en las últimas 24 horas"],
-      ["📅", r.activos30, "Usaron NOVA (30 días)", r.conMovimientos + " han anotado algo"],
-      ["📲", (d.apk || {}).total, "Descargas de la APK", "desde GitHub (no cuenta las de la página)"],
-      ["🤖", r.android, "Abrieron la app Android", r.web + " en el navegador · desde la 1.66"],
-      ["🧾", r.movimientos, "Movimientos anotados", "entre todas las personas"],
-      ["✦", r.chats, "Chats con NOVA IA", ""],
-      ["🎯", r.metas, "Metas de ahorro", ""],
-      ["👛", r.espacios, "Espacios creados", ""],
-      ["🚖", r.conductores, "En modo conductor", ""]
+      ["👥", r.registrados, "Personas registradas", "+" + r.nuevos7 + " esta semana · " + r.confirmados + " confirmaron el correo", "registrados"],
+      ["🔥", r.activos7, "Usaron NOVA (7 días)", r.hoy + " en las últimas 24 horas", "activos7"],
+      ["📅", r.activos30, "Usaron NOVA (30 días)", r.conMovimientos + " han anotado algo", "activos30"],
+      ["📲", (d.apk || {}).total, "Descargas de la APK", "desde GitHub (no cuenta las de la página)", "apk"],
+      ["🤖", r.android, "Abrieron la app Android", r.web + " en el navegador · desde la 1.66", "android"],
+      ["🧾", r.movimientos, "Movimientos anotados", "entre todas las personas", "movimientos"],
+      ["✦", r.chats, "Chats con NOVA IA", "", "chats"],
+      ["🎯", r.metas, "Metas de ahorro", "", "metas"],
+      ["👛", r.espacios, "Espacios creados", "", "espacios"],
+      ["🚖", r.conductores, "En modo conductor", "", "conductores"]
     ];
-    var g = $("dueno-kpis"); g.replaceChildren();
-    kpis.forEach(function (k) {
+    var g = $("dueno-kpis");
+    if (g.contains(botonAyudaDueno)) cerrarAyudaDueno();
+    g.replaceChildren();
+    kpis.forEach(function (k, i) {
       var c = el("div", "dueno-kpi");
       c.append(el("span", "ico", k[0]), el("strong", null, numDueno.format(k[1] || 0)), el("span", null, k[2]));
       if (k[3]) c.append(el("small", null, k[3]));
+      agregarAyudaDueno(c, k[4], k[2], "dueno-kpis-ayuda-" + i);
       g.append(c);
     });
-    var dias = Array.isArray(d.dias) ? d.dias : [];
-    barrasDueno($("dueno-activos"), dias, "activos");
-    barrasDueno($("dueno-movs"), dias, "movimientos");
-    barrasDueno($("dueno-registros"), dias, "registros");
     var ahora = Date.now(), errores = d.errores || {};
-    barrasDueno($("dueno-chats"), Dueno.ultimos30Dias(d.chatsPorDia, ahora), "total");
-    barrasDueno($("dueno-errores"), Dueno.ultimos30Dias(errores.porDia, ahora), "total");
-    registrosMetaDueno = Dueno.registrosParaMeta(r.nuevos30, dias);
+    pintarSeriesDueno(d, ahora);
+    registrosMetaDueno = Dueno.registrosParaMeta(r.nuevos30, Array.isArray(d.dias) ? d.dias : []);
     pintarMetaDueno();
     pintarEstadoDueno(d.estado);
     pintarSaludDueno(d.salud);
@@ -8071,37 +8223,163 @@
     });
   }
   // Pide los datos del panel. Si el servidor dice que la sesión venció (401), la renueva y vuelve a intentar una vez.
-  function pedirDueno(reintento) {
+  function pedirDueno(reintento, origen, automatica) {
+    if (origen !== fuente || !panelDuenoAbierto() || (automatica && (document.hidden || !autoDueno.checked))) {
+      return Promise.resolve(null);
+    }
     return cliente.functions.invoke("nova-dueno", { body: {} }).then(function (res) {
       var estado = res.error && res.error.context && res.error.context.status;
-      if (estado === 401 && !reintento) {
-        return cliente.auth.refreshSession().then(function () { return pedirDueno(true); });
+      if (estado === 401 && !reintento && origen === fuente && panelDuenoAbierto() &&
+          (!automatica || (!document.hidden && autoDueno.checked))) {
+        return cliente.auth.refreshSession().then(function () { return pedirDueno(true, origen, automatica); });
       }
       if (estado === 401 || estado === 403) { var e = new Error("sesion"); e.estado = estado; throw e; }
       if (res.error || !res.data || typeof res.data !== "object") throw new Error("sin datos");
       return res.data;
     });
   }
-  var cargaDueno = 0;
-  function cargarDueno() {
-    if (!soyDueno()) return;
-    var carga = ++cargaDueno, origen = fuente;
-    mensaje("dueno-mensaje", "Cargando los datos…");
+  var cargaDueno, origenCargaDueno, visitaPendienteDueno, origenPanelDueno;
+  var relojDueno, actualizadoDueno = 0, proximaCargaDueno = 0;
+  var autoDueno = $("dueno-auto");
+  var resumenDueno = leerLocal("nova-dueno-resumen", false) === true;
+  var negocioAbiertoEnDetalle = $("dueno-negocio").open;
+
+  function panelDuenoAbierto() { return soyDueno() && fuente === origenPanelDueno && !panelDueno.hidden; }
+  function pintarModoDueno() {
+    panelDueno.classList.toggle("dueno-resumen", resumenDueno);
+    $("dueno-modo-resumen").setAttribute("aria-pressed", String(resumenDueno));
+    $("dueno-modo-detalle").setAttribute("aria-pressed", String(!resumenDueno));
+    $("dueno-negocio").open = resumenDueno || negocioAbiertoEnDetalle;
+  }
+  function cambiarModoDueno(resumen) {
+    if (resumen === resumenDueno) return;
+    if (!resumenDueno) negocioAbiertoEnDetalle = $("dueno-negocio").open;
+    cerrarEtiquetaDueno();
+    cerrarAyudaDueno();
+    resumenDueno = resumen;
+    guardarLocal("nova-dueno-resumen", resumen);
+    pintarModoDueno();
+  }
+  function registrarVisitaDueno(personas) {
+    if (!visitaPendienteDueno || !Array.isArray(personas)) return;
+    var visita = visitaPendienteDueno;
+    visitaPendienteDueno = null;
+    var nuevos = Dueno.nuevosDesdeVisita(personas, visita.anterior, visita.ahora);
+    var cuadro = $("dueno-nuevas-visita");
+    cuadro.hidden = !nuevos;
+    cuadro.textContent = nuevos ? pl(nuevos, "persona nueva", "personas nuevas") +
+      " desde tu última visita (" + fechaPanel.format(new Date(visita.anterior)) + ")." : "";
+    guardarLocal(visita.clave, visita.ahora);
+  }
+
+  function pintarActualizadoDueno() {
+    $("dueno-actualizado").textContent = actualizadoDueno ?
+      "Actualizado hace " + Math.max(0, Math.floor((Date.now() - actualizadoDueno) / 1000)) + " s" : "";
+  }
+  function pasoRelojDueno() {
+    if (!panelDuenoAbierto() || document.hidden) {
+      detenerRelojDueno();
+      return;
+    }
+    pintarActualizadoDueno();
+    if (autoDueno.checked && !cargaDueno && Date.now() >= proximaCargaDueno) cargarDueno(true);
+  }
+  function detenerRelojDueno() {
+    clearInterval(relojDueno);
+    relojDueno = null;
+  }
+  function sincronizarRelojDueno() {
+    detenerRelojDueno();
+    if (!panelDuenoAbierto() || document.hidden) return;
+    pasoRelojDueno();
+    relojDueno = setInterval(pasoRelojDueno, 1000);
+  }
+  function cargarDueno(automatica) {
+    if (!panelDuenoAbierto()) return;
+    var origen = fuente;
+    if (cargaDueno) return origenCargaDueno === origen ? cargaDueno : cargaDueno.then(function () {
+      if (origen === fuente) return cargarDueno(automatica);
+    });
+    origenCargaDueno = origen;
+    proximaCargaDueno = Date.now() + 60000;
+    if (automatica !== true || !actualizadoDueno) mensaje("dueno-mensaje", "Cargando los datos…");
     $("dueno-recargar").disabled = true;
-    return pedirDueno(false).then(function (datosDueno) {
-      if (origen !== fuente || carga !== cargaDueno) return;
-      mensaje("dueno-mensaje", "");
+    cargaDueno = Promise.resolve().then(function () {
+      return pedirDueno(false, origen, automatica === true);
+    }).then(function (datosDueno) {
+      if (!datosDueno || origen !== fuente || !panelDuenoAbierto()) return;
       pintarDueno(datosDueno);
+      registrarVisitaDueno(datosDueno.personas);
+      actualizadoDueno = Date.now();
+      pintarActualizadoDueno();
+      mensaje("dueno-mensaje", "");
     }).catch(function (e) {
-      if (origen !== fuente || carga !== cargaDueno) return;
+      if (origen !== fuente || !panelDuenoAbierto()) return;
       if (e && e.estado === 401) mensaje("dueno-mensaje", "Tu sesión venció. Cierra sesión en Ajustes y vuelve a entrar con tu correo.", true);
       else if (e && e.estado === 403) mensaje("dueno-mensaje", "Esta cuenta no es la del dueño.", true);
       else mensaje("dueno-mensaje", "No se pudieron cargar los datos. Revisa tu conexión e intenta otra vez.", true);
-    }).finally(function () { if (carga === cargaDueno) $("dueno-recargar").disabled = false; });
+    }).finally(function () {
+      cargaDueno = origenCargaDueno = null;
+      $("dueno-recargar").disabled = false;
+    });
+    return cargaDueno;
   }
+  function recargarTrasCambioDueno() {
+    var origen = fuente;
+    return Promise.resolve(cargaDueno).then(function () {
+      if (origen === fuente) return cargarDueno();
+    });
+  }
+  function abrirPanelDueno() {
+    if (!soyDueno() || !panelDueno.hidden) return;
+    var clave = "nova-dueno-ultima-visita:" + fuente.usuarioEventos;
+    visitaPendienteDueno = { clave: clave, anterior: leerLocal(clave, null), ahora: Date.now() };
+    $("dueno-nuevas-visita").hidden = true;
+    pintarPlantillasDueno();
+    origenPanelDueno = fuente;
+    abrirCapa("pantalla-dueno");
+    cargarDueno();
+    sincronizarRelojDueno();
+  }
+  function limpiarSesionDueno() {
+    detenerRelojDueno();
+    origenPanelDueno = visitaPendienteDueno = datosAnaliticaDueno = personasDueno = null;
+    actualizadoDueno = 0;
+    pintarActualizadoDueno();
+  }
+
   $("dueno-apk-avanzada").href = enlaceDescarga("NOVA-avanzada.apk");
-  $("btn-dueno").addEventListener("click", function () { abrirCapa("pantalla-dueno"); cargarDueno(); });
-  $("dueno-recargar").addEventListener("click", cargarDueno);
+  $("btn-dueno").addEventListener("click", abrirPanelDueno);
+  $("dueno-recargar").addEventListener("click", function () { cargarDueno(); });
+  $("dueno-rango").value = String(rangoDueno);
+  $("dueno-rango").addEventListener("change", function () {
+    rangoDueno = Dueno.rangoDias(Number(this.value));
+    guardarLocal("nova-dueno-rango", rangoDueno);
+    if (!datosAnaliticaDueno || !panelDuenoAbierto()) return;
+    var d = datosAnaliticaDueno, ahora = Date.now(), fechaUso = d.generado || ahora;
+    pintarSeriesDueno(d, ahora);
+    pintarCrecimientoDueno(d, ahora);
+    var uso = Analitica.prepararUso(d.uso, fechaUso);
+    if (uso && uso.total) pintarDiasIaDueno(uso.dias, fechaUso);
+  });
+  $("dueno-modo-resumen").addEventListener("click", function () { cambiarModoDueno(true); });
+  $("dueno-modo-detalle").addEventListener("click", function () { cambiarModoDueno(false); });
+  pintarModoDueno();
+  autoDueno.checked = leerLocal("nova-dueno-auto", false) === true;
+  autoDueno.addEventListener("change", function () {
+    guardarLocal("nova-dueno-auto", autoDueno.checked);
+    proximaCargaDueno = Date.now() + 60000;
+  });
+  document.addEventListener("visibilitychange", sincronizarRelojDueno);
+  $("dueno-copiar").addEventListener("click", function () {
+    if (!panelDuenoAbierto()) return;
+    var url = location.origin + location.pathname + "#panel";
+    Promise.resolve().then(function () { return navigator.clipboard.writeText(url); }).then(function () {
+      toast("Enlace copiado");
+    }).catch(function () {
+      if (panelDuenoAbierto()) window.prompt("Copia el enlace al panel", url);
+    });
+  });
   if (filtrosDueno.some(function (filtro) { return filtro[0] === vistaDuenoGuardada.filtro; })) {
     vistaDueno.filtro = vistaDuenoGuardada.filtro;
   }
@@ -9591,6 +9869,7 @@
   // ---------- Sesión ----------
   // El enlace del correo para cambiar la contraseña llega con "type=recovery" (o con un
   // error si venció). Se lee antes de crear el cliente, porque este limpia la dirección.
+  var panelAlEntrar = location.hash === "#panel" || new URLSearchParams(location.search).get("panel") === "1";
   var hashInicial = new URLSearchParams(location.hash.replace(/^#/, ""));
   var esRecuperacion = hashInicial.get("type") === "recovery";
   var errorEnlace = hashInicial.get("error_description");
@@ -10015,11 +10294,14 @@
       ultimaActividad = Date.now();
       if (!fuente.demo) bloquearSiHayPin();
       revisarInactividad();
-      pintarEstadoPapelera(); tutorialSiHaceFalta(); novedadesSiHaceFalta();
+      var abrirPanelDirecto = panelAlEntrar && soyDueno();
+      pintarEstadoPapelera();
+      if (abrirPanelDirecto) abrirPanelDueno();
+      else { tutorialSiHaceFalta(); novedadesSiHaceFalta(); }
       $("btn-dueno").hidden = !soyDueno(); marcarUso(); cargarAvisosNube(); cargarEncuestaNube(); cargarConfigNube();
       while (accionesPendientes.length) anotarTeclaRapida(accionesPendientes.shift());
       programarAvisos();
-      if (!fuente.demo) revisarBanco().then(function () { if (abrirBancoAlEntrar) { abrirBancoAlEntrar = false; abrirBanco(); } }).catch(function () { /* sin lista del banco */ });
+      if (!fuente.demo) revisarBanco(abrirPanelDirecto).then(function () { if (abrirBancoAlEntrar && !abrirPanelDirecto) { abrirBancoAlEntrar = false; abrirBanco(); } }).catch(function () { /* sin lista del banco */ });
       // Si salieron categorías nuevas del modo conductor (como "Cuota del vehículo"), se agregan solas.
       if (conductor()) asegurarCategoriasConductor().then(pintar).catch(function () { /* se intentará la próxima vez */ });
       return procesarProgramados();
@@ -10706,6 +10988,7 @@
     if (n > 0 && !confirm("Tienes " + n + (n === 1 ? " cambio" : " cambios") + " guardados sin internet que todavía no se envían. Si cierras sesión ahora se pierden. ¿Cerrar sesión de todos modos?")) return;
     reiniciarEventos();
     var vieja = fuente;
+    limpiarSesionDueno();
     fuente.salir().finally(function () {
       try { localStorage.removeItem("kv:nova-identidad"); localStorage.removeItem("nova-identidad"); } catch (e) { /* nada */ }
       if (vieja.limpiar) vieja.limpiar();

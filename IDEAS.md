@@ -85,13 +85,13 @@ Lista de ideas propuestas para revisar; ninguna está hecha todavía.
 
 ## Para anotar más rápido
 
-- ⭐ Anotar con la voz el gasto completo: "gasté 15 mil en almuerzo con Nequi".
+- ✅ ⭐ Anotar con la voz el gasto completo: "gasté 15 mil en almuerzo con Nequi".
 - ✅ Repetir el último gasto con un toque (el mismo café de siempre).
 - ✅ Plantillas de gastos frecuentes por hora: a las 7 a. m. sugiere "bus".
 - ✅ Teclado numérico grande con botones de 1.000, 5.000, 10.000 y 50.000.
 - ✅ Anotar varios gastos seguidos sin cerrar la pantalla.
 - ✅ Deshacer el último movimiento con un aviso de 5 segundos.
-- Foto del recibo como adjunto opcional en cualquier gasto.
+- ✅ Foto del recibo como adjunto opcional en cualquier gasto.
 - ✅ Autocompletar la descripción con lo que ya escribiste antes.
 - Atajo en la pantalla de inicio de Android: "Nuevo gasto".
 - Leer el valor de un pantallazo de Nequi o Daviplata compartido con NOVA.
@@ -187,7 +187,7 @@ Lista de ideas propuestas para revisar; ninguna está hecha todavía.
 
 ## Diseño y facilidad de uso
 
-- ⭐ Pantalla de inicio personalizable (elegir y ordenar las tarjetas).
+- ✅ ⭐ Pantalla de inicio personalizable (elegir y ordenar las tarjetas).
 - ✅ Modo claro y oscuro automático según la hora.
 - ✅ Animaciones suaves al anotar (confirmación visual).
 - ✅ Buscar con filtros combinados (fecha, monto, categoría, cuenta).
@@ -196,7 +196,7 @@ Lista de ideas propuestas para revisar; ninguna está hecha todavía.
 - ✅ Tamaño de letra ajustable dentro de la app.
 - ✅ Lector de pantalla revisado en todas las pantallas (accesibilidad).
 - ✅ Vista de calendario con el total de cada día.
-- Tutorial interactivo la primera vez, más corto y saltable.
+- ✅ Tutorial interactivo la primera vez, más corto y saltable.
 
 ## Seguridad y datos
 
@@ -212,7 +212,7 @@ Lista de ideas propuestas para revisar; ninguna está hecha todavía.
 - ✅ Página de inicio (landing) de NOVA con capturas, beneficios y botón de descarga de la APK.
 - ✅ Preguntas frecuentes y guía de uso en la web.
 - ✅ Mejorar el SEO para búsquedas como "app de finanzas gratis Colombia".
-- Página de novedades (qué trae cada versión), que la app enlaza al actualizar.
+- ✅ Página de novedades (qué trae cada versión), que la app enlaza al actualizar.
 - ✅ Formulario de sugerencias dentro de la app, que llegue a tu correo o a GitHub.
 - ✅ Programa de "invita a un amigo" con un logro especial.
 
@@ -268,51 +268,51 @@ Ideas para el panel del dueño. El panel muestra cómo se usa la app, nunca los 
 - Temas más preguntados (agrupados, sin mostrar el texto exacto).
 - ✅ Cuántas veces la IA buscó en internet.
 - Usuarios que más usan la IA (para controlar el costo).
-- Botón para pausar la IA si se dispara el uso.
-- Mensaje de mantenimiento de la IA visible para todos.
+- ✅ Botón para pausar la IA si se dispara el uso.
+- ✅ Mensaje de mantenimiento de la IA visible para todos.
 
 ## Versiones y APK
 
-- ⭐ Cuántos usuarios hay en cada versión (ya existe; agregar un gráfico).
+- ✅ ⭐ Cuántos usuarios hay en cada versión (ya existe; agregar un gráfico).
 - ✅ Porcentaje que ya actualizó a la última versión.
-- Fecha de publicación de cada versión.
-- Enlace directo a la APK y a la última corrida de GitHub.
-- Estado de la última publicación de la APK (bien o con error).
-- Avisar en el panel si la publicación falló.
-- Obligar a actualizar a quien use una versión muy vieja.
-- Notas de cada versión editables desde el panel.
+- ✅ Fecha de publicación de cada versión.
+- ✅ Enlace directo a la APK y a la última corrida de GitHub.
+- ✅ Estado de la última publicación de la APK (bien o con error).
+- ✅ Avisar en el panel si la publicación falló.
+- ✅ Obligar a actualizar a quien use una versión muy vieja.
+- ✅ Notas de cada versión editables desde el panel.
 - Descargas de la APK por día.
 - ✅ Cuántos usan la APK "avanzada" y cuántos la normal.
 
 ## Salud técnica
 
-- ⭐ Errores de la app (los que se registran) por día.
+- ✅ ⭐ Errores de la app (los que se registran) por día.
 - ✅ Lista de los últimos errores, con versión y pantalla.
 - ✅ Estado de Supabase (base de datos y funciones).
-- Estado de Vercel (la página web) y de la última publicación.
+- ✅ Estado de Vercel (la página web) y de la última publicación.
 - Tiempo de carga de la app.
 - Funciones de Supabase: llamadas, errores y tiempo de respuesta.
 - ✅ Espacio usado en la base de datos y en el almacenamiento.
 - ✅ Fotos de recibos guardadas y su tamaño total.
-- Fuente de las tasas de cambio que está funcionando (Fawaz, TRM, respaldo).
+- ✅ Fuente de las tasas de cambio que está funcionando (Fawaz, TRM, respaldo).
 - ✅ Prueba rápida de un botón: ¿la IA responde? ¿las tasas cargan?
 
 ## Comunicación con usuarios
 
-- ⭐ Enviar un aviso dentro de la app a todos o a un grupo.
+- ✅ ⭐ Enviar un aviso dentro de la app a todos o a un grupo.
 - ✅ Banner de novedades al abrir la app.
 - ✅ Encuesta corta dentro de la app ("¿qué mejorarías?").
 - ✅ Bandeja de sugerencias y reportes de los usuarios.
-- Responder una sugerencia desde el panel.
+- ✅ Responder una sugerencia desde el panel.
 - Correo de bienvenida y de "te extrañamos" (automáticos).
-- Plantillas de mensajes.
+- ✅ Plantillas de mensajes.
 - ✅ Historial de avisos enviados y cuántos los vieron.
-- Programar un aviso para una fecha.
+- ✅ Programar un aviso para una fecha.
 - Notificación al dueño cuando se registra alguien nuevo.
 
 ## Seguridad y control
 
-- ⭐ Registro de accesos al panel (quién entró y cuándo).
+- ✅ ⭐ Registro de accesos al panel (quién entró y cuándo).
 - ✅ Bloquear o desbloquear una cuenta.
 - ✅ Reenviar el correo de confirmación a un usuario.
 - Ver inicios de sesión sospechosos (muchos intentos fallidos).
@@ -325,7 +325,7 @@ Ideas para el panel del dueño. El panel muestra cómo se usa la app, nunca los 
 
 ## Negocio y metas
 
-- ⭐ Meta de usuarios del mes, con barra de progreso.
+- ✅ ⭐ Meta de usuarios del mes, con barra de progreso.
 - ✅ Costo mensual estimado (Supabase, Vercel, IA).
 - ✅ Costo por usuario activo.
 - ✅ Proyección de usuarios a 3 y 6 meses.
@@ -339,12 +339,12 @@ Ideas para el panel del dueño. El panel muestra cómo se usa la app, nunca los 
 ## Diseño y facilidad del panel
 
 - ⭐ Tarjetas que no se salen del cuadro (ya hecho). ✅
-- Rango de fechas elegible para todos los gráficos.
-- Modo resumen (solo números grandes) y modo detalle.
-- Actualización automática cada minuto.
-- Gráficos al tocar: ver el valor de cada día.
-- Panel cómodo en el celular y en el computador.
-- Atajo para abrir el panel desde la pantalla de inicio.
-- Tema oscuro del panel.
-- Ayuda corta (ℹ️) en cada número para explicar qué significa.
+- ✅ Rango de fechas elegible para todos los gráficos.
+- ✅ Modo resumen (solo números grandes) y modo detalle.
+- ✅ Actualización automática cada minuto.
+- ✅ Gráficos al tocar: ver el valor de cada día.
+- ✅ Panel cómodo en el celular y en el computador.
+- ✅ Atajo para abrir el panel desde la pantalla de inicio.
+- ✅ Tema oscuro del panel.
+- ✅ Ayuda corta (ℹ️) en cada número para explicar qué significa.
 - Guardar la vista preferida (filtros y orden). ✅ (en PR)
