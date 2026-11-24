@@ -86,6 +86,18 @@
     return cantidad(meta) ? Math.min(100, Math.round(100 * cantidad(actual) / cantidad(meta))) : 0;
   }
 
+  function porcentajesEncuesta(conteos, total) {
+    return conteos.map(function (conteo) { return porcentaje(conteo, total); });
+  }
+
+  function validarEncuesta(pregunta, opciones) {
+    pregunta = pregunta.trim();
+    opciones = opciones.map(function (opcion) { return opcion.trim(); }).filter(Boolean);
+    if (!pregunta || Array.from(pregunta).length > 200 || opciones.length < 2 || opciones.length > 6 ||
+        opciones.some(function (opcion) { return Array.from(opcion).length > 60; })) return null;
+    return { accion: "encuesta_crear", pregunta: pregunta, opciones: opciones };
+  }
+
   function validarAviso(titulo, mensaje, audiencia, fechaFinal, ahora, fechaInicial) {
     titulo = titulo.trim();
     mensaje = mensaje.trim();
@@ -165,6 +177,7 @@
   }
 
   var api = {
+    porcentajesEncuesta: porcentajesEncuesta, validarEncuesta: validarEncuesta,
     bytesAMegabytes: bytesAMegabytes, formatearTamano: formatearTamano, tablasMasGrandes: tablasMasGrandes,
     accionesDeCuenta: accionesDeCuenta, confirmaCorreo: confirmaCorreo,
     personasVisibles: personasVisibles,

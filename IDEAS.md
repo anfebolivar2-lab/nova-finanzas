@@ -301,12 +301,12 @@ Ideas para el panel del dueño. El panel muestra cómo se usa la app, nunca los 
 
 - ⭐ Enviar un aviso dentro de la app a todos o a un grupo.
 - ✅ Banner de novedades al abrir la app.
-- Encuesta corta dentro de la app ("¿qué mejorarías?").
+- ✅ Encuesta corta dentro de la app ("¿qué mejorarías?").
 - ✅ Bandeja de sugerencias y reportes de los usuarios.
 - Responder una sugerencia desde el panel.
 - Correo de bienvenida y de "te extrañamos" (automáticos).
 - Plantillas de mensajes.
-- Historial de avisos enviados y cuántos los vieron.
+- ✅ Historial de avisos enviados y cuántos los vieron.
 - Programar un aviso para una fecha.
 - Notificación al dueño cuando se registra alguien nuevo.
 

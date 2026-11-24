@@ -1,7 +1,23 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const { filtrarPersonas, contarFiltros, ultimos30Dias, barrasVersiones, registrosParaMeta, porcentaje, validarAviso, sugerenciasPendientes, recientes, recortarTexto,
-  bytesAMegabytes, formatearTamano, tablasMasGrandes, accionesDeCuenta, confirmaCorreo } = require("./dueno.js");
+  bytesAMegabytes, formatearTamano, tablasMasGrandes, accionesDeCuenta, confirmaCorreo, porcentajesEncuesta, validarEncuesta } = require("./dueno.js");
+
+test("calcula porcentajes por opción, incluso sin respuestas o con una sola opción", () => {
+  assert.deepEqual(porcentajesEncuesta([0, 0], 0), [0, 0]);
+  assert.deepEqual(porcentajesEncuesta([8], 8), [100]);
+  assert.deepEqual(porcentajesEncuesta([0, 8, 0], 8), [0, 100, 0]);
+  assert.deepEqual(porcentajesEncuesta([1, 2], 3), [33, 67]);
+});
+
+test("recorta las opciones de encuesta, descarta vacías y comprueba límites", () => {
+  assert.deepEqual(validarEncuesta(" ¿Te sirve? ", [" Sí ", "  ", " No "]),
+    { accion: "encuesta_crear", pregunta: "¿Te sirve?", opciones: ["Sí", "No"] });
+  assert.equal(validarEncuesta("Pregunta", ["Sí", " "]), null);
+  assert.equal(validarEncuesta("Pregunta", Array(7).fill("Opción")), null);
+  assert.equal(validarEncuesta("x".repeat(201), ["Sí", "No"]), null);
+  assert.equal(validarEncuesta("Pregunta", ["Sí", "x".repeat(61)]), null);
+});
 
 const ahora = new Date("2026-11-22T12:00:00Z");
 const DIA = 24 * 60 * 60 * 1000;
