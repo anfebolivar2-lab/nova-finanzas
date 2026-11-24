@@ -316,8 +316,8 @@ Ideas para el panel del dueño. El panel muestra cómo se usa la app, nunca los 
 - ✅ Bloquear o desbloquear una cuenta.
 - ✅ Reenviar el correo de confirmación a un usuario.
 - Ver inicios de sesión sospechosos (muchos intentos fallidos).
-- Cerrar la sesión de un usuario en todos sus dispositivos.
-- Varios administradores con permisos distintos (solo ver, o ver y actuar).
+- ✅ Cerrar la sesión de un usuario en todos sus dispositivos.
+- ✅ Varios administradores con permisos distintos (solo ver, o ver y actuar).
 - Doble verificación para entrar al panel.
 - Respaldo de la base de datos con un botón y la fecha del último.
 - ✅ Que borrar algo pida doble confirmación, y que siempre haya papelera.

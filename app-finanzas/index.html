@@ -1317,9 +1317,9 @@
     <div id="sugerencia-respuestas" class="dueno-lista" aria-live="polite"></div>
   </div>
 </div>
-<section id="pantalla-dueno" class="capa" aria-labelledby="pantalla-dueno-titulo" role="dialog" hidden>
+<section id="pantalla-dueno" class="capa dueno-sin-acciones" aria-labelledby="pantalla-dueno-titulo" role="dialog" hidden>
   <div class="sub-cabecera dueno-en-resumen"><button type="button" class="icono-btn" data-cerrar aria-label="Volver"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button><h1 id="pantalla-dueno-titulo" tabindex="-1">👑 Panel del dueño</h1></div>
-  <p class="nota dueno-en-resumen">Solo tu cuenta puede ver esto. <span id="dueno-hora"></span></p>
+  <p class="nota dueno-en-resumen"><span id="dueno-hora"></span></p>
   <div class="dueno-controles dueno-en-resumen">
     <label for="dueno-rango">Rango de los gráficos</label>
     <select id="dueno-rango">
@@ -1336,6 +1336,7 @@
     <span id="dueno-actualizado" class="nota"></span>
   </div>
   <p id="dueno-nuevas-visita" class="tarjeta nota dueno-en-resumen" role="status" hidden></p>
+  <p id="dueno-rol-mensaje" class="nota dueno-en-resumen" aria-live="polite" hidden>Tu cuenta solo puede ver el panel.</p>
   <p class="mensaje dueno-en-resumen" id="dueno-mensaje" role="status"></p>
   <label class="dueno-interruptor"><input id="dueno-ocultar-prueba" type="checkbox"> Ocultar cuentas de prueba</label>
   <article class="tarjeta formulario dueno-seccion dueno-en-resumen">
@@ -1349,25 +1350,40 @@
     <div id="dueno-config" class="dueno-lista" hidden>
       <form class="formulario" data-clave="ia_pausada">
         <label class="dueno-interruptor"><input id="dueno-config-ia_pausada" type="checkbox" role="switch"> Pausar la IA</label>
-        <button type="submit" class="mini">Guardar</button>
+        <button data-dueno-accion type="submit" class="mini">Guardar</button>
       </form>
       <form class="formulario" data-clave="ia_mensaje">
         <label for="dueno-config-ia_mensaje">Mensaje de mantenimiento</label>
         <textarea id="dueno-config-ia_mensaje" rows="2" maxlength="300"></textarea>
-        <button type="submit" class="mini">Guardar</button>
+        <button data-dueno-accion type="submit" class="mini">Guardar</button>
       </form>
       <form class="formulario" data-clave="version_minima">
         <label for="dueno-config-version_minima">Versión mínima</label>
         <input id="dueno-config-version_minima" type="text" maxlength="20" placeholder="1.72">
-        <button type="submit" class="mini">Guardar</button>
+        <button data-dueno-accion type="submit" class="mini">Guardar</button>
       </form>
       <form class="formulario" data-clave="notas_version">
         <label for="dueno-config-notas_version">Notas de la versión</label>
         <textarea id="dueno-config-notas_version" rows="3" maxlength="1000"></textarea>
-        <button type="submit" class="mini">Guardar</button>
+        <button data-dueno-accion type="submit" class="mini">Guardar</button>
       </form>
     </div>
     <p id="dueno-config-mensaje" class="mensaje" role="status"></p>
+  </article>
+  <article id="dueno-admins-seccion" class="tarjeta formulario dueno-seccion" hidden>
+    <h2 class="titulo-tarjeta">Administradores del panel</h2>
+    <ul id="dueno-admins-lista" class="lista-banco"></ul>
+    <form id="dueno-admins-form" class="formulario">
+      <label for="dueno-admins-correo">Correo de la cuenta</label>
+      <input id="dueno-admins-correo" type="email" autocomplete="off" required>
+      <label for="dueno-admins-rol">Rol</label>
+      <select id="dueno-admins-rol">
+        <option value="ver">Solo ver</option>
+        <option value="actuar">Ver y actuar</option>
+      </select>
+      <button id="dueno-admins-agregar" type="submit" class="mini">Agregar</button>
+    </form>
+    <p id="dueno-admins-mensaje" class="mensaje" aria-live="polite"></p>
   </article>
   <details id="dueno-negocio" class="tarjeta dueno-seccion dueno-en-resumen" open>
     <summary>Negocio</summary>
@@ -1456,8 +1472,8 @@
     <h3>Últimas acciones sobre cuentas</h3>
     <ul id="dueno-salud-acciones" class="lista-banco"></ul>
     <div class="dueno-filtros">
-      <button type="button" class="mini" id="dueno-probar-tasas">Probar tasas ahora</button>
-      <button type="button" class="mini" id="dueno-probar-ia">Probar IA (gasta 1 consulta)</button>
+      <button type="button" class="mini" data-dueno-accion id="dueno-probar-tasas">Probar tasas ahora</button>
+      <button type="button" class="mini" data-dueno-accion id="dueno-probar-ia">Probar IA (gasta 1 consulta)</button>
     </div>
     <p id="dueno-tasas-resultado" class="mensaje" role="status" hidden></p>
     <p id="dueno-ia-resultado" class="mensaje" role="status" hidden></p>
@@ -1502,7 +1518,7 @@
   <article class="tarjeta dueno-grafico"><h2 class="titulo-tarjeta">Errores por día</h2><div id="dueno-errores"></div></article>
   <article class="tarjeta formulario">
     <h2 class="titulo-tarjeta">Meta de usuarios del mes</h2>
-    <form id="form-dueno-meta" class="formulario">
+    <form data-dueno-accion id="form-dueno-meta" class="formulario">
       <label for="dueno-meta">Meta de registros</label>
       <input id="dueno-meta" type="number" inputmode="numeric" min="1" max="9007199254740991" step="1">
       <button type="submit" class="mini">Guardar meta</button>
@@ -1516,7 +1532,7 @@
   </article>
   <article class="tarjeta formulario">
     <h2 class="titulo-tarjeta">Avisos</h2>
-    <form id="form-dueno-aviso" class="formulario" novalidate>
+    <form data-dueno-accion id="form-dueno-aviso" class="formulario" novalidate>
       <label for="dueno-aviso-titulo">Título</label>
       <input id="dueno-aviso-titulo" type="text" maxlength="80" required>
       <label for="dueno-aviso-texto">Mensaje</label>
@@ -1543,7 +1559,7 @@
   </article>
   <article class="tarjeta formulario">
     <h2 class="titulo-tarjeta">Encuestas</h2>
-    <form id="form-dueno-encuesta" class="formulario">
+    <form data-dueno-accion id="form-dueno-encuesta" class="formulario">
       <label for="dueno-encuesta-pregunta">Pregunta</label>
       <input id="dueno-encuesta-pregunta" type="text" maxlength="200" required>
       <div id="dueno-encuesta-opciones" class="formulario"></div>
@@ -1568,7 +1584,8 @@
   <dialog id="dueno-ficha" class="tarjeta dueno-ficha" aria-labelledby="dueno-ficha-correo">
     <h2 id="dueno-ficha-correo" class="titulo-tarjeta"></h2>
     <dl id="dueno-ficha-datos"></dl>
-    <div id="dueno-ficha-acciones" class="dueno-filtros"></div>
+    <p id="dueno-ficha-mensaje" class="mensaje" aria-live="polite"></p>
+    <div data-dueno-accion id="dueno-ficha-acciones" class="dueno-filtros"></div>
     <form method="dialog"><button class="mini" autofocus>Cerrar</button></form>
   </dialog>
   <dialog id="dueno-confirmar-cuenta" class="tarjeta dueno-ficha" aria-labelledby="dueno-confirmar-titulo">
@@ -1885,6 +1902,7 @@
 <script src="vendor/supabase.js"></script>
 <script src="tarjeta.js"></script>
 <script src="dueno.js"></script>
+<script src="permisos.js"></script>
 <script src="analitica.js"></script>
 <script src="nube.js"></script>
 <script src="ota.js"></script>

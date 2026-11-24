@@ -466,6 +466,7 @@
       alFallar: function () { toast("Un cambio guardado sin internet no se pudo enviar y se descartó."); }
     });
     f.usuarioEventos = usuario.id;
+    f.novaAdmin = !!usuario.user_metadata && usuario.user_metadata.nova_admin === true;
     // Historial de cambios: lo escriben disparadores de la base de datos; aquí solo se lee.
     f.historial = function () {
       return cliente.from("fin_historial").select("*").order("creado_en", { ascending: false }).limit(100).then(function (r) { if (r.error) throw new Error(r.error.message); return r.data; });
@@ -6810,7 +6811,7 @@
   // navegador y qué versión tiene (sin datos de su plata), para que el dueño sepa cuánta gente la usa.
   var DUENOS = ["e84fedff-8279-4a12-9ff7-4992dae4cbbf", "92bfcc78-ebac-47ab-8171-2683d624c721"];
   function idUsuario() { return (leerLocal("nova-identidad", {}) || {}).id || ""; }
-  function soyDueno() { return !!fuente && !fuente.demo && DUENOS.indexOf(fuente.usuarioEventos) >= 0; }
+  function soyDueno() { return !!fuente && !fuente.demo && (DUENOS.indexOf(fuente.usuarioEventos) >= 0 || fuente.novaAdmin === true); }
   var Nube = window.NovaNube;
   var plataformaNova = enApp ? "android" : "web";
   var versionNova;
@@ -7405,6 +7406,22 @@
   var Dueno = window.NovaDueno;
   var rangoDueno = Dueno.rangoDias(leerLocal("nova-dueno-rango", 30));
   var panelDueno = $("pantalla-dueno");
+  var permisosDueno = window.NovaPermisos.permisosPanel();
+
+  function pintarPermisosDueno(rol) {
+    permisosDueno = window.NovaPermisos.permisosPanel(rol);
+    panelDueno.classList.toggle("dueno-sin-acciones", !permisosDueno.actuar);
+    $("dueno-rol-mensaje").hidden = rol !== "ver";
+    $("dueno-admins-seccion").hidden = !permisosDueno.gestionarAdmins;
+    if (!permisosDueno.gestionarAdmins) $("dueno-admins-lista").replaceChildren();
+    if (confirmacionCuenta.open && (!permisosDueno.actuar ||
+        (cuentaPendiente && cuentaPendiente.accion === "admin_quitar" && !permisosDueno.gestionarAdmins))) {
+      confirmacionCuenta.close();
+    }
+    Array.from(panelDueno.querySelectorAll("#dueno-config input, #dueno-config textarea")).concat(camposCostosDueno).forEach(function (campo) {
+      campo.disabled = !permisosDueno.actuar;
+    });
+  }
   var botonAyudaDueno, textoAyudaDueno;
   function cerrarAyudaDueno() {
     if (!botonAyudaDueno) return;
@@ -7443,6 +7460,7 @@
   }
   $("form-dueno-meta").addEventListener("submit", function (e) {
     e.preventDefault();
+    if (!permisosDueno.actuar) return;
     var valor = Dueno.cantidad($("dueno-meta").value);
     if (!guardarLocal("nova-dueno-meta", valor)) return toast("No se pudo guardar la meta en este dispositivo");
     metaDueno = valor;
@@ -7484,7 +7502,7 @@
   }
 
   function actuarDueno(boton, cuerpo, idMensaje, exito, alGuardar) {
-    if (boton.disabled || !soyDueno()) return;
+    if (boton.disabled || !soyDueno() || !permisosDueno.actuar) return;
     var origen = fuente;
     boton.disabled = true;
     mensaje(idMensaje, "Guardando…");
@@ -7583,10 +7601,11 @@
       li.append(el("strong", null, aviso.titulo), el("p", null, aviso.mensaje),
         el("small", "nota", [aviso.audiencia, aviso.activo ? "Activo" : "Apagado"].filter(Boolean).join(" · ") + inicio + fin),
         el("small", "nota", aviso.vistos != null ? "Lo vieron " + aviso.vistos : "Conteo de vistas no disponible."));
-      if (aviso.activo && aviso.id != null) {
+      if (permisosDueno.actuar && aviso.activo && aviso.id != null) {
         var boton = botonHabito("Apagar", function () {
           if (confirm("¿Apagar este aviso?")) actuarDueno(boton, { accion: "aviso_apagar", id: aviso.id }, "dueno-aviso-mensaje", "Aviso apagado");
         });
+        boton.setAttribute("data-dueno-accion", "");
         li.append(boton);
       }
     });
@@ -7611,11 +7630,12 @@
           li.append(el("p", null, comentario.comentario), el("small", "nota", fechaDueno(comentario.creado_en)));
         });
       }
-      if (encuesta.activa) {
+      if (permisosDueno.actuar && encuesta.activa) {
         var cerrar = botonHabito("Cerrar encuesta", function () {
           if (confirm("¿Cerrar esta encuesta?")) actuarDueno(cerrar, { accion: "encuesta_cerrar", id: encuesta.id },
             "dueno-encuesta-mensaje", "Encuesta cerrada");
         });
+        cerrar.setAttribute("data-dueno-accion", "");
         li.append(cerrar);
       }
     });
@@ -7627,8 +7647,9 @@
       if (s.respuesta) {
         li.append(el("strong", null, "Respuesta"), el("p", null, s.respuesta));
         if (s.respondida_en) li.append(el("small", "nota", fechaDueno(s.respondida_en)));
-      } else if (s.id != null) {
+      } else if (permisosDueno.actuar && s.id != null) {
         var form = el("form", "formulario dueno-responder");
+        form.setAttribute("data-dueno-accion", "");
         var respuesta = el("textarea");
         respuesta.id = "dueno-respuesta-" + s.id;
         respuesta.rows = 3;
@@ -7648,10 +7669,11 @@
         });
         li.append(form);
       }
-      if (s.id != null) {
+      if (permisosDueno.actuar && s.id != null) {
         var boton = botonHabito(s.atendida ? "Marcar pendiente" : "Marcar atendida", function () {
           actuarDueno(boton, { accion: "sugerencia_atender", id: s.id, atendida: !s.atendida }, "dueno-sugerencias-mensaje", "Sugerencia actualizada");
         });
+        boton.setAttribute("data-dueno-accion", "");
         li.append(boton);
       }
     });
@@ -7889,7 +7911,7 @@
   }
   formCostosDueno.addEventListener("submit", function (e) { e.preventDefault(); });
   formCostosDueno.addEventListener("input", function () {
-    if (soyDueno() && negocioDueno) pintarCostosDueno(true);
+    if (soyDueno() && permisosDueno.actuar && negocioDueno) pintarCostosDueno(true);
   });
   $("dueno-informe-abrir").addEventListener("click", function () {
     if (!soyDueno() || !negocioDueno) return;
@@ -8026,7 +8048,10 @@
   var textosCuentaDueno = {
     cuenta_bloquear: ["Bloquear cuenta", "Sí, bloquear", "Cuenta bloqueada.", "Bloqueo de cuenta"],
     cuenta_desbloquear: ["Desbloquear cuenta", "Sí, desbloquear", "Cuenta desbloqueada.", "Desbloqueo de cuenta"],
-    cuenta_reenviar_confirmacion: ["Reenviar correo de confirmación", "Sí, reenviar", "Correo de confirmación reenviado.", "Reenvío de confirmación"]
+    cuenta_reenviar_confirmacion: ["Reenviar correo de confirmación", "Sí, reenviar", "Correo de confirmación reenviado.", "Reenvío de confirmación"],
+    cuenta_cerrar_sesiones: ["Cerrar sesión en todos sus dispositivos", "Sí, cerrar sesión", "", "Cierre de sesiones"],
+    admin_agregar: ["Agregar administrador", "", "Permiso guardado.", "Permiso de administrador guardado"],
+    admin_quitar: ["Quitar administrador", "Sí, quitar", "Administrador quitado.", "Administrador quitado"]
   };
   var confirmacionCuenta = $("dueno-confirmar-cuenta"), correoCuenta = $("dueno-confirmar-correo");
   var enviarCuenta = $("dueno-confirmar-enviar"), cancelarCuenta = $("dueno-confirmar-cancelar");
@@ -8038,7 +8063,8 @@
   }
 
   function confirmarCuentaDueno(persona, accion) {
-    if (!soyDueno() || actuandoCuenta) return;
+    if (!soyDueno() || !permisosDueno.actuar || actuandoCuenta ||
+        (accion === "admin_quitar" && !permisosDueno.gestionarAdmins)) return;
     var textos = textosCuentaDueno[accion];
     cuentaPendiente = { persona: persona, accion: accion };
     $("dueno-confirmar-titulo").textContent = textos[0];
@@ -8062,38 +8088,87 @@
     throw new Error(fallo);
   }
 
+  function pedirAccionDueno(cuerpo) {
+    var fallo = "No se pudo completar la acción.";
+    return cliente.functions.invoke("nova-dueno", { body: cuerpo }).then(function (res) {
+      return datosDeFuncionDueno(res, fallo);
+    }).then(function (res) {
+      if (!res.ok) throw new Error(fallo);
+      return res;
+    });
+  }
+
+  function pintarAdminsDueno(admins) {
+    if (!permisosDueno.gestionarAdmins) return;
+    listaDueno("dueno-admins-lista", admins || [], "Todavía no hay administradores.", function (li, admin) {
+      var boton = botonHabito("Quitar", function () { confirmarCuentaDueno(admin, "admin_quitar"); });
+      boton.setAttribute("aria-label", "Quitar a " + admin.correo);
+      li.append(el("strong", "dueno-correo", admin.correo),
+        el("small", "nota", admin.rol === "actuar" ? "Ver y actuar" : "Solo ver"), boton);
+    });
+  }
+
+  $("dueno-admins-form").addEventListener("submit", function (e) {
+    e.preventDefault();
+    if (!soyDueno() || !permisosDueno.gestionarAdmins || actuandoCuenta) return;
+    var origen = fuente, campo = $("dueno-admins-correo"), selector = $("dueno-admins-rol");
+    var boton = $("dueno-admins-agregar");
+    actuandoCuenta = campo.disabled = selector.disabled = boton.disabled = true;
+    mensaje("dueno-admins-mensaje", "Guardando…");
+    pedirAccionDueno({ accion: "admin_agregar", correo: campo.value.trim(), rol: selector.value }).then(function (res) {
+      if (origen !== fuente) return;
+      campo.value = "";
+      mensaje("dueno-admins-mensaje", "Permiso guardado." +
+        (res.auditoria === false ? " No se pudo guardar en el historial." : ""));
+      return recargarTrasCambioDueno();
+    }).catch(function (error) {
+      if (origen === fuente) mensaje("dueno-admins-mensaje", error.message, true);
+    }).finally(function () {
+      actuandoCuenta = campo.disabled = selector.disabled = boton.disabled = false;
+    });
+  });
+
   correoCuenta.addEventListener("input", validarCorreoCuenta);
   cancelarCuenta.addEventListener("click", function () { confirmacionCuenta.close(); });
   confirmacionCuenta.addEventListener("cancel", function (e) { if (actuandoCuenta) e.preventDefault(); });
   $("dueno-confirmar-form").addEventListener("submit", function (e) {
     e.preventDefault();
     validarCorreoCuenta();
-    if (enviarCuenta.disabled || !soyDueno()) return;
+    if (enviarCuenta.disabled || !soyDueno() || !permisosDueno.actuar) return;
     var cambio = cuentaPendiente, origen = fuente;
+    if (cambio.accion === "admin_quitar" && !permisosDueno.gestionarAdmins) return;
     var fallo = "No se pudo completar la acción.";
     actuandoCuenta = true;
     enviarCuenta.disabled = cancelarCuenta.disabled = correoCuenta.disabled = true;
     mensaje("dueno-confirmar-mensaje", "Aplicando el cambio…");
-    cliente.functions.invoke("nova-dueno", { body: { accion: cambio.accion, id: cambio.persona.id } })
-      .then(function (res) { return datosDeFuncionDueno(res, fallo); })
-      .then(function (res) {
-        if (!res.ok) throw new Error(fallo);
-        confirmacionCuenta.close();
-        $("dueno-ficha").close();
-        if (origen !== fuente || !soyDueno()) return;
-        $("dueno-cuenta-mensaje").hidden = false;
-        var exito = textosCuentaDueno[cambio.accion][2];
-        if (res.auditoria === false) exito += " No se pudo guardar en el historial.";
-        mensaje("dueno-cuenta-mensaje", exito);
-        toast(exito);
+    pedirAccionDueno({ accion: cambio.accion, id: cambio.persona.id }).then(function (res) {
+      if (origen !== fuente || !soyDueno()) return;
+      confirmacionCuenta.close();
+      if (cambio.accion === "cuenta_cerrar_sesiones") {
+        mensaje("dueno-ficha-mensaje", res.sesiones ?
+          "Se cerró la sesión en " + pl(res.sesiones, "dispositivo", "dispositivos") + "." : "No tenía sesiones abiertas.");
+        return;
+      }
+      if (cambio.accion === "admin_quitar") {
+        $("dueno-admins-correo").focus();
+        mensaje("dueno-admins-mensaje", "Administrador quitado." +
+          (res.auditoria === false ? " No se pudo guardar en el historial." : ""));
         return recargarTrasCambioDueno();
-      }).catch(function (error) {
-        if (origen === fuente && soyDueno()) mensaje("dueno-confirmar-mensaje", error.message || fallo, true);
-      }).finally(function () {
-        actuandoCuenta = false;
-        cancelarCuenta.disabled = correoCuenta.disabled = false;
-        validarCorreoCuenta();
-      });
+      }
+      $("dueno-ficha").close();
+      $("dueno-cuenta-mensaje").hidden = false;
+      var exito = textosCuentaDueno[cambio.accion][2];
+      if (res.auditoria === false) exito += " No se pudo guardar en el historial.";
+      mensaje("dueno-cuenta-mensaje", exito);
+      toast(exito);
+      return recargarTrasCambioDueno();
+    }).catch(function (error) {
+      if (origen === fuente && soyDueno()) mensaje("dueno-confirmar-mensaje", error.message || fallo, true);
+    }).finally(function () {
+      actuandoCuenta = false;
+      cancelarCuenta.disabled = correoCuenta.disabled = false;
+      validarCorreoCuenta();
+    });
   });
 
   function abrirFichaDueno(persona) {
@@ -8114,7 +8189,10 @@
     if (ficha.referidoPor) datos.append(el("dt", null, "Invitada por"), el("dd", null, ficha.referidoPor));
     var acciones = $("dueno-ficha-acciones");
     acciones.replaceChildren();
-    Dueno.accionesDeCuenta(persona).forEach(function (accion) {
+    mensaje("dueno-ficha-mensaje", "");
+    var disponibles = permisosDueno.actuar ? Dueno.accionesDeCuenta(persona) : [];
+    if (permisosDueno.actuar && persona.id && !persona.dueno) disponibles.push("cuenta_cerrar_sesiones");
+    disponibles.forEach(function (accion) {
       var boton = el("button", accion === "cuenta_bloquear" ? "mini peligro" : "mini", textosCuentaDueno[accion][0]);
       boton.type = "button";
       boton.addEventListener("click", function () { confirmarCuentaDueno(persona, accion); });
@@ -8216,7 +8294,7 @@
   }
 
   function probarServicioDueno(boton, idMensaje, etiqueta, prueba) {
-    if (boton.disabled || !soyDueno()) return;
+    if (boton.disabled || !soyDueno() || !permisosDueno.actuar) return;
     var origen = fuente, inicio = performance.now();
     boton.disabled = true;
     $(idMensaje).hidden = false;
@@ -8244,7 +8322,7 @@
     });
   });
   $("dueno-probar-ia").addEventListener("click", function () {
-    if (!soyDueno() || !confirm("Esta prueba de IA gasta 1 consulta. ¿Continuar?")) return;
+    if (!soyDueno() || !permisosDueno.actuar || !confirm("Esta prueba de IA gasta 1 consulta. ¿Continuar?")) return;
     probarServicioDueno(this, "dueno-ia-resultado", "IA", function () {
       return preguntarEnFlujo({ pregunta: "Escribe únicamente la palabra OK." }, function () {}).then(function (respuesta) {
         if (!/^ok[.!]?$/i.test(respuesta.trim())) throw new Error("La IA no devolvió la respuesta esperada.");
@@ -8278,6 +8356,8 @@
   }
 
   function pintarDueno(d) {
+    pintarPermisosDueno(d.miRol);
+    pintarAdminsDueno(d.admins);
     var r = d.resumen || {};
     $("dueno-hora").textContent = d.generado ? "Datos de " + fechaDueno(d.generado) + "." : "";
     var kpis = [
@@ -8440,7 +8520,10 @@
     }).catch(function (e) {
       if (origen !== fuente || !panelDuenoAbierto()) return;
       if (e && e.estado === 401) mensaje("dueno-mensaje", "Tu sesión venció. Cierra sesión en Ajustes y vuelve a entrar con tu correo.", true);
-      else if (e && e.estado === 403) mensaje("dueno-mensaje", "Esta cuenta no es la del dueño.", true);
+      else if (e && e.estado === 403) {
+        pintarPermisosDueno();
+        mensaje("dueno-mensaje", "Esta cuenta no tiene acceso al panel.", true);
+      }
       else mensaje("dueno-mensaje", "No se pudieron cargar los datos. Revisa tu conexión e intenta otra vez.", true);
     }).finally(function () {
       cargaDueno = origenCargaDueno = null;
@@ -8467,6 +8550,8 @@
   }
   function limpiarSesionDueno() {
     detenerRelojDueno();
+    pintarPermisosDueno();
+    mensaje("dueno-admins-mensaje", "");
     origenPanelDueno = visitaPendienteDueno = datosAnaliticaDueno = personasDueno = null;
     actualizadoDueno = 0;
     pintarActualizadoDueno();
