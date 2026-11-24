@@ -1,5 +1,5 @@
-// nova-dueno v10: panel del dueño de NOVA. Cuenta cuántas personas se registraron, cuántas la usan, cuántas veces se
-// descargó la APK y qué funciones usan. Solo responde a la cuenta del dueño (DUENOS).
+// nova-dueno v11: panel del dueño de NOVA. Cuenta cuántas personas se registraron, cuántas la usan, cuántas veces se
+// descargó la APK y qué funciones usan. Responde a dueños y administradores autorizados.
 // Por privacidad NO devuelve montos ni movimientos de nadie: solo cuántos hay y cuándo se usó la app.
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 
@@ -122,10 +122,77 @@ const texto = (v: unknown, max: number) => String(v ?? "").trim().slice(0, max);
 const AUDIENCIAS = ["todos", "android", "web"];
 const CLAVES_CONFIG = ["ia_pausada", "ia_mensaje", "version_minima", "notas_version"];
 
-const ACCIONES_CUENTA = ["cuenta_bloquear", "cuenta_desbloquear", "cuenta_reenviar_confirmacion"];
+const ACCIONES_CUENTA = ["cuenta_bloquear", "cuenta_desbloquear", "cuenta_reenviar_confirmacion", "cuenta_cerrar_sesiones"];
+const ACCIONES_ADMIN = ["admin_agregar", "admin_quitar"];
+const UUID_CUENTA = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+type RolAdmin = "ver" | "actuar";
+type RolPanel = "dueno" | RolAdmin;
+
+async function rolPanel(id: string): Promise<RolPanel | null> {
+  if (DUENOS.includes(id)) return "dueno";
+  const consulta = await rest(`fin_admins?select=rol&user_id=eq.${encodeURIComponent(id)}`);
+  if (!consulta.ok) throw new Error("fin_admins " + consulta.status);
+  const [admin] = await consulta.json();
+  const rol = admin && admin.rol;
+  return rol === "ver" || rol === "actuar" ? rol : null;
+}
+
+async function auditarAccion(dueno: string, accion: string, id: string) {
+  return await rest("fin_dueno_acciones", {
+    method: "POST",
+    headers: { Prefer: "return=minimal" },
+    signal: AbortSignal.timeout(6000),
+    body: JSON.stringify({ dueno_id: dueno, accion, objetivo_id: id }),
+  }).then((r) => r.ok).catch(() => false);
+}
+
+async function gestionarAdmin(accion: string, cuerpo: Record<string, unknown>, dueno: string) {
+  const agregar = accion === "admin_agregar";
+  const rol = cuerpo.rol;
+  let usuario: Usuario;
+  if (agregar) {
+    if (rol !== "ver" && rol !== "actuar") return responder(400, { error: "Elige un rol válido." });
+    const correo = typeof cuerpo.correo === "string" ? cuerpo.correo.trim() : "";
+    if (!correo) return responder(400, { error: "Escribe el correo de la cuenta." });
+    const lista = await usuarios();
+    const encontrado = lista.find((u) => u.email === correo);
+    if (!encontrado) return responder(404, { error: "No encontramos una cuenta con ese correo." });
+    usuario = encontrado;
+  } else {
+    if (typeof cuerpo.id !== "string" || !UUID_CUENTA.test(cuerpo.id)) {
+      return responder(400, { error: "El identificador de la cuenta no es válido." });
+    }
+    const id = cuerpo.id.toLowerCase();
+    if (DUENOS.includes(id)) return responder(400, { error: "No puedes quitar a un dueño." });
+    const consulta = await fetch(`${URL_SB}/auth/v1/admin/users/${id}`, { headers: adm });
+    if (consulta.status === 404) return responder(404, { error: "La cuenta ya no existe." });
+    if (!consulta.ok) return responder(502, { error: "No se pudo consultar la cuenta." });
+    usuario = await consulta.json();
+  }
+
+  const id = usuario.id;
+  if (DUENOS.includes(id)) return responder(400, { error: "Esa cuenta ya es de un dueño." });
+  const cambio = agregar ? await rest("fin_admins", {
+    method: "POST",
+    headers: { Prefer: "resolution=merge-duplicates,return=minimal" },
+    body: JSON.stringify({ user_id: id, rol, creado_por: dueno }),
+  }) : await rest(`fin_admins?user_id=eq.${id}`, { method: "DELETE" });
+  if (!cambio.ok) return responder(502, { error: agregar ? "No se pudo guardar el rol." : "No se pudo quitar al administrador." });
+
+  const metadata = await fetch(`${URL_SB}/auth/v1/admin/users/${id}`, {
+    method: "PUT",
+    headers: { ...adm, "Content-Type": "application/json" },
+    body: JSON.stringify({ user_metadata: { ...usuario.user_metadata, nova_admin: agregar } }),
+  }).catch(() => null);
+  const auditoria = await auditarAccion(dueno, accion, id);
+  if (!metadata || !metadata.ok) {
+    return responder(502, { error: "Se cambió el permiso, pero faltó actualizar el acceso en la app. Intenta la misma acción de nuevo." });
+  }
+  return responder(200, { ok: true, auditoria });
+}
 
 async function actuarSobreCuenta(accion: string, objetivo: unknown, dueno: string) {
-  if (typeof objetivo !== "string" || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(objetivo)) {
+  if (typeof objetivo !== "string" || !UUID_CUENTA.test(objetivo)) {
     return responder(400, { error: "El identificador de la cuenta no es válido." });
   }
   const id = objetivo.toLowerCase();
@@ -135,6 +202,17 @@ async function actuarSobreCuenta(accion: string, objetivo: unknown, dueno: strin
   if (consulta.status === 404) return responder(404, { error: "La cuenta ya no existe." });
   if (!consulta.ok) return responder(502, { error: "No se pudo consultar la cuenta." });
   const usuario: Usuario = await consulta.json();
+
+  if (accion === "cuenta_cerrar_sesiones") {
+    const cierre = await rest("rpc/fin_cerrar_sesiones", {
+      method: "POST",
+      body: JSON.stringify({ objetivo: id }),
+    });
+    if (!cierre.ok) return responder(502, { error: "No se pudieron cerrar las sesiones." });
+    const sesiones = await cierre.json();
+    await auditarAccion(dueno, accion, id);
+    return responder(200, { ok: true, sesiones });
+  }
 
   let cambio: Response;
   if (accion === "cuenta_reenviar_confirmacion") {
@@ -156,12 +234,7 @@ async function actuarSobreCuenta(accion: string, objetivo: unknown, dueno: strin
     if (!cambio.ok) return responder(502, { error: bloquear ? "No se pudo bloquear la cuenta." : "No se pudo desbloquear la cuenta." });
   }
 
-  const auditoria = await rest("fin_dueno_acciones", {
-    method: "POST",
-    headers: { Prefer: "return=minimal" },
-    signal: AbortSignal.timeout(6000),
-    body: JSON.stringify({ dueno_id: dueno, accion, objetivo_id: id }),
-  }).then((r) => r.ok).catch(() => false);
+  const auditoria = await auditarAccion(dueno, accion, id);
   return responder(200, { ok: true, auditoria });
 }
 
@@ -557,12 +630,25 @@ Deno.serve(async (req) => {
   const yo = await fetch(`${URL_SB}/auth/v1/user`, { headers: { Authorization: req.headers.get("Authorization") || "", apikey: ANON } });
   if (!yo.ok) return responder(401, { error: "sin_sesion" });
   const quien = await yo.json();
-  if (!DUENOS.includes(quien.id)) return responder(403, { error: "solo_dueno" });
+  let miRol: RolPanel | null;
+  try {
+    miRol = await rolPanel(quien.id);
+  } catch (e) {
+    console.error("nova-dueno permisos", String(e));
+    return responder(502, { error: "No se pudieron consultar los permisos." });
+  }
+  if (!miRol) return responder(403, { error: "solo_dueno" });
 
-  const cuerpo = await req.json().catch(() => ({})) as Record<string, unknown>;
-  const accion = String(cuerpo.accion || "");
-  if (accion) {
+  const json = await req.json().catch(() => ({}));
+  const cuerpo = (json && typeof json === "object" ? json : {}) as Record<string, unknown>;
+  if (Object.prototype.hasOwnProperty.call(cuerpo, "accion")) {
+    if (miRol === "ver") return responder(403, { error: "Tu rol solo permite ver." });
+    const accion = String(cuerpo.accion || "");
     try {
+      if (ACCIONES_ADMIN.includes(accion)) {
+        if (miRol !== "dueno") return responder(403, { error: "Solo un dueño puede gestionar administradores." });
+        return await gestionarAdmin(accion, cuerpo, quien.id);
+      }
       const respuesta = await accionDueno(accion, cuerpo, quien.id);
       if (respuesta) return respuesta;
     } catch (e) { console.error("nova-dueno accion", String(e)); return responder(502, { error: "No se pudo completar la acción." }); }
@@ -639,10 +725,18 @@ Deno.serve(async (req) => {
     reales.forEach((p) => { if (p.version) versiones[p.version] = (versiones[p.version] || 0) + 1; });
 
     const correoDe = Object.fromEntries(lista.map((u) => [u.id, u.email || ""]));
+    const admins = miRol === "dueno" ? (await filas("fin_admins", "user_id,rol,creado_en")).map((admin) => ({
+      id: String(admin.user_id),
+      correo: correoDe[String(admin.user_id)] || "(sin correo)",
+      rol: admin.rol,
+      creado_en: admin.creado_en,
+    })) : undefined;
     const salud = saludPanel(correoDe);
     const uso = usoPanel(ahora, correoDe).catch(() => null);
     return responder(200, {
       generado: new Date().toISOString(),
+      miRol,
+      ...(miRol === "dueno" ? { admins } : {}),
       apk,
       resumen: {
         registrados: reales.length, confirmados: reales.filter((p) => p.confirmado).length,
