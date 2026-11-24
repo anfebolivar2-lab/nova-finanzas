@@ -8042,6 +8042,7 @@
     mensajeUso.textContent = !uso ? "Las estadísticas de uso no están disponibles." :
       !uso.total ? "Todavía no hay eventos de uso en los últimos 30 días." : "";
     $("dueno-eventos-datos").hidden = !uso || !uso.total;
+    pintarUsoIADueno(datosUso, ahora);
     if (!uso || !uso.total) return;
 
     var s = uso.sesion;
@@ -8068,6 +8069,28 @@
     barrasHorizontalesDueno("dueno-eventos-recuadros", recuadros, null);
     if (!uso.pantallas.length) $("dueno-eventos-pantallas").append(el("p", "nota", "Sin aperturas registradas."));
     if (!recuadros.length) $("dueno-eventos-recuadros").append(el("p", "nota", "Sin recuadros ocultados."));
+  }
+
+  function pintarUsoIADueno(datosUso, ahora) {
+    var ia = Analitica.prepararIA(datosUso), rapidez = ia.rapidez;
+    $("dueno-eventos-ia-rapidez").textContent = rapidez ?
+      "Promedio " + numDueno.format(rapidez.promedioSeg) + " s · Mediana " + numDueno.format(rapidez.medianaSeg) +
+        " s · 9 de cada 10 respuestas tardan menos de " + numDueno.format(rapidez.p90Seg + 0.1) + " s" :
+      "Todavía no hay tiempos de respuesta registrados.";
+    barrasHorizontalesDueno("dueno-eventos-ia-temas", ia.temas, null);
+    var top = $("dueno-eventos-ia-top");
+    top.replaceChildren();
+    ia.top.forEach(function (fila) {
+      top.append(el("p", "nota", fila.nombre + " · " + pl(fila.total, "pregunta", "preguntas")));
+    });
+    if (!ia.temas.length) $("dueno-eventos-ia-temas").append(el("p", "nota", "Todavía no hay temas registrados."));
+    if (!ia.top.length) $("dueno-eventos-ia-top").append(el("p", "nota", "Todavía no hay personas en el listado."));
+    pintarCupoIADueno(datosUso, ahora);
+  }
+
+  function pintarCupoIADueno(datosUso, ahora) {
+    var dias = Analitica.cupoIAPorDia(datosUso && datosUso.iaCupoPorDia, ahora, rangoDueno);
+    barrasDueno($("dueno-eventos-ia-cupo"), dias, "total", { unidad: ["vez", "veces"] });
   }
 
   function pintarSaludDueno(salud) {
@@ -8361,6 +8384,7 @@
     pintarCrecimientoDueno(d, ahora);
     var uso = Analitica.prepararUso(d.uso, fechaUso);
     if (uso && uso.total) pintarDiasIaDueno(uso.dias, fechaUso);
+    pintarCupoIADueno(d.uso, fechaUso);
   });
   $("dueno-modo-resumen").addEventListener("click", function () { cambiarModoDueno(true); });
   $("dueno-modo-detalle").addEventListener("click", function () { cambiarModoDueno(false); });
@@ -8897,7 +8921,7 @@
       : estado === 429 ? "Se acabó el cupo gratis de la IA por hoy. Intenta mañana."
       : "La IA no pudo responder. Intenta otra vez en un momento." + (detalle ? " (" + detalle + ")" : "");
   }
-  function preguntarEnFlujo(cuerpo, alTexto, externo, vigente) {
+  function preguntarEnFlujo(cuerpo, alTexto, externo, vigente, alEnviar) {
     if (!enLinea()) return Promise.reject(new Error("Sin internet: la IA necesita conexión. Todo lo demás de NOVA sigue funcionando sin internet."));
     return cliente.auth.getSession().then(function (s) {
       var token = s.data && s.data.session && s.data.session.access_token;
@@ -8905,6 +8929,7 @@
       if ((externo && externo.signal.aborted) || (vigente && !vigente())) return "";
       var control = new AbortController(), aviso = setTimeout(function () { control.abort(); }, 50000);
       if (externo) externo.signal.addEventListener("abort", function () { control.abort(); });
+      if (alEnviar) alEnviar();
       return fetch(cfg.supabaseUrl + "/functions/v1/nova-ia", {
         method: "POST", signal: control.signal,
         headers: { "Content-Type": "application/json", Authorization: "Bearer " + token, apikey: cfg.supabaseKey },
@@ -9372,7 +9397,7 @@
     // Si todavía hay una pregunta esperando, se cancela: así nunca se queda trabado.
     if (chatControl) { try { chatControl.abort(); } catch (e) { /* ya terminó */ } }
     var mio = ++chatToken, control = chatControl = new AbortController();
-    var chat = chatActual, uso = usoActivoEventos();
+    var chat = chatActual, uso = usoActivoEventos(), inicioRespuesta;
     $("chat-bienvenida").hidden = true;
     mensaje("chat-mensaje", "");
     $("chat").querySelectorAll("li.pensando").forEach(function (x) { x.remove(); });
@@ -9386,17 +9411,20 @@
     return Promise.resolve().then(function () {
       if ((soloCifras && ocultos) || (opciones.vigente && !opciones.vigente())) return "";
       registrarEventoDe(uso, "ia", imagen ? "pregunta_foto" : opciones.porVoz ? "pregunta_voz" : "pregunta_texto");
-      return preguntarEnFlujo({ pregunta: pregunta, historial: historial, contexto: soloCifras ? { hoy: hoyLocal() } : contextoFinanzas(), imagen: imagen, mime: opciones.mime }, function (texto) {
+      if (uso) registrarEventoDe(uso, "ia", "tema_" + Eventos.temaPregunta(pregunta));
+      var cuerpo = { pregunta: pregunta, historial: historial, contexto: soloCifras ? { hoy: hoyLocal() } : contextoFinanzas(), imagen: imagen, mime: opciones.mime };
+      return preguntarEnFlujo(cuerpo, function (texto) {
         if (mio !== chatToken) return;
         pintarTextoIA(espera, texto);
         espera.classList.remove("pensando");
         espera.scrollIntoView({ block: "nearest" });
-      }, control, opciones.vigente);
+      }, control, opciones.vigente, function () { inicioRespuesta = performance.now(); });
     }).then(function (respuesta) {
       if (mio !== chatToken) return;
       if (opciones.vigente && !opciones.vigente()) { espera.remove(); return; }
       respuesta = (respuesta || "").trim();
       if (!respuesta) throw new Error("La IA no pudo responder. Intenta otra vez en un momento.");
+      if (uso && !control.signal.aborted) registrarEventoDe(uso, "ia", "respuesta_ms", Eventos.decimasRespuesta(performance.now() - inicioRespuesta));
       if (marcasIA(respuesta).fuentes.length) registrarEventoDe(uso, "ia", "busqueda_web");
       pintarTextoIA(espera, respuesta);
       espera.classList.remove("pensando");

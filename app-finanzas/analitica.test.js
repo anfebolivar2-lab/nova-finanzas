@@ -274,3 +274,42 @@ test("uso prepara barras con cero eventos por grupo sin dividir por cero", () =>
     assert.ok(grupo.every(fila => fila.total === 0 && fila.porcentaje === 0));
   }
 });
+
+test("prepara la analítica de IA vacía y evita barras sin una base positiva", () => {
+  const vacio = { rapidez: null, temas: [], top: [] };
+  assert.deepEqual(A.prepararIA(null), vacio);
+  assert.deepEqual(A.prepararIA({
+    iaRapidez: { n: 0, promedioMs: 0, medianaMs: 0, p90Ms: 0 },
+    iaTemas: [{ nombre: "tema_ahorro", total: 0 }],
+    iaTop: [{ correo: "ana@correo.test", preguntas: 0 }]
+  }), vacio);
+  assert.deepEqual(A.cupoIAPorDia(null, ahora, 7), []);
+  assert.deepEqual(A.cupoIAPorDia({}, ahora, 7).map(fila => fila.total), Array(7).fill(0));
+});
+
+test("muestra una respuesta, escala temas y limita el ranking a cinco correos reales", () => {
+  const uso = A.prepararIA({
+    iaRapidez: { n: 1, promedioMs: 1700, medianaMs: 1700, p90Ms: 1700 },
+    iaTemas: [{ nombre: "tema_deudas", total: 1 }, { nombre: "tema_ahorro", total: 4 },
+      { nombre: "texto confidencial", total: 99 }],
+    iaTop: [{ correo: "demo@EXAMPLE.COM", preguntas: 99 }].concat(
+      Array.from({ length: 6 }, (_, i) => ({ correo: i + "@correo.test", preguntas: i + 1, texto: "privado" }))
+    )
+  });
+  assert.deepEqual(uso.rapidez, { n: 1, promedioSeg: 1.7, medianaSeg: 1.7, p90Seg: 1.7 });
+  assert.deepEqual(uso.temas, [{ nombre: "Ahorro", total: 4, porcentaje: 100 }, { nombre: "Deudas", total: 1, porcentaje: 25 }]);
+  assert.deepEqual(uso.top, [6, 5, 4, 3, 2].map(n => ({ nombre: (n - 1) + "@correo.test", total: n })));
+});
+
+test("agrupa el cupo en el rango elegido según UTC y completa días sin errores", () => {
+  const cupo = { "2026-10-26": 8, "2026-11-02": 1, "2026-11-03": 10 };
+  const semana = A.cupoIAPorDia(cupo, ahora, 7);
+  assert.deepEqual(semana[0], { dia: "2026-10-27", total: 0 });
+  assert.deepEqual(semana.at(-1), { dia: "2026-11-02", total: 1 });
+  assert.equal(semana.reduce((suma, fila) => suma + fila.total, 0), 1);
+  for (const rango of [14, 30]) {
+    const serie = A.cupoIAPorDia(cupo, ahora, rango);
+    assert.equal(serie.length, rango);
+    assert.equal(serie.reduce((suma, fila) => suma + fila.total, 0), 9);
+  }
+});

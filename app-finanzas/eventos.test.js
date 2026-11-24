@@ -11,7 +11,7 @@ test("normaliza y acepta únicamente identificadores de su tipo", () => {
   }
 });
 
-test("solo duración admite segundos y respeta los límites enteros", () => {
+test("la duración de sesión respeta los límites enteros", () => {
   for (const n of [0, 5, 86400, null]) {
     assert.deepEqual(E.eventoSeguro("sesion", "duracion", n), { tipo: "sesion", nombre: "duracion", valor: n });
   }
@@ -33,4 +33,36 @@ test("la cola conserva los 50 eventos recientes y devuelve lotes sin mutarla", (
   assert.deepEqual(lotes.flat().map(evento => evento.valor), Array.from({ length: 50 }, (_, i) => i + 3));
   lotes[0].pop();
   assert.equal(cola.length, 50);
+});
+
+test("clasifica preguntas localmente y registra solo el tema fijo", () => {
+  const casos = [
+    ["¿En qué GASTÉ ayer?", "gastos"], ["¿Cómo puedo AHORRÁR?", "ahorro"],
+    ["Quiero pagar un PRÉSTAMO", "deudas"], ["Arma un PRESUPUESTO para mis gastos", "presupuesto"],
+    ["¿Cómo hago mi declaración de rénta?", "impuestos"], ["¿Me conviene una INVERSIÓN en CDT?", "inversion"],
+    ["¿Cuánto gané con mi nómina?", "ingresos"], ["Hola, ¿cómo estás?", "otro"]
+  ];
+  for (const [pregunta, tema] of casos) {
+    assert.equal(E.temaPregunta(pregunta), tema);
+    assert.deepEqual(E.eventoSeguro("ia", "tema_" + tema), { tipo: "ia", nombre: "tema_" + tema, valor: null });
+  }
+  assert.equal(E.temaPregunta(null), "otro");
+  assert.equal(E.eventoSeguro("ia", "tema_cuenta_privada"), null);
+  assert.equal(E.eventoSeguro("ia", "tema_ahorro", 9), null);
+});
+
+test("clasifica preguntas generadas con el tema principal, sin usar las filas como tema", () => {
+  const R = require("./respuestas");
+  assert.equal(E.temaPregunta(R.preguntaGrafico("Gastos por categoría", "Hoy", "COP", [["Impuestos", 120]])), "gastos");
+  assert.equal(E.temaPregunta(R.preguntaPlanPresupuesto(200, [], [], "COP")), "presupuesto");
+  assert.equal(E.temaPregunta(R.preguntaSuscripciones([], "COP")), "gastos");
+  assert.equal(E.temaPregunta(R.prepararLoteCategorias([], [], []).pregunta), "otro");
+});
+
+test("redondea y acota la duración de respuestas a décimas de segundo", () => {
+  assert.deepEqual([0, 149, 150, 1700, 9000000].map(E.decimasRespuesta), [1, 1, 2, 17, 86400]);
+  assert.deepEqual(E.eventoSeguro("ia", "respuesta_ms", 17), { tipo: "ia", nombre: "respuesta_ms", valor: 17 });
+  for (const valor of [null, 0, -1, 86401, 1.5, "17", NaN]) {
+    assert.equal(E.eventoSeguro("ia", "respuesta_ms", valor), null);
+  }
 });

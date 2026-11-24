@@ -263,11 +263,11 @@ Ideas para el panel del dueño. El panel muestra cómo se usa la app, nunca los 
 - ✅ ⭐ Preguntas a la IA por día.
 - ✅ Cuántas preguntas usan foto y cuántas voz.
 - ✅ Errores de la IA (cupo agotado, se tardó, falló).
-- Cupo diario de Gemini que queda.
-- Tiempo promedio de respuesta de la IA.
-- Temas más preguntados (agrupados, sin mostrar el texto exacto).
+- ✅ Cupo diario de Gemini que queda. (muestra cuántas veces se agotó; Google no informa el cupo que queda)
+- ✅ Tiempo promedio de respuesta de la IA.
+- ✅ Temas más preguntados (agrupados, sin mostrar el texto exacto).
 - ✅ Cuántas veces la IA buscó en internet.
-- Usuarios que más usan la IA (para controlar el costo).
+- ✅ Usuarios que más usan la IA (para controlar el costo).
 - ✅ Botón para pausar la IA si se dispara el uso.
 - ✅ Mensaje de mantenimiento de la IA visible para todos.
 

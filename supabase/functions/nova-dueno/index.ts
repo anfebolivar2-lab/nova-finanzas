@@ -1,4 +1,4 @@
-// nova-dueno v8: panel del dueño de NOVA. Cuenta cuántas personas se registraron, cuántas la usan, cuántas veces se
+// nova-dueno v9: panel del dueño de NOVA. Cuenta cuántas personas se registraron, cuántas la usan, cuántas veces se
 // descargó la APK y qué funciones usan. Solo responde a la cuenta del dueño (DUENOS).
 // Por privacidad NO devuelve montos ni movimientos de nadie: solo cuántos hay y cuándo se usó la app.
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
@@ -208,7 +208,8 @@ const nombresUso = new Map(Object.entries({
       mas moneda notas-nova papelera pasar pruebas registro respaldo
       simulacion sugerencia tarjeta tab_inicio tab_planes tab_analisis tab_buscar`,
     anotar: "texto voz foto banco manual rapido",
-    ia: "pregunta_texto pregunta_foto pregunta_voz error_cupo error_tiempo error_otro busqueda_web",
+    ia: `pregunta_texto pregunta_foto pregunta_voz error_cupo error_tiempo error_otro busqueda_web respuesta_ms
+      tema_gastos tema_ahorro tema_deudas tema_presupuesto tema_impuestos tema_inversion tema_ingresos tema_otro`,
     sesion: "duracion",
     ajuste: "tema_oscuro tema_claro pin_on pin_off huella_on huella_off modo_conductor_on modo_conductor_off",
     recuadro: `
@@ -224,7 +225,19 @@ const nombresUso = new Map(Object.entries({
 
 type EventoUso = { user_id: string; tipo: string; nombre: string; valor: number | null; creado_en: string };
 
-async function usoPanel(ahora: number) {
+function rapidezIA(tiemposMs: number[]) {
+  const n = tiemposMs.length;
+  if (!n) return { n: 0, promedioMs: 0, medianaMs: 0, p90Ms: 0 };
+  const ordenados = tiemposMs.slice().sort((a, b) => a - b);
+  return {
+    n,
+    promedioMs: ordenados.reduce((suma, ms) => suma + ms, 0) / n,
+    medianaMs: (ordenados[Math.floor((n - 1) / 2)] + ordenados[Math.floor(n / 2)]) / 2,
+    p90Ms: ordenados[Math.ceil(n * 0.9) - 1],
+  };
+}
+
+async function usoPanel(ahora: number, correoDe: Record<string, string>) {
   const desde = encodeURIComponent(new Date(ahora - 30 * DIA).toISOString());
   const hasta = encodeURIComponent(new Date(ahora).toISOString());
   const ruta = `fin_eventos?select=user_id,tipo,nombre,valor,creado_en&creado_en=gte.${desde}&creado_en=lte.${hasta}&order=creado_en.desc,user_id.asc,tipo.asc,nombre.asc,valor.asc`;
@@ -234,6 +247,10 @@ async function usoPanel(ahora: number) {
   const anotar = { texto: 0, voz: 0, foto: 0, banco: 0, manual: 0, rapido: 0 };
   const ia = { pregunta_texto: 0, pregunta_foto: 0, pregunta_voz: 0, error_cupo: 0, error_tiempo: 0, error_otro: 0, busqueda_web: 0 };
   const iaPorDia: Record<string, number> = {};
+  const iaCupoPorDia: Record<string, number> = {};
+  const tiemposMs: number[] = [];
+  const temasIA = new Map<string, number>();
+  const preguntasPorPersona = new Map<string, number>();
   const duraciones: number[] = [];
   const temas = new Map<string, string>();
   const pines = new Map<string, string>();
@@ -257,10 +274,20 @@ async function usoPanel(ahora: number) {
       } else if (tipo === "anotar") {
         anotar[nombre as keyof typeof anotar]++;
       } else if (tipo === "ia") {
-        ia[nombre as keyof typeof ia]++;
+        if (nombre === "respuesta_ms") {
+          if (valor !== null && Number.isInteger(valor) && valor >= 1 && valor <= 86400) tiemposMs.push(valor * 100);
+        } else if (nombre.startsWith("tema_")) {
+          temasIA.set(nombre, (temasIA.get(nombre) || 0) + 1);
+        } else {
+          ia[nombre as keyof typeof ia]++;
+        }
         if (nombre.startsWith("pregunta_")) {
           const dia = clave(creado_en);
           iaPorDia[dia] = (iaPorDia[dia] || 0) + 1;
+          preguntasPorPersona.set(user_id, (preguntasPorPersona.get(user_id) || 0) + 1);
+        } else if (nombre === "error_cupo") {
+          const dia = clave(creado_en);
+          iaCupoPorDia[dia] = (iaCupoPorDia[dia] || 0) + 1;
         }
       } else if (tipo === "sesion" && valor !== null && Number.isInteger(valor) && valor >= 5 && valor < 86400) {
         duraciones.push(valor);
@@ -285,6 +312,12 @@ async function usoPanel(ahora: number) {
     anotar,
     iaPorDia,
     ia,
+    iaRapidez: rapidezIA(tiemposMs),
+    iaTemas: Array.from(temasIA, ([nombre, total]) => ({ nombre, total })).sort(mayorPrimero),
+    iaTop: Array.from(preguntasPorPersona, ([id, preguntas]) => ({ correo: correoDe[id], preguntas }))
+      .filter(({ correo }) => correo && !/@example\.com$/i.test(correo))
+      .sort((a, b) => b.preguntas - a.preguntas || a.correo.localeCompare(b.correo)).slice(0, 5),
+    iaCupoPorDia,
     sesion: {
       n,
       promedioSeg: n ? duraciones.reduce((suma, seg) => suma + seg, 0) / n : 0,
@@ -560,7 +593,7 @@ Deno.serve(async (req) => {
 
     const correoDe = Object.fromEntries(lista.map((u) => [u.id, u.email || ""]));
     const salud = saludPanel(correoDe);
-    const uso = usoPanel(ahora).catch(() => null);
+    const uso = usoPanel(ahora, correoDe).catch(() => null);
     return responder(200, {
       generado: new Date().toISOString(),
       apk,
