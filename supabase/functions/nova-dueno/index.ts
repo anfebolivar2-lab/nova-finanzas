@@ -1,4 +1,4 @@
-// nova-dueno v11: panel del dueño de NOVA. Cuenta cuántas personas se registraron, cuántas la usan, cuántas veces se
+// nova-dueno v12: panel del dueño de NOVA. Cuenta cuántas personas se registraron, cuántas la usan, cuántas veces se
 // descargó la APK y qué funciones usan. Responde a dueños y administradores autorizados.
 // Por privacidad NO devuelve montos ni movimientos de nadie: solo cuántos hay y cuándo se usó la app.
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";

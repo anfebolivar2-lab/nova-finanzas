@@ -6829,6 +6829,7 @@
   var Eventos = window.NovaEventos;
   var usoEventos = null;
   var permitirEventos = leerLocal("nova-eventos-activo", true) !== false;
+  // Si se muestra el login primero, se conserva la medición en memoria hasta entrar con una cuenta.
   var cargaInicial;
   $("uso-activo").checked = permitirEventos;
   $("uso-activo").addEventListener("change", function () {
@@ -6872,7 +6873,8 @@
     var reloj = window.performance;
     if (!Eventos || !permitirEventos || !reloj || typeof reloj.now !== "function") return;
     var navegacion = typeof reloj.getEntriesByType === "function" && reloj.getEntriesByType("navigation")[0];
-    var ms = reloj.now() - (navegacion ? navegacion.startTime : 0);
+    var inicio = navegacion && Number.isFinite(navegacion.startTime) ? navegacion.startTime : 0;
+    var ms = reloj.now() - inicio;
     if (Number.isFinite(ms) && ms >= 0) cargaInicial = Eventos.decimasRespuesta(ms);
   }
   function registrarAjustesUso(uso) {

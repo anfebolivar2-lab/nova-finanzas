@@ -281,7 +281,7 @@ Ideas para el panel del dueño. El panel muestra cómo se usa la app, nunca los 
 - ✅ Avisar en el panel si la publicación falló.
 - ✅ Obligar a actualizar a quien use una versión muy vieja.
 - ✅ Notas de cada versión editables desde el panel.
-- Descargas de la APK por día.
+- ✅ Descargas de la APK por día.
 - ✅ Cuántos usan la APK "avanzada" y cuántos la normal.
 
 ## Salud técnica
@@ -290,7 +290,7 @@ Ideas para el panel del dueño. El panel muestra cómo se usa la app, nunca los 
 - ✅ Lista de los últimos errores, con versión y pantalla.
 - ✅ Estado de Supabase (base de datos y funciones).
 - ✅ Estado de Vercel (la página web) y de la última publicación.
-- Tiempo de carga de la app.
+- ✅ Tiempo de carga de la app.
 - Funciones de Supabase: llamadas, errores y tiempo de respuesta.
 - ✅ Espacio usado en la base de datos y en el almacenamiento.
 - ✅ Fotos de recibos guardadas y su tamaño total.
