@@ -348,3 +348,4 @@ Ideas para el panel del dueño. El panel muestra cómo se usa la app, nunca los 
 - ✅ Tema oscuro del panel.
 - ✅ Ayuda corta (ℹ️) en cada número para explicar qué significa.
 - ✅ Guardar la vista preferida (filtros y orden).
+- ✅ Sin internet reforzado: límite de espera de 15 s, entrada rápida sin esperar a la IA, sin gastos duplicados al reenviar, cambios rechazados guardados y botón «Toca para reintentar».

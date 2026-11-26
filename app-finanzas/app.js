@@ -454,14 +454,17 @@
   }
   function pintarAvisoRed(c) {
     var b = $("banner-red"), n = c ? c.pendientes : (fuente && fuente.pendientes ? fuente.pendientes() : 0);
+    var sin = !enLinea(), reintentar = fuente && !fuente.demo && !sin && n > 0;
+    b.style.cursor = reintentar ? "pointer" : "";
+    if (reintentar) b.setAttribute("tabindex", "0");
+    else b.removeAttribute("tabindex");
     if (!fuente || fuente.demo) { b.hidden = true; return; }
-    var sin = !enLinea();
     b.hidden = !(sin || n > 0);
     if (b.hidden) return;
     b.className = "banner-red" + (sin ? " sin" : "");
     b.textContent = sin
       ? "📴 Sin internet: todo sigue funcionando y tus cambios se guardan en el celular" + (n ? " (" + n + " por enviar)" : "") + "."
-      : "🔄 Enviando " + n + (n === 1 ? " cambio" : " cambios") + " guardados sin internet…";
+      : "🔄 " + n + (n === 1 ? " cambio pendiente." : " cambios pendientes.") + " Toca para reintentar.";
   }
   function fuenteSupabase(cliente, usuario) {
     // Se recuerda quién es para poder abrir la app sin internet (los datos se guardan por usuario).
@@ -470,7 +473,35 @@
       almacen: almacenLocal, usuarioId: usuario.id, enLinea: enLinea,
       antes: function () { return cliente.auth.getSession(); },     // renueva la sesión antes de enviar lo pendiente
       alMapear: remapearDatos, alCambiar: pintarAvisoRed,
-      alFallar: function () { toast("Un cambio guardado sin internet no se pudo enviar y se descartó."); }
+      yaExiste: function (tabla, fila, ids) {
+        var consultaFila = cliente.from("fin_" + tabla).select("*");
+        Object.keys(fila).forEach(function (clave) {
+          var valor = fila[clave];
+          if (typeof valor === "string" || typeof valor === "number" || typeof valor === "boolean") {
+            consultaFila = consultaFila.eq(clave, valor);
+          }
+        });
+        return consultaFila.order("id", { ascending: false }).limit(10).then(function (r) {
+          if (r.error) throw new Error(r.error.message);
+          return (r.data || []).find(function (f) { return !ids.includes(f.id); }) || null;
+        });
+      },
+      alFallar: function (o, error) {
+        var nombres = {
+          movimientos: "movimiento", categorias: "categoría", cuentas: "cuenta", metas: "meta",
+          frecuentes: "registro frecuente", programados: "registro programado", limites: "límite",
+          conversaciones: "conversación", documentos: "documento", deudas: "deuda", abonos: "abono",
+          grupos: "grupo", gastos_grupo: "gasto de grupo", aportes_grupo: "aporte de grupo", espacios: "espacio"
+        };
+        var fila = o.fila || o.cambios || {};
+        var nombre = fila.descripcion || fila.nombre || nombres[o.tabla] || (o.t === "perfil" ? "perfil" : "cambio");
+        if (fila.monto != null) nombre += " $" + fila.monto;
+        var motivo = String((error && error.message) || error || "").replace(/\s+/g, " ").trim();
+        if (/constraint|violates|invalid input/i.test(motivo)) motivo = "La base rechazó algún dato";
+        if (!motivo) motivo = "La base no aceptó el cambio";
+        if (motivo.length > 80) motivo = motivo.slice(0, 77) + "…";
+        toast("No se pudo enviar «" + nombre + "»: " + motivo + ". Quedó guardado en este celular.");
+      }
     });
     f.usuarioEventos = usuario.id;
     f.novaAdmin = !!usuario.user_metadata && usuario.user_metadata.nova_admin === true;
@@ -490,9 +521,28 @@
     };
     return f;
   }
-  window.addEventListener("online", function () { pintarAvisoRed(); if (fuente && fuente.sincronizar) fuente.sincronizar().then(function () { pintarAvisoRed(); }); });
+  var reintentoRed = null;
+  function reintentarPendientes() {
+    if (!fuente || fuente.demo || !fuente.pendientes() || !enLinea() || reintentoRed === fuente) return;
+    var actual = fuente;
+    reintentoRed = actual;
+    actual.sincronizar().catch(function () { /* se reintenta */ }).then(function () {
+      if (reintentoRed === actual) reintentoRed = null;
+      pintarAvisoRed();
+    });
+  }
+  window.addEventListener("online", function () { pintarAvisoRed(); reintentarPendientes(); });
   window.addEventListener("offline", function () { pintarAvisoRed(); });
-  setInterval(function () { if (fuente && fuente.pendientes && fuente.pendientes() > 0 && enLinea()) fuente.sincronizar().catch(function () { /* se reintenta */ }); }, 20000);
+  document.addEventListener("visibilitychange", function () { if (document.visibilityState === "visible") reintentarPendientes(); });
+  window.addEventListener("focus", reintentarPendientes);
+  window.addEventListener("pageshow", reintentarPendientes);
+  $("banner-red").addEventListener("click", reintentarPendientes);
+  $("banner-red").addEventListener("keydown", function (e) {
+    if (this.tabIndex !== 0 || (e.key !== "Enter" && e.key !== " ")) return;
+    e.preventDefault();
+    reintentarPendientes();
+  });
+  setInterval(reintentarPendientes, 20000);
 
   function fuenteDemo() {
     var sig = 1000;
@@ -10001,7 +10051,9 @@
     var enviar = e.target.querySelector("button[type=submit]");
     enviar.disabled = true;
     mensaje("rapido-mensaje", "✦ La IA está leyendo…");
-    preguntarIA({ texto: texto }, via === "voz" ? "voz" : "texto").then(function (r) {
+    Nube.conPlazo(Promise.resolve().then(function () {
+      return preguntarIA({ texto: texto }, via === "voz" ? "voz" : "texto");
+    }), 8000).then(function (r) {
       // Las etiquetas escritas con # siempre se respetan.
       (local.etiquetas || []).forEach(function (t) { if (r.etiquetas.indexOf(t) < 0) r.etiquetas.push(t); });
       // En otra moneda ("20 dólares") el valor sale de la frase tal cual: la IA lee todo como pesos.
@@ -10412,7 +10464,7 @@
     global: { fetch: function (url, opciones) {
       var rutaEventos = cfg.supabaseUrl.replace(/\/$/, "") + "/rest/v1/fin_eventos";
       if (String(url).split("?")[0] === rutaEventos) opciones = Object.assign({}, opciones, { keepalive: true });
-      return window.fetch(url, opciones);
+      return Nube.fetchConLimite(window.fetch.bind(window), url, opciones, { ms: 15000, rutas: [/^\/rest\/v1\//, /^\/auth\/v1\//] });
     } }
   }) : null;
 
@@ -10878,6 +10930,7 @@
     if (pantalla === "auth") medirCargaInicial();
   }
 
+  var persistenciaPedida = false;
   function entrar(nuevaFuente) {
     inicioListoParaGasto = false;
     reiniciarEventos();
@@ -10902,6 +10955,10 @@
       if (enVista === "inicio") registrarEvento("pantalla", "tab_inicio");
       mostrar("app"); ir("inicio"); pintar();
       if (!fuente.demo) {
+        if (!persistenciaPedida && navigator.storage && navigator.storage.persist) {
+          persistenciaPedida = true;
+          navigator.storage.persist().catch(function () { /* se conserva la copia local */ });
+        }
         medirCargaInicial();
         if (usoActivoEventos() && cargaInicial !== null) {
           registrarEvento("sesion", "carga", cargaInicial);

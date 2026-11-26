@@ -87,7 +87,42 @@
     })[0] || null;
   }
 
+  function conPlazo(promesa, ms) {
+    var reloj;
+    var plazo = new Promise(function (_, rechazar) {
+      reloj = setTimeout(function () { rechazar(new Error("plazo")); }, ms);
+    });
+    return Promise.race([promesa, plazo]).finally(function () { clearTimeout(reloj); });
+  }
+
+  function fetchConLimite(fetchBase, url, opciones, config) {
+    var ruta = new URL(url.url || url, "https://nova.invalid").pathname;
+    if (!config.rutas.some(function (patron) { return ruta.search(patron) !== -1; })) return fetchBase(url, opciones);
+
+    var control = new AbortController();
+    var externa = (opciones && opciones.signal) || url.signal;
+    var reloj, abortar;
+    return new Promise(function (resolver, rechazar) {
+      abortar = function () {
+        control.abort(externa.reason);
+        rechazar(control.signal.reason || new DOMException("Abortado", "AbortError"));
+      };
+      if (externa && externa.aborted) { abortar(); return; }
+      if (externa) externa.addEventListener("abort", abortar, { once: true });
+      reloj = setTimeout(function () {
+        var error = new TypeError("Failed to fetch (tiempo agotado)");
+        rechazar(error);
+        control.abort(error);
+      }, config.ms);
+      Promise.resolve(fetchBase(url, Object.assign({}, opciones, { signal: control.signal }))).then(resolver, rechazar);
+    }).finally(function () {
+      clearTimeout(reloj);
+      if (externa) externa.removeEventListener("abort", abortar);
+    });
+  }
+
   var api = {
+    fetchConLimite: fetchConLimite, conPlazo: conPlazo,
     encuestaParaMostrar: encuestaParaMostrar,
     validarVersion: validarVersion, versionMenor: versionMenor, configDesdeFilas: configDesdeFilas,
     mensajePausaIA: mensajePausaIA, sugerenciasRespondidas: sugerenciasRespondidas,

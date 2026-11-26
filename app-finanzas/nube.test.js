@@ -1,7 +1,71 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const { avisosParaMostrar, validarSugerencia, enviosDeLaHora, errorSeguro, puedeRegistrarError,
-  validarVersion, versionMenor, configDesdeFilas, mensajePausaIA, sugerenciasRespondidas, encuestaParaMostrar } = require("./nube.js");
+  validarVersion, versionMenor, configDesdeFilas, mensajePausaIA, sugerenciasRespondidas, encuestaParaMostrar,
+  fetchConLimite, conPlazo } = require("./nube.js");
+const { setTimeout: esperar } = require("node:timers/promises");
+
+const limiteFetch = { ms: 30, rutas: [/^\/rest\/v1\//, /^\/auth\/v1\//] };
+const urlRest = "https://ejemplo.test/rest/v1/fin_movimientos";
+
+test("fetch con límite devuelve la respuesta y no aborta después de terminar", async () => {
+  const respuesta = { ok: true };
+  let señal;
+  const resultado = await fetchConLimite(async (url, opciones) => {
+    assert.equal(url, urlRest);
+    assert.equal(opciones.keepalive, true);
+    señal = opciones.signal;
+    return respuesta;
+  }, urlRest, { keepalive: true }, limiteFetch);
+  assert.equal(resultado, respuesta);
+  await esperar(50);
+  assert.equal(señal.aborted, false);
+});
+
+test("fetch con límite aborta y rechaza aunque la conexión no responda", async () => {
+  let señal;
+  await assert.rejects(fetchConLimite((url, opciones) => {
+    señal = opciones.signal;
+    return new Promise(() => {});
+  }, urlRest, undefined, limiteFetch), { name: "TypeError", message: /Failed to fetch/ });
+  assert.equal(señal.aborted, true);
+});
+
+test("fetch fuera de las rutas configuradas recibe las opciones tal cual y puede tardar más", async () => {
+  const opciones = {};
+  const url = "https://ejemplo.test/functions/v1/nova?ruta=/rest/v1/";
+  const resultado = await fetchConLimite(async (ruta, recibidas) => {
+    assert.equal(ruta, url);
+    assert.equal(recibidas, opciones);
+    await esperar(50);
+    return "listo";
+  }, url, opciones, limiteFetch);
+  assert.equal(resultado, "listo");
+});
+
+test("fetch con límite respeta una señal externa antes y durante la llamada", async () => {
+  const control = new AbortController();
+  let señal;
+  const peticion = fetchConLimite((url, opciones) => {
+    señal = opciones.signal;
+    return new Promise(() => {});
+  }, urlRest, { signal: control.signal }, limiteFetch);
+  control.abort();
+  await assert.rejects(peticion, { name: "AbortError" });
+  assert.equal(señal.aborted, true);
+  await assert.rejects(fetchConLimite(() => assert.fail("La señal ya estaba abortada"),
+    urlRest, { signal: control.signal }, limiteFetch), { name: "AbortError" });
+});
+
+test("conPlazo conserva los valores y errores de la promesa", async () => {
+  const error = new Error("falló");
+  assert.equal(await conPlazo(Promise.resolve("listo"), 30), "listo");
+  await assert.rejects(conPlazo(Promise.reject(error), 30), (e) => e === error);
+});
+
+test("conPlazo rechaza si la promesa tarda demasiado", async () => {
+  await assert.rejects(conPlazo(esperar(50, "tarde"), 30), { message: "plazo" });
+});
 
 test("elige la encuesta activa más reciente entre las pendientes sin reordenar el original", () => {
   const encuestas = Object.freeze([
