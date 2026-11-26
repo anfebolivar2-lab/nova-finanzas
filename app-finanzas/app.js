@@ -6886,6 +6886,51 @@
     window.Capacitor.Plugins.App.addListener("appUrlOpen", function (ev) { if (esEnlaceBanco(ev && ev.url)) abrirBanco(); });
     if (window.Capacitor.Plugins.App.getLaunchUrl) window.Capacitor.Plugins.App.getLaunchUrl().then(function (r) { if (r && esEnlaceBanco(r.url)) abrirBanco(); }).catch(function () { /* se abrió normal */ });
   }
+  var gastoPendiente = false, inicioListoParaGasto = false, cerrandoCapasParaGasto = false;
+  var ultimoEnlaceGasto = "", horaUltimoEnlaceGasto = 0;
+  function pedirNuevoGasto() {
+    gastoPendiente = true;
+    abrirGastoPendiente();
+  }
+  function abrirGastoPendiente() {
+    try {
+      if (!gastoPendiente || cerrandoCapasParaGasto) return;
+      if (fuente && fuente.demo) { gastoPendiente = false; return; }
+      if (!inicioListoParaGasto || !fuente || !$("pantalla-auth").hidden || $("pantalla-app").hidden) return;
+      revisarInactividad();
+      if (!$("bloqueo").hidden) return;
+      if (pilaCapas.length) {
+        cerrarYLuego(function () {
+          cerrandoCapasParaGasto = false;
+          abrirGastoPendiente();
+        });
+        cerrandoCapasParaGasto = true;
+        return;
+      }
+      gastoPendiente = false;
+      $("tutorial").hidden = true;
+      $("novedades").hidden = true;
+      abrirRegistro({ tipo: "gasto" });
+    } catch (e) { /* el atajo es opcional */ }
+  }
+  function recibirEnlaceGasto(ev) {
+    try {
+      var url = ev && ev.url;
+      if (!window.NovaEnlaces.esEnlaceNuevoGasto(url)) return;
+      var ahora = Date.now();
+      if (url === ultimoEnlaceGasto && ahora - horaUltimoEnlaceGasto < 2000) return;
+      ultimoEnlaceGasto = url;
+      horaUltimoEnlaceGasto = ahora;
+      pedirNuevoGasto();
+    } catch (e) { /* el atajo es opcional */ }
+  }
+  try {
+    var appAtajos = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.App;
+    if (appAtajos) {
+      Promise.resolve(appAtajos.addListener("appUrlOpen", recibirEnlaceGasto)).catch(function () {});
+      if (appAtajos.getLaunchUrl) Promise.resolve(appAtajos.getLaunchUrl()).then(recibirEnlaceGasto).catch(function () {});
+    }
+  } catch (e) { /* el puente nativo puede no estar disponible */ }
   document.addEventListener("visibilitychange", function () { if (!document.hidden && fuente && !fuente.demo) revisarBanco(); });
 
   // ---------- Panel del dueño ----------
@@ -10613,6 +10658,7 @@
   }
 
   function entrar(nuevaFuente) {
+    inicioListoParaGasto = false;
     reiniciarEventos();
     fuente = nuevaFuente;
     avisosNube = []; erroresEnviados = [];
@@ -10655,6 +10701,8 @@
       if (!fuente.demo) revisarBanco(abrirPanelDirecto).then(function () { if (abrirBancoAlEntrar && !abrirPanelDirecto) { abrirBancoAlEntrar = false; abrirBanco(); } }).catch(function () { /* sin lista del banco */ });
       // Si salieron categorías nuevas del modo conductor (como "Cuota del vehículo"), se agregan solas.
       if (conductor()) asegurarCategoriasConductor().then(pintar).catch(function () { /* se intentará la próxima vez */ });
+      inicioListoParaGasto = true;
+      abrirGastoPendiente();
       return procesarProgramados();
     }).catch(function (e) {
       mostrar("auth");
@@ -10881,11 +10929,14 @@
     hashPin(pin).then(function (hp) {
       if (pinModo !== modo) return;
       if (pinModo === "abrir" && hp !== leerPin() && leerPin2() && hp === leerPin2()) {
-        ocultos = true; guardarLocal("nova-ocultos", true); pintarOjo(); cerrarBloqueo(); if (fuente) pintar(); return;
+        ocultos = true; guardarLocal("nova-ocultos", true); pintarOjo(); cerrarBloqueo(); if (fuente) pintar();
+        abrirGastoPendiente();
+        return;
       }
       if (hp !== leerPin()) { $("bloqueo-pin").value = ""; return mensaje("bloqueo-mensaje", "PIN incorrecto.", true); }
       if (pinModo === "quitar") { try { localStorage.removeItem(PIN_CLAVE); localStorage.removeItem(PIN2_CLAVE); } catch (e) { /* nada */ } pintarEstadoPin(); toast("PIN quitado"); }
       cerrarBloqueo();
+      abrirGastoPendiente();
     });
   }
   function bloquearSiHayPin() { if (leerPin() && fuente) abrirBloqueo("abrir"); }

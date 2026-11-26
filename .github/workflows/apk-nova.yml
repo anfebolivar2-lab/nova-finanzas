@@ -89,6 +89,11 @@ jobs:
           sed -i '0,/<\/activity>/s#</activity>#    <intent-filter>\n                <action android:name="android.intent.action.SEND" />\n                <category android:name="android.intent.category.DEFAULT" />\n                <data android:mimeType="text/plain" />\n            </intent-filter>\n        </activity>#' android/app/src/main/AndroidManifest.xml
           grep -q 'android.intent.action.SEND' android/app/src/main/AndroidManifest.xml
           grep -q 'onNewIntent' android/app/src/main/java/co/novafinanzas/app/MainActivity.java
+          # Atajo «Nuevo gasto»: al mantener presionado el ícono de NOVA (Android 7.1 o más nuevo) abre la pantalla de anotar un gasto
+          sed -i '0,/<\/activity>/s#</activity>#    <meta-data android:name="android.app.shortcuts" android:resource="@xml/shortcuts" />\n        </activity>#' android/app/src/main/AndroidManifest.xml
+          grep -q 'android.app.shortcuts' android/app/src/main/AndroidManifest.xml
+          test -f android/app/src/main/res/xml/shortcuts.xml
+          test -f android/app/src/main/res/values/atajos.xml
           if grep -rqi "NotificationListener" android/app/src/main/AndroidManifest.xml; then echo "Quedó un lector de notificaciones: Play Protect bloquearía la APK"; exit 1; fi
           test -f android/app/src/main/res/drawable/ic_stat_nova.xml
           # Número de versión: uno más en cada armado
