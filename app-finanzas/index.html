@@ -46,7 +46,7 @@
     animation: splash-resplandor 2s ease-in-out infinite alternate;
   }
   #splash svg {
-    width: 80px; height: 80px; fill: var(--splash-verde); stroke: none;
+    width: 96px; height: 96px; fill: var(--splash-verde); stroke: none;
     animation: splash-aparecer 600ms ease-out both;
   }
   #splash.splash-saliendo { opacity: 0; pointer-events: none; }
@@ -67,8 +67,10 @@
 </head>
 <body>
 <div id="splash" role="status" aria-label="Cargando NOVA">
-  <svg viewBox="0 0 24 24" aria-hidden="true">
-    <path d="M12 2l2.2 7.8L22 12l-7.8 2.2L12 22l-2.2-7.8L2 12l7.8-2.2z"/>
+  <svg viewBox="0 0 512 512" aria-hidden="true">
+    <path d="M240 122l36 113 114 37-114 37-36 113-36-113-114-37 114-37z"/>
+    <path d="M372 104l12 35 34 11-34 11-12 35-12-35-34-11 34-11z"/>
+    <circle cx="392" cy="232" r="9"/>
   </svg>
 </div>
 <script>

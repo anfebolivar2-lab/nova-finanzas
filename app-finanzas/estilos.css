@@ -1194,9 +1194,9 @@ body.app-visible { background: var(--r-fondo); }
 .cabecera { gap: 8px; color: var(--r-texto); }
 .cabecera .logo {
   display: grid; place-items: center; flex: 0 0 44px; height: 44px; border-radius: 12px;
-  background: #0b0f0d; border: 1px solid var(--line);
+  background: #0b0f0d url("iconos/icono-192.png") center / cover no-repeat; border: 0;
 }
-.cabecera .logo .chispa { width: 31px; height: 31px; }
+.cabecera .logo .chispa { display: none; }
 .cabecera .logo span, .cabecera #esp-ico, #saludo { display: none; }
 .cabecera-contexto { flex: 1; }
 .cabecera .chip-espacio {
