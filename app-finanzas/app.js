@@ -770,7 +770,9 @@
   }
   function pintarInicio() {
     var ciclo = cicloEfectivo(), rango = rangoInicio();
-    $("inicio-periodo").textContent = ciclo === "mensual" ? fechaMes.format(rango.desde) : A.nombrePeriodo(ciclo, rango);
+    var textoPeriodo = ciclo === "mensual" ? fechaMes.format(rango.desde) : A.nombrePeriodo(ciclo, rango);
+    $("inicio-periodo").textContent = textoPeriodo;
+    $("cabecera-periodo").textContent = textoPeriodo;
     var movs = A.enRango(datos.movimientos, rango), t = A.totales(movs);
     $("saldo-total").textContent = ocultos ? "$ ••••" : (t.neto < 0 ? "−" : "") + pesos.format(Math.abs(t.neto));
     var disponible = t.ingresos > 0 ? Math.max(0, Math.min(100, (t.neto / t.ingresos) * 100)) : 0;
@@ -3218,11 +3220,11 @@
     svg.setAttribute("viewBox", "0 0 120 120"); svg.setAttribute("class", "dona"); svg.setAttribute("role", "img");
     svg.setAttribute("aria-label", "Gastos por categoría: " + filas.map(function (f) { return nombreCategoriaVisible(f.id) + " " + dinero(f.total); }).join(", "));
     var acumulado = 0, R = 46, L = 2 * Math.PI * R;
-    filas.forEach(function (f) {
+    filas.forEach(function (f, i) {
       var c = document.createElementNS(NS, "circle");
       c.setAttribute("cx", 60); c.setAttribute("cy", 60); c.setAttribute("r", R);
       c.setAttribute("fill", "none"); c.setAttribute("stroke-width", 16);
-      c.setAttribute("stroke", colorDe(categoria(f.id) || { icono: "otro" }));
+      c.style.stroke = "var(--r-grafico-" + (i % 7 + 1) + ")";
       var parte = (f.total / total) * L;
       c.setAttribute("stroke-dasharray", Math.max(0, parte - 1.5) + " " + (L - Math.max(0, parte - 1.5)));
       c.setAttribute("stroke-dashoffset", -acumulado);
@@ -3238,7 +3240,7 @@
     filas.forEach(function (f, i) {
       var c = categoria(f.id) || { nombre: "Sin categoría", icono: "otro" };
       var li = el("li", "cat-fila" + (i >= 6 ? " extra" : ""));
-      var punto = el("span", "punto"); punto.style.background = colorDe(c);
+      var punto = el("span", "punto"); punto.style.background = "var(--r-grafico-" + (i % 7 + 1) + ")";
       var nombre = el("span", "cat-nombre"); nombre.append(punto, document.createTextNode(etiquetaCategoria(c)));
       li.append(nombre, el("strong", null, dinero(f.total)), el("small", "nota", Math.round((f.total / total) * 100) + "%"));
       li.tabIndex = 0; li.setAttribute("role", "button");
@@ -5400,10 +5402,15 @@
 
   // ---------- Navegación ----------
   var PRINCIPALES = ["inicio", "planes", "ia", "analisis", "buscar", "ajustes"];
+  var TITULOS_CABECERA = { planes: "Planes", ia: "NOVA IA", analisis: "Análisis", buscar: "Buscar", ajustes: "Más" };
   function ir(vista) {
     if (vista === "ajustes-invitar" && (!fuente || fuente.demo)) vista = "ajustes";
     document.querySelectorAll(".vista").forEach(function (v) { v.hidden = v.dataset.vista !== vista; });
     $("pantalla-app").classList.toggle("en-inicio", vista === "inicio");
+    var tituloCabecera = $("cabecera-titulo");
+    tituloCabecera.textContent = TITULOS_CABECERA[vista] || "";
+    tituloCabecera.hidden = !tituloCabecera.textContent;
+    $("cabecera-periodo").hidden = tituloCabecera.hidden;
     if (vista !== "inicio") document.querySelector(".periodo-inicio").open = false;
     var principal = PRINCIPALES.indexOf(vista) >= 0 ? vista : vista === "trabajo" ? "inicio" : "ajustes";
     document.querySelectorAll(".nav-inferior button").forEach(function (b) {
