@@ -1,6 +1,8 @@
 (function (raiz) {
   "use strict";
 
+  var Analisis = typeof module === "object" && module.exports ? require("./analisis.js") : raiz.NovaAnalisis;
+
   function simular(tipo, valor, base) {
     if (!Number.isFinite(valor) || valor <= 0) return null;
     var cambio, duracion = null;
@@ -61,7 +63,36 @@
     return new Date(referencia.getTime() - 1);
   }
 
-  var api = { simular: simular, actualizarNotas: actualizarNotas, enNoMolestar: enNoMolestar, horaAviso: horaAviso, referenciaAvisos: referenciaAvisos };
+  function gastoAltoDelDia(movimientos, ahora, opciones) {
+    opciones = opciones || {};
+    var hoy = Analisis.claveDia(ahora);
+    if (opciones.ultimoAviso === hoy) return null;
+    var desde = new Date(ahora);
+    desde.setDate(desde.getDate() - 30);
+    var primerDia = Analisis.claveDia(desde), moneda = opciones.moneda || "COP";
+    var porDia = new Map();
+    movimientos.forEach(function (m) {
+      if (!m || m.tipo !== "gasto" || m.borrado || m.estado === "borrado" || m.transferencia ||
+          (Array.isArray(m.etiquetas) && m.etiquetas.indexOf("deuda") !== -1)) return;
+      // Los gastos en otra moneda ya guardan en monto el valor convertido a la moneda del espacio.
+      if (m.moneda && m.moneda !== moneda && !(Number(m.tasa) > 0 && Number(m.monto_original) > 0)) return;
+      var valor = Number(m.monto);
+      if (!Number.isFinite(valor) || valor <= 0 || !m.fecha) return;
+      var dia = /^\d{4}-\d{2}-\d{2}$/.test(m.fecha) ? m.fecha : Analisis.claveDia(m.fecha);
+      if (dia < primerDia || dia > hoy) return;
+      porDia.set(dia, (porDia.get(dia) || 0) + valor);
+    });
+    var total = porDia.get(hoy) || 0;
+    porDia.delete(hoy);
+    var minimo = opciones.minimo == null ? 50000 : opciones.minimo;
+    if (porDia.size < 5 || total < minimo) return null;
+    var promedio = Array.from(porDia.values()).reduce(function (suma, valor) { return suma + valor; }, 0) / porDia.size;
+    var veces = Math.round(total / promedio * 10) / 10;
+    var factor = opciones.factor == null ? 2 : opciones.factor;
+    return veces >= factor ? { total: total, promedio: promedio, veces: veces } : null;
+  }
+
+  var api = { simular: simular, actualizarNotas: actualizarNotas, enNoMolestar: enNoMolestar, horaAviso: horaAviso, referenciaAvisos: referenciaAvisos, gastoAltoDelDia: gastoAltoDelDia };
   if (typeof module === "object" && module.exports) module.exports = api;
   else raiz.NovaHerramientas = api;
 })(typeof window !== "undefined" ? window : this);
