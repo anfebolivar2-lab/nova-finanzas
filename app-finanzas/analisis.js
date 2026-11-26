@@ -680,6 +680,13 @@
     return { desde: d, hasta: new Date(d.getFullYear(), d.getMonth(), d.getDate() + 1) };
   }
 
+  function metaPorHora(metaDiaria, horas) {
+    metaDiaria = Number(metaDiaria);
+    horas = Number(horas);
+    if (!Number.isFinite(metaDiaria) || !Number.isFinite(horas) || metaDiaria <= 0 || horas <= 0) return null;
+    return Math.round(metaDiaria / horas);
+  }
+
   // Lo ganado con las apps, lo gastado en el vehículo y la ganancia neta en un rango.
   // pendientes: los movimientos "pendiente" no cuentan como plata que ya entró o salió.
   function resumenTrabajo(movs, categorias, rango) {
@@ -1573,7 +1580,7 @@
     actualizarRetos: actualizarRetos, remapearRetos: remapearRetos, insigniasReto: insigniasReto, totalesPorDia: totalesPorDia, MESES: MESES,
     GRUPO_APPS: GRUPO_APPS, GRUPO_TRABAJO: GRUPO_TRABAJO, CATEGORIAS_CONDUCTOR: CATEGORIAS_CONDUCTOR, DOCUMENTOS: DOCUMENTOS,
     avisoPorDefecto: avisoPorDefecto, presetDe: presetDe,
-    esGanancia: esGanancia, esGastoTrabajo: esGastoTrabajo, esFijo: esFijo, rangoJornada: rangoJornada, resumenTrabajo: resumenTrabajo,
+    esGanancia: esGanancia, esGastoTrabajo: esGastoTrabajo, esFijo: esFijo, rangoJornada: rangoJornada, resumenTrabajo: resumenTrabajo, metaPorHora: metaPorHora,
     estadoDocumento: estadoDocumento, sumarMeses: sumarMeses, proximoVencimiento: proximoVencimiento, avisosDocumentos: avisosDocumentos,
     rachaDias: rachaDias, hitoDeRacha: hitoDeRacha, sugerenciasPorHora: sugerenciasPorHora,
     porcentajeValido: porcentajeValido, tasaAnualDesdeMensual: tasaAnualDesdeMensual, superaUsura: superaUsura, programadosProximos: programadosProximos,

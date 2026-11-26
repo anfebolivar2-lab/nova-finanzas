@@ -142,6 +142,26 @@
     return veces >= factor ? { total: total, promedio: promedio, veces: veces } : null;
   }
 
+  function cuotasVsIngresos(movimientos, categorias, ahora, opciones) {
+    var mes = Analisis.claveDia(ahora).slice(0, 7);
+    var umbral = opciones && opciones.umbral != null ? opciones.umbral : 0.30;
+    var deudas = new Set((categorias || []).filter(function (c) {
+      return Analisis.sinTildes(c.nombre).trim() === "deudas";
+    }).map(function (c) { return c.id; }));
+    var ingresos = 0, cuotas = 0;
+    (movimientos || []).forEach(function (m) {
+      if (!m || m.transferencia || m.borrado || m.estado === "borrado" || m.estado === "pendiente" ||
+          !m.fecha || Analisis.fechaAnotada(m.fecha).slice(0, 7) !== mes) return;
+      var monto = Number(m.monto);
+      if (!Number.isFinite(monto) || monto <= 0) return;
+      if (m.tipo === "ingreso") ingresos += monto;
+      if (m.tipo === "gasto" && deudas.has(m.categoria_id)) cuotas += monto;
+    });
+    var proporcion = ingresos > 0 ? cuotas / ingresos : null;
+    return { ingresos: ingresos, cuotas: cuotas, porcentaje: proporcion === null ? null : proporcion * 100,
+      supera: proporcion !== null && proporcion > umbral };
+  }
+
   function centavos(valor) {
     var unidades = Math.round(valor * 100);
     return Number.isSafeInteger(unidades) && unidades / 100 === valor ? unidades : NaN;
@@ -189,7 +209,7 @@
   }
 
   var api = { simular: simular, actualizarNotas: actualizarNotas, enNoMolestar: enNoMolestar, horaAviso: horaAviso,
-    referenciaAvisos: referenciaAvisos, gastoAltoDelDia: gastoAltoDelDia, fechaDeMeta: fechaDeMeta,
+    referenciaAvisos: referenciaAvisos, gastoAltoDelDia: gastoAltoDelDia, cuotasVsIngresos: cuotasVsIngresos, fechaDeMeta: fechaDeMeta,
     alcanzaDeseo: alcanzaDeseo, gastosHormigaTop: gastosHormigaTop, repartirGasto: repartirGasto,
     repartoSugerido: repartoSugerido, categoriaSugeridaPorComercio: categoriaSugeridaPorComercio };
   if (typeof module === "object" && module.exports) module.exports = api;

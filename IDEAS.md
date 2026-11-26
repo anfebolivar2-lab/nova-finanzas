@@ -49,7 +49,7 @@ Lista de funciones para ir sumando poco a poco, probadas una por una.
 - ⭐ Simulador de tarjeta de crédito: cuánto pagas de intereses si solo pagas el mínimo.
 - ✅ Calendario de pagos de tarjetas y créditos con aviso 3 días antes. (tarjeta «Cortes y pagos de tarjetas»)
 - ✅ Plan bola de nieve o avalancha con fecha estimada de «libre de deudas».
-- Avisar cuando una cuota se pasa del 30 % de tus ingresos.
+- ✅ Avisar cuando una cuota se pasa del 30 % de tus ingresos.
 
 ## Trabajo e impuestos (Colombia)
 
@@ -57,7 +57,7 @@ Lista de funciones para ir sumando poco a poco, probadas una por una.
 - Retención en la fuente y aportes a salud y pensión para independientes.
 - Cuenta de cobro y factura simple para independientes, en PDF.
 - ✅ Prima, cesantías e intereses: cuánto te toca y cuándo. (calculadora de liquidación + aviso de junio y diciembre)
-- Modo conductor: meta de ganancia por día y por hora conectada.
+- ✅ Modo conductor: meta de ganancia por día y por hora conectada.
 
 ## Familia y grupos
 

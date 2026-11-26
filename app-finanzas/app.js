@@ -4423,6 +4423,7 @@
     if (meta) {
       $("jornada-meta-barra").style.width = Math.min(100, (r.ingresos / meta) * 100) + "%";
       nota.textContent = r.ingresos >= meta ? "🎉 ¡Meta del día cumplida!" : "Llevas " + dinero(r.ingresos) + " de tu meta de " + dinero(meta) + " (" + Math.round((r.ingresos / meta) * 100) + "%)";
+      nota.textContent += notaMetaPorHora(meta);
     } else nota.textContent = r.viajes ? r.viajes + (r.viajes === 1 ? " viaje" : " viajes") + " hoy · " + dinero(r.porViaje) + " por viaje" : "Anota tus ganancias después de cada carrera.";
     pintarTrabajo();
   }
@@ -4435,6 +4436,18 @@
     li.append(n, el("strong", null, dinero(total)), barra);
     if (detalle) li.append(el("small", "nota detalle", detalle));
     ul.append(li);
+  }
+
+  var CLAVE_HORAS_CONECTADO = "nova_horas_conectado";
+
+  function horasConectado() {
+    var horas = leerLocal(CLAVE_HORAS_CONECTADO, null);
+    return Number.isFinite(horas) && horas >= 1 && horas <= 24 ? horas : null;
+  }
+
+  function notaMetaPorHora(meta) {
+    var porHora = A.metaPorHora(meta, horasConectado());
+    return porHora === null ? "" : " · Eso es " + dinero(porHora) + " por hora conectada";
   }
 
   function pintarTrabajo() {
@@ -4450,7 +4463,9 @@
       : r.movimientos ? "Sin viajes anotados" : "Aún no hay movimientos en este periodo";
     var meta = num(datos.perfil.meta_diaria);
     $("trabajo-meta-caja").hidden = !(meta && cualTrabajo === "hoy");
-    $("trabajo-meta-nota").textContent = meta && cualTrabajo === "hoy" ? (r.ingresos >= meta ? "🎉 ¡Meta del día cumplida!" : "Meta del día: " + dinero(meta) + " (" + Math.round((r.ingresos / meta) * 100) + "%)") : "";
+    $("trabajo-meta-nota").textContent = meta && cualTrabajo === "hoy"
+      ? (r.ingresos >= meta ? "🎉 ¡Meta del día cumplida!" : "Meta del día: " + dinero(meta) + " (" + Math.round((r.ingresos / meta) * 100) + "%)") + notaMetaPorHora(meta)
+      : "";
     $("trabajo-meta-barra").style.width = meta ? Math.min(100, (r.ingresos / meta) * 100) + "%" : "0";
 
     function chips(cont, lista, cual) {
@@ -4501,6 +4516,7 @@
     });
     if (document.activeElement !== $("vehiculo-nombre")) $("vehiculo-nombre").value = datos.perfil.vehiculo || "";
     if (document.activeElement !== $("meta-diaria")) $("meta-diaria").value = datos.perfil.meta_diaria ? pesos.format(num(datos.perfil.meta_diaria)) : "";
+    if (document.activeElement !== $("horas-conectado")) $("horas-conectado").value = horasConectado() || "";
   }
   document.querySelectorAll("#trabajo-periodos button").forEach(function (b) {
     b.addEventListener("click", function () { cualTrabajo = b.dataset.cual; guardarLocal("nova-trabajo", cualTrabajo); pintarTrabajo(); });
@@ -4526,7 +4542,18 @@
     e.preventDefault();
     var txt = $("meta-diaria").value.trim(), meta = txt ? leerValor(txt) : null;
     if (txt && !(meta > 0)) return mensaje("vehiculo-mensaje", "No entendí la meta. Escribe por ejemplo 150 mil.", true);
-    guardarPerfil({ vehiculo: $("vehiculo-nombre").value.trim() || null, meta_diaria: meta }, "vehiculo-mensaje", "Guardado.");
+    var textoHoras = $("horas-conectado").value.trim();
+    var horas = Number(textoHoras.replace(",", "."));
+    if (textoHoras && (!/^\d+(?:[.,]\d+)?$/.test(textoHoras) || horas < 1 || horas > 24)) {
+      return mensaje("vehiculo-mensaje", "Escribe un número de horas entre 1 y 24.", true);
+    }
+    var guardado = true;
+    if (textoHoras) guardado = guardarLocal(CLAVE_HORAS_CONECTADO, horas);
+    else {
+      try { localStorage.removeItem(CLAVE_HORAS_CONECTADO); } catch (err) { guardado = false; }
+    }
+    guardarPerfil({ vehiculo: $("vehiculo-nombre").value.trim() || null, meta_diaria: meta }, "vehiculo-mensaje",
+      guardado ? "Guardado." : "Se guardaron el vehículo y la meta. El navegador no pudo guardar el cambio de horas.");
   });
 
   // Vencimientos (SOAT, tecnomecánica…)
@@ -4730,8 +4757,9 @@
   // Recuadro de Inicio: para no olvidarse de lo que se debe, lo que le deben y lo que está por vencer.
   function pintarDeudasInicio(r) {
     var t = $("tarjeta-deudas"), pend = r.lista.filter(function (x) { return x.falta > 0; });
-    t.hidden = !pend.length;
-    if (!pend.length) return;
+    var cuotas = NovaHerramientas.cuotasVsIngresos(datos.movimientos, datos.categorias, new Date());
+    t.hidden = !pend.length && !cuotas.supera;
+    if (t.hidden) return;
     var partes = [];
     if (r.debo > 0) partes.push("Debes " + dinero(r.debo));
     if (r.meDeben > 0) partes.push("Te deben " + dinero(r.meDeben));
@@ -4743,6 +4771,8 @@
     if (vencidas.length) {
       nota.classList.add("estado-vencida");
       nota.textContent = vencidas.length === 1 ? "⛔ " + vencidas[0].deuda.persona + ": se pasó la fecha de pago" : "⛔ " + vencidas.length + " deudas con la fecha de pago pasada";
+    } else if (cuotas.supera) {
+      nota.textContent = "⚠️ Tus cuotas van en " + Math.round(cuotas.porcentaje) + " % de tus ingresos de este mes (lo sano es menos de 30 %)";
     } else if (proximas.length) {
       var x = proximas[0];
       nota.textContent = x.deuda.persona + ": " + (x.dias === 0 ? "vence hoy" : x.dias === 1 ? "vence mañana" : "vence en " + x.dias + " días");
