@@ -18,11 +18,11 @@ Lista de funciones para ir sumando poco a poco, probadas una por una.
 - ⭐ Aviso de saldo bajo: te avisa cuando una cuenta baja de un valor que tú eliges.
 - ⭐ «Cancela y ahorra»: si una suscripción lleva meses sin usarse, te dice cuánto ahorrarías al año.
 - Reto de no gastar: elige días o una semana sin gastos en algo (domicilios, ropa) y NOVA lleva la cuenta.
-- Metas con fecha automática: dices cuánto puedes guardar al mes y NOVA calcula cuándo llegas.
+- ✅ Metas con fecha automática: dices cuánto puedes guardar al mes y NOVA calcula cuándo llegas.
 - ✅ Alcancía por redondeo con meta: lo que sobra de redondear va directo a una meta. (tarjeta «Alcancía»)
 - Comparar precios de una compra grande en varias tiendas (con la IA que busca en internet).
-- Lista de deseos: cosas que quieres comprar, con precio y «¿me alcanza?» para cada una.
-- Aviso de «gasto hormiga del mes»: tus 3 gastos pequeños que más suman.
+- ✅ Lista de deseos: cosas que quieres comprar, con precio y «¿me alcanza?» para cada una.
+- ✅ Aviso de «gasto hormiga del mes»: tus 3 gastos pequeños que más suman.
 
 ## Para anotar más rápido
 

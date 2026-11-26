@@ -1370,6 +1370,8 @@
     mensaje("bienes-mensaje", "");
     pintarRegistroPatrimonio();
     pintarCompras();
+    pintarDeseos();
+    pintarFechaMeta();
     pintarSuscripciones();
     var ul = $("lista-limites");
     ul.replaceChildren();
@@ -1461,14 +1463,151 @@
     });
   }
 
+  function calcularFechaMeta(objetivo, aporte) {
+    return NovaHerramientas.fechaDeMeta(objetivo, 0, aporte, new Date());
+  }
+
+  function textoMeses(meses) { return meses + (meses === 1 ? " mes" : " meses"); }
+
+  function pintarFechaMeta() {
+    var aporte = leerValor($("meta-aporte").value);
+    var calculo = calcularFechaMeta(leerValor($("meta-objetivo").value), aporte);
+    $("meta-aporte-nota").textContent = calculo && !ocultos ?
+      "Con " + dinero(aporte) + " al mes llegarías en " + fechaMes.format(parteFechaLocal(calculo.fecha)) +
+      " (" + textoMeses(calculo.meses) + ")" : "";
+  }
+
+  $("meta-objetivo").addEventListener("input", pintarFechaMeta);
+  $("meta-aporte").addEventListener("input", pintarFechaMeta);
+
   $("form-meta").addEventListener("submit", function (e) {
     e.preventDefault();
     var nombre = $("meta-nombre").value.trim(), objetivo = leerValor($("meta-objetivo").value);
     if (!nombre) return mensaje("meta-mensaje", "Escribe para qué ahorras.", true);
     if (!(objetivo > 0)) return mensaje("meta-mensaje", "No entendí el valor. Escribe por ejemplo 2 millones.", true);
-    fuente.crear("metas", Object.assign({ nombre: nombre, objetivo: objetivo }, $("meta-fecha").value ? { fecha_limite: $("meta-fecha").value } : {})).then(function (m) {
-      datos.metas.push(m); e.target.reset(); mensaje("meta-mensaje", "Meta creada."); pintar();
+    var fecha = $("meta-fecha").value;
+    if (!fecha) {
+      var calculo = calcularFechaMeta(objetivo, leerValor($("meta-aporte").value));
+      if (calculo) fecha = calculo.fecha;
+    }
+    fuente.crear("metas", Object.assign({ nombre: nombre, objetivo: objetivo }, fecha ? { fecha_limite: fecha } : {})).then(function (m) {
+      datos.metas.push(m); e.target.reset(); pintarFechaMeta(); mensaje("meta-mensaje", "Meta creada."); pintar();
     }).catch(function (err) { mensaje("meta-mensaje", err.message, true); });
+  });
+
+  function claveDeseos() { return claveComodidad("deseos:" + (espacioId || "principal")); }
+
+  function leerDeseos(origen, clave) {
+    return (origen.demo ? origen.deseos && origen.deseos[clave] : leerLocal(clave, null)) || { items: [] };
+  }
+
+  function guardarDeseos(origen, clave, lista) {
+    if (!origen.demo) return guardarLocal(clave, lista);
+    origen.deseos = origen.deseos || {};
+    origen.deseos[clave] = lista;
+    return true;
+  }
+
+  function quitarDeseo(origen, clave, id) {
+    return guardarDeseos(origen, clave, { items: leerDeseos(origen, clave).items.filter(function (d) { return d.id !== id; }) });
+  }
+
+  function ahorroMensualDeseos(ahora) {
+    var primero = A.claveDia(A.desplazar("mensual", ahora, -3).desde);
+    var fin = A.claveDia(Periodos.periodo("mensual", ahora).desde);
+    var inicio = fin;
+    var recientes = datos.movimientos.filter(function (m) {
+      if (!m.fecha || m.transferencia || m.borrado || m.estado === "borrado" || m.estado === "pendiente" ||
+          (m.tipo !== "ingreso" && m.tipo !== "gasto")) return false;
+      var dia = A.fechaAnotada(m.fecha);
+      if (dia < inicio) inicio = dia;
+      return dia >= primero && dia < fin;
+    });
+    // Incluye los meses terminados desde que hay registros, incluso si alguno quedó sin movimientos.
+    var meses = 0;
+    for (var i = 1; i <= 3; i++) {
+      if (inicio < A.claveDia(A.desplazar("mensual", ahora, 1 - i).desde)) meses++;
+    }
+    var neto = A.totales(recientes).neto;
+    return meses && neto > 0 ? neto / meses : null;
+  }
+
+  var estadoDeseoAMeta = new Map();
+  function pintarDeseos() {
+    var origen = fuente, clave = claveDeseos(), lista = leerDeseos(origen, clave);
+    var ul = $("lista-deseos");
+    $("form-deseo").hidden = ocultos;
+    ul.replaceChildren();
+    if (!lista.items.length) {
+      ul.append(el("li", "nota", "Todavía no tienes deseos. Agrega algo que quieras comprar y NOVA te dice si te alcanza."));
+      return;
+    }
+    var disponible = saldoDisponibleAhorros().saldo, ahorro = ahorroMensualDeseos(new Date());
+    lista.items.forEach(function (d) {
+      var li = el("li", "meta"), acciones = el("div", "habito-acciones");
+      li.append(el("strong", null, d.nombre + " · " + dinero(d.precio)));
+      if (!ocultos) {
+        var r = NovaHerramientas.alcanzaDeseo(d.precio, disponible, ahorro);
+        var texto = r.alcanza ? "✅ Sí te alcanza con lo que tienes disponible" :
+          "Te faltan " + dinero(r.falta) + (r.meses === null ? "" : ". A tu ritmo de ahorro llegas en " + textoMeses(r.meses));
+        li.append(el("p", "nota", "¿Me alcanza? " + texto));
+      }
+      var meta = botonHabito("Pasar a meta", function () {
+        if (estadoDeseoAMeta.has(d.id)) return;
+        estadoDeseoAMeta.set(d.id, "creando");
+        mensaje("deseo-mensaje", "");
+        pintarDeseos();
+        origen.crear("metas", { nombre: d.nombre, objetivo: d.precio }).then(function (m) {
+          estadoDeseoAMeta.set(d.id, "creada");
+          var guardado = quitarDeseo(origen, clave, d.id);
+          if (guardado) estadoDeseoAMeta.delete(d.id);
+          if (origen !== fuente || clave !== claveDeseos()) return;
+          if (!datos.metas.some(function (x) { return x.id === m.id; })) datos.metas.push(m);
+          if (guardado) toast("Ahora es una meta");
+          else mensaje("deseo-mensaje", "La meta se creó, pero no se pudo quitar el deseo de este dispositivo.", true);
+          pintar();
+        }).catch(function (err) {
+          if (estadoDeseoAMeta.get(d.id) === "creando") estadoDeseoAMeta.delete(d.id);
+          if (origen === fuente && clave === claveDeseos()) mensaje("deseo-mensaje", err.message, true);
+        }).finally(function () {
+          if (origen === fuente && clave === claveDeseos()) pintarDeseos();
+        });
+      });
+      function quitar(texto) {
+        if (!quitarDeseo(origen, clave, d.id)) return mensaje("deseo-mensaje", "No se pudo guardar en este dispositivo.", true);
+        estadoDeseoAMeta.delete(d.id);
+        mensaje("deseo-mensaje", "");
+        pintarDeseos();
+        toast(texto);
+      }
+      var comprada = botonHabito("Ya la compré", function () { quitar("Compra marcada"); });
+      var borrar = botonHabito("Quitar", function () {
+        if (confirm("¿Quitar «" + d.nombre + "» de la lista?")) quitar("Deseo quitado");
+      });
+      [meta, comprada, borrar].forEach(function (boton) {
+        boton.disabled = estadoDeseoAMeta.get(d.id) === "creando" ||
+          (boton === meta && (ocultos || estadoDeseoAMeta.has(d.id)));
+        boton.setAttribute("aria-label", boton.textContent + " · " + d.nombre);
+      });
+      acciones.append(meta, comprada, borrar);
+      li.append(acciones);
+      ul.append(li);
+    });
+  }
+
+  $("form-deseo").addEventListener("submit", function (e) {
+    e.preventDefault();
+    if (ocultos) return;
+    var nombre = $("deseo-nombre").value.trim(), precio = leerValor($("deseo-precio").value);
+    if (!nombre) return mensaje("deseo-mensaje", "Escribe qué quieres comprar.", true);
+    if (!Number.isFinite(precio) || precio <= 0) return mensaje("deseo-mensaje", "Escribe un precio válido.", true);
+    var clave = claveDeseos(), lista = leerDeseos(fuente, clave);
+    if (lista.items.length >= 50) return mensaje("deseo-mensaje", "Puedes guardar hasta 50 deseos.", true);
+    lista.items.push({ id: idLocal(), nombre: nombre, precio: precio, creado: new Date().toISOString() });
+    if (!guardarDeseos(fuente, clave, lista)) return mensaje("deseo-mensaje", "No se pudo guardar en este dispositivo.", true);
+    e.target.reset();
+    mensaje("deseo-mensaje", "Deseo agregado.");
+    pintarDeseos();
   });
 
   // Pantalla de límite.
@@ -1583,6 +1722,7 @@
     { id: "fondo-emergencia", nombre: "Fondo de emergencia" },
     { id: "servicios-por-mes", nombre: "Servicios públicos mes a mes" },
     { id: "consejo-dia", nombre: "Consejo financiero del día", inicio: true },
+    { id: "hormiga-mes", nombre: "Tus gastos hormiga del mes", inicio: true },
     { id: "pruebas-gratis", nombre: "Pruebas gratis por terminar", inicio: true },
     { id: "aviso-pago", nombre: "Aviso del día de pago", inicio: true },
     { id: "calificar-compra", nombre: "¿Valió la pena?", inicio: true },
@@ -1648,6 +1788,7 @@
       "distribucion-patrimonio": wDistribucionPatrimonio, "vencimientos-cdt": wVencimientosCdt,
       "calculadoras-inversion": wCalculadorasInversion,
       "fondo-emergencia": wFondoEmergencia, "servicios-por-mes": wServiciosPorMes, "consejo-dia": wConsejoDia, "pruebas-gratis": wPruebasGratis,
+      "hormiga-mes": inicio ? wHormigaMes : null,
       "aviso-pago": inicio ? wAvisoPago : null, "calificar-compra": inicio ? wCalificarCompra : null,
       "resumen-compras": wResumenCompras, "sugerencias-ahorro": wSugerenciasAhorro
     }[id];
@@ -1785,16 +1926,21 @@
     art.append(lista);
   }
 
-  function wFondoEmergencia(art) {
-    titulo(art, "Fondo de emergencia");
+  function saldoDisponibleAhorros() {
     var cuentas = datos.cuentas.filter(function (c) { return c.tipo === "ahorro" || c.tipo === "efectivo"; });
     var tieneAhorro = cuentas.length > 0;
     if (!tieneAhorro) cuentas = datos.cuentas.filter(function (c) { return c.tipo !== "credito"; });
     var saldo = cuentas.reduce(function (total, c) { return total + saldoCuenta(c); }, 0);
-    var r = A.fondoEmergencia(datos.movimientos, saldo, new Date());
+    return { saldo: Math.max(0, saldo), tieneAhorro: tieneAhorro };
+  }
+
+  function wFondoEmergencia(art) {
+    titulo(art, "Fondo de emergencia");
+    var disponible = saldoDisponibleAhorros();
+    var r = A.fondoEmergencia(datos.movimientos, disponible.saldo, new Date());
     if (!r) return art.append(el("p", "nota", "Faltan gastos registrados en los últimos 3 meses completos."));
     art.append(el("p", "nota", "Gasto promedio de los últimos 3 meses completos · " + dinero(r.gastoMensual)),
-      el("p", "nota", (tieneAhorro ? "Disponible en ahorros y efectivo" : "Disponible en cuentas sin crédito") +
+      el("p", "nota", (disponible.tieneAhorro ? "Disponible en ahorros y efectivo" : "Disponible en cuentas sin crédito") +
         " · " + dinero(r.saldoDisponible)));
     r.metas.forEach(function (meta) {
       var nombre = "Meta de " + meta.meses + " meses";
@@ -1829,6 +1975,22 @@
   function wConsejoDia(art) {
     titulo(art, "Consejo financiero del día");
     art.append(el("p", null, NovaConsejos.consejoDelDia(new Date())));
+  }
+
+  function wHormigaMes(art) {
+    var grupos = NovaHerramientas.gastosHormigaTop(datos.movimientos, new Date(), {
+      moneda: monedaBase(),
+      nombreCategoria: function (id) { var c = categoria(id); return c && c.nombre; }
+    });
+    if (!grupos.length) return;
+    art.id = "hormiga-mes";
+    titulo(art, "Tus gastos hormiga del mes");
+    var lista = el("ul", "lista-simple"), total = 0;
+    grupos.forEach(function (g) {
+      lista.append(el("li", "nota", "🐜 " + g.nombre + " · " + g.veces + " veces · " + dinero(g.total)));
+      total += g.total;
+    });
+    art.append(lista, el("p", "nota", "Sumados son " + dinero(total) + ": pequeño por pedazo, grande al final del mes."));
   }
 
   function wPromedioDia(art) {

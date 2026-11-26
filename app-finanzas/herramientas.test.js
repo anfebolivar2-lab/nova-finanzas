@@ -1,6 +1,68 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const { simular, actualizarNotas, enNoMolestar, horaAviso, referenciaAvisos, gastoAltoDelDia } = require("./herramientas");
+const { simular, actualizarNotas, enNoMolestar, horaAviso, referenciaAvisos, gastoAltoDelDia,
+  fechaDeMeta, alcanzaDeseo, gastosHormigaTop } = require("./herramientas");
+
+test("calcula la fecha de la meta con el aporte exacto, el ahorro previo y el redondeo", () => {
+  const hoy = new Date(2026, 0, 15);
+  assert.deepEqual(fechaDeMeta(1000000, 0, 250000, hoy), { meses: 4, fecha: "2026-05-15" });
+  assert.deepEqual(fechaDeMeta(1000000, 500000, 250000, hoy), { meses: 2, fecha: "2026-03-15" });
+  assert.deepEqual(fechaDeMeta(1000000, 499999, 250000, hoy), { meses: 3, fecha: "2026-04-15" });
+});
+
+test("la fecha de la meta respeta el último día del mes y el cambio de año", () => {
+  assert.deepEqual(fechaDeMeta(10, 0, 11, new Date(2026, 0, 31)), { meses: 1, fecha: "2026-02-28" });
+  assert.deepEqual(fechaDeMeta(10, 0, 11, "2026-01-31"), { meses: 1, fecha: "2026-02-28" });
+  assert.deepEqual(fechaDeMeta(10, 0, 10, new Date(2028, 0, 31)), { meses: 1, fecha: "2028-02-29" });
+  assert.deepEqual(fechaDeMeta(10, 0, 10, new Date(2026, 11, 31)), { meses: 1, fecha: "2027-01-31" });
+});
+
+test("la fecha de la meta queda vacía con aporte inválido, meta cumplida o más de 600 meses", () => {
+  const hoy = new Date(2026, 0, 15);
+  for (const aporte of [0, -1, NaN, Infinity]) assert.equal(fechaDeMeta(100, 0, aporte, hoy), null);
+  assert.equal(fechaDeMeta(100, 100, 10, hoy), null);
+  assert.equal(fechaDeMeta(601, 0, 1, hoy), null);
+  assert.equal(fechaDeMeta(600, 0, 1, hoy).meses, 600);
+});
+
+test("calcula cuánto falta para un deseo y estima meses solo con un ritmo válido", () => {
+  assert.deepEqual(alcanzaDeseo(100, 100, 10), { alcanza: true, falta: 0, meses: null });
+  assert.deepEqual(alcanzaDeseo(100, 25, 30), { alcanza: false, falta: 75, meses: 3 });
+  for (const ritmo of [null, 0, -5, NaN, Infinity]) {
+    assert.deepEqual(alcanzaDeseo(100, 50, ritmo), { alcanza: false, falta: 50, meses: null });
+  }
+  assert.deepEqual(alcanzaDeseo(100, NaN, 50), { alcanza: false, falta: 100, meses: 2 });
+  assert.deepEqual(alcanzaDeseo(100, -10, 50), { alcanza: false, falta: 110, meses: 3 });
+  assert.deepEqual(alcanzaDeseo(-1, 0, 50), { alcanza: true, falta: 0, meses: null });
+});
+
+test("agrupa gastos hormiga del mes por nombre y filtra movimientos que no cuentan", () => {
+  const gasto = { tipo: "gasto", fecha: "2026-05-01", monto: 20000, descripcion: "Café con leche" };
+  const variaciones = [
+    { descripcion: " CAFE   CON LECHE " },
+    { descripcion: "cafe con LECHE", moneda: "USD", tasa: 4000, monto_original: 5 },
+    { monto: 20001 }, { fecha: "2026-04-30" }, { transferencia: true }, { etiquetas: ["deuda"] },
+    { borrado: true }, { estado: "borrado" }, { tipo: "ingreso" }, { moneda: "USD" }
+  ];
+  const movimientos = [gasto, ...variaciones.map(m => ({ ...gasto, ...m })),
+    { ...gasto, descripcion: "Otro" }, { ...gasto, descripcion: "Otro" }];
+  const hoy = new Date(2026, 4, 31);
+  assert.deepEqual(gastosHormigaTop(movimientos, hoy), [{ nombre: "Café con leche", veces: 3, total: 60000 }]);
+  assert.deepEqual(gastosHormigaTop(movimientos, hoy, { tope: 19999 }), []);
+  assert.deepEqual(gastosHormigaTop([], hoy), []);
+});
+
+test("ordena los gastos hormiga por total y frecuencia, usa la categoría y devuelve hasta tres", () => {
+  const compras = (descripcion, veces, monto) => Array.from({ length: veces }, () => ({
+    descripcion, monto, tipo: "gasto", fecha: "2026-05-01", categoria_id: 3
+  }));
+  const movimientos = [...compras("Pan", 3, 4), ...compras("Bus", 4, 3), ...compras("", 3, 5), ...compras("Agua", 3, 1)];
+  assert.deepEqual(gastosHormigaTop(movimientos, new Date(2026, 4, 31), { nombreCategoria: () => "Domicilios" }), [
+    { nombre: "Domicilios", veces: 3, total: 15 },
+    { nombre: "Bus", veces: 4, total: 12 },
+    { nombre: "Pan", veces: 3, total: 12 }
+  ]);
+});
 
 test("simula los tres escenarios y calcula el colchón solo si hay déficit", () => {
   const base = { ingresos: 1000, ingresoPrincipal: 600, gastos: 800, arriendo: 500, colchon: 1600 };

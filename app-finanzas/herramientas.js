@@ -63,6 +63,59 @@
     return new Date(referencia.getTime() - 1);
   }
 
+  function fechaDeMeta(objetivo, ahorrado, aporteMensual, hoy) {
+    var falta = objetivo - ahorrado;
+    if (!Number.isFinite(falta) || falta <= 0 || !Number.isFinite(aporteMensual) || aporteMensual <= 0) return null;
+    var meses = Math.max(1, Math.ceil(falta / aporteMensual));
+    var fecha = new Date(typeof hoy === "string" && /^\d{4}-\d{2}-\d{2}$/.test(hoy) ? hoy + "T00:00:00" : hoy);
+    if (meses > 600 || !Number.isFinite(fecha.getTime())) return null;
+    var dia = fecha.getDate();
+    fecha.setMonth(fecha.getMonth() + meses + 1, 0);
+    fecha.setDate(Math.min(dia, fecha.getDate()));
+    return { meses: meses, fecha: Analisis.claveDia(fecha) };
+  }
+
+  function alcanzaDeseo(precio, disponible, ahorroMensual) {
+    precio = Number.isFinite(precio) && precio > 0 ? precio : 0;
+    disponible = Number.isFinite(disponible) ? disponible : 0;
+    var falta = Math.max(0, precio - disponible);
+    var meses = falta > 0 && Number.isFinite(ahorroMensual) && ahorroMensual > 0 ? Math.ceil(falta / ahorroMensual) : null;
+    return { alcanza: falta === 0, falta: falta, meses: Number.isFinite(meses) ? meses : null };
+  }
+
+  function gastoEnMonedaBase(m, moneda) {
+    if (!m || m.tipo !== "gasto" || m.borrado || m.estado === "borrado" || m.transferencia ||
+        (Array.isArray(m.etiquetas) && m.etiquetas.indexOf("deuda") !== -1)) return false;
+    // Los gastos convertidos ya guardan en monto el valor en la moneda del espacio.
+    return !m.moneda || m.moneda === moneda || (Number(m.tasa) > 0 && Number(m.monto_original) > 0);
+  }
+
+  function gastosHormigaTop(movimientos, ahora, opciones) {
+    opciones = opciones || {};
+    var mes = Analisis.claveDia(ahora).slice(0, 7), moneda = opciones.moneda || "COP";
+    var tope = opciones.tope == null ? 20000 : opciones.tope;
+    var grupos = new Map();
+    (movimientos || []).forEach(function (m) {
+      if (!gastoEnMonedaBase(m, moneda) || !m.fecha || Analisis.fechaAnotada(m.fecha).slice(0, 7) !== mes) return;
+      var valor = Number(m.monto);
+      if (!Number.isFinite(valor) || valor <= 0 || valor > tope) return;
+      var descripcion = typeof m.descripcion === "string" ? m.descripcion.trim() : "";
+      var categoria = opciones.nombreCategoria ? opciones.nombreCategoria(m.categoria_id) : m.categoria;
+      var nombre = (descripcion || (typeof categoria === "string" && categoria.trim()) ||
+        "Sin categoría").replace(/\s+/g, " ");
+      var clave = Analisis.sinTildes(nombre);
+      var grupo = grupos.get(clave);
+      if (!grupo) {
+        grupo = { nombre: nombre[0].toUpperCase() + nombre.slice(1), veces: 0, total: 0 };
+        grupos.set(clave, grupo);
+      }
+      grupo.veces++;
+      grupo.total += valor;
+    });
+    return Array.from(grupos.values()).filter(function (g) { return g.veces >= 3; })
+      .sort(function (a, b) { return b.total - a.total || b.veces - a.veces; }).slice(0, 3);
+  }
+
   function gastoAltoDelDia(movimientos, ahora, opciones) {
     opciones = opciones || {};
     var hoy = Analisis.claveDia(ahora);
@@ -72,10 +125,7 @@
     var primerDia = Analisis.claveDia(desde), moneda = opciones.moneda || "COP";
     var porDia = new Map();
     movimientos.forEach(function (m) {
-      if (!m || m.tipo !== "gasto" || m.borrado || m.estado === "borrado" || m.transferencia ||
-          (Array.isArray(m.etiquetas) && m.etiquetas.indexOf("deuda") !== -1)) return;
-      // Los gastos en otra moneda ya guardan en monto el valor convertido a la moneda del espacio.
-      if (m.moneda && m.moneda !== moneda && !(Number(m.tasa) > 0 && Number(m.monto_original) > 0)) return;
+      if (!gastoEnMonedaBase(m, moneda)) return;
       var valor = Number(m.monto);
       if (!Number.isFinite(valor) || valor <= 0 || !m.fecha) return;
       var dia = /^\d{4}-\d{2}-\d{2}$/.test(m.fecha) ? m.fecha : Analisis.claveDia(m.fecha);
@@ -92,7 +142,9 @@
     return veces >= factor ? { total: total, promedio: promedio, veces: veces } : null;
   }
 
-  var api = { simular: simular, actualizarNotas: actualizarNotas, enNoMolestar: enNoMolestar, horaAviso: horaAviso, referenciaAvisos: referenciaAvisos, gastoAltoDelDia: gastoAltoDelDia };
+  var api = { simular: simular, actualizarNotas: actualizarNotas, enNoMolestar: enNoMolestar, horaAviso: horaAviso,
+    referenciaAvisos: referenciaAvisos, gastoAltoDelDia: gastoAltoDelDia, fechaDeMeta: fechaDeMeta,
+    alcanzaDeseo: alcanzaDeseo, gastosHormigaTop: gastosHormigaTop };
   if (typeof module === "object" && module.exports) module.exports = api;
   else raiz.NovaHerramientas = api;
 })(typeof window !== "undefined" ? window : this);
