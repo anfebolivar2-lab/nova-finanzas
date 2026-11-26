@@ -6829,6 +6829,8 @@
   var Eventos = window.NovaEventos;
   var usoEventos = null;
   var permitirEventos = leerLocal("nova-eventos-activo", true) !== false;
+  // Si se muestra el login primero, se conserva la medición en memoria hasta entrar con una cuenta.
+  var cargaInicial;
   $("uso-activo").checked = permitirEventos;
   $("uso-activo").addEventListener("change", function () {
     guardarLocal("nova-eventos-activo", this.checked);
@@ -6841,7 +6843,7 @@
     $("uso-activo").checked = permitido;
     if (permitirEventos === permitido) return;
     permitirEventos = permitido;
-    if (!permitido) reiniciarEventos();
+    if (!permitido) { cargaInicial = null; reiniciarEventos(); }
     else if (fuente && !$("pantalla-app").hidden) iniciarEventos();
   }
 
@@ -6864,6 +6866,16 @@
   }
   function registrarEvento(tipo, nombre, valor) {
     registrarEventoDe(usoActivoEventos(), tipo, nombre, valor);
+  }
+  function medirCargaInicial() {
+    if (cargaInicial !== undefined) return;
+    cargaInicial = null;
+    var reloj = window.performance;
+    if (!Eventos || !permitirEventos || !reloj || typeof reloj.now !== "function") return;
+    var navegacion = typeof reloj.getEntriesByType === "function" && reloj.getEntriesByType("navigation")[0];
+    var inicio = navegacion && Number.isFinite(navegacion.startTime) ? navegacion.startTime : 0;
+    var ms = reloj.now() - inicio;
+    if (Number.isFinite(ms) && ms >= 0) cargaInicial = Eventos.decimasRespuesta(ms);
   }
   function registrarAjustesUso(uso) {
     if (uso.ajustes) return;
@@ -8043,6 +8055,14 @@
       { nombre: "APK avanzada", total: apk.avanzada, porcentaje: apk.porcentajeAvanzada }
     ] : [], "");
     if (!apk) $("dueno-reparto-apk").append(el("p", "nota", "Todavía no hay descargas por archivo."));
+    listaDueno("dueno-descargas-por-dia", Dueno.descargasRecientes(d.descargasPorDia, d.generado || ahora),
+      "Todavía no hay historial.", function (li, fila) {
+        var fecha = el("time", null, fechaCorta.format(new Date(fila.dia + "T12:00:00")));
+        fecha.dateTime = fila.dia;
+        var texto = fila.nuevas === null ? "Medición inicial" : "+" + numDueno.format(fila.nuevas);
+        if (fila.dias > 1) texto += " en " + numDueno.format(fila.dias) + " días";
+        li.append(fecha, el("span", null, texto));
+      });
     pintarPersonasDueno();
   }
   var textosCuentaDueno = {
@@ -8220,6 +8240,11 @@
     mensajeUso.textContent = !uso ? "Las estadísticas de uso no están disponibles." :
       !uso.total ? "Todavía no hay eventos de uso en los últimos 30 días." : "";
     $("dueno-eventos-datos").hidden = !uso || !uso.total;
+    var carga = datosUso && datosUso.carga;
+    $("dueno-eventos-carga").textContent = carga && carga.n ?
+      "Mediana " + Dueno.formatearSegundos(carga.medianaMs) + " · Promedio " + Dueno.formatearSegundos(carga.promedioMs) +
+        " · p90 " + Dueno.formatearSegundos(carga.p90Ms) + " · " + pl(carga.n, "apertura medida", "aperturas medidas") :
+      "Todavía no hay mediciones.";
     pintarUsoIADueno(datosUso, ahora);
     if (!uso || !uso.total) return;
 
@@ -10481,6 +10506,7 @@
     $("cargando").hidden = true;
     $("pantalla-auth").hidden = pantalla !== "auth";
     $("pantalla-app").hidden = pantalla !== "app";
+    if (pantalla === "auth") medirCargaInicial();
   }
 
   function entrar(nuevaFuente) {
@@ -10505,6 +10531,13 @@
       iniciarEventos();
       if (enVista === "inicio") registrarEvento("pantalla", "tab_inicio");
       mostrar("app"); ir("inicio"); pintar();
+      if (!fuente.demo) {
+        medirCargaInicial();
+        if (usoActivoEventos() && cargaInicial !== null) {
+          registrarEvento("sesion", "carga", cargaInicial);
+          cargaInicial = null;
+        }
+      }
       cargarTasas();
       ultimaActividad = Date.now();
       if (!fuente.demo) bloquearSiHayPin();

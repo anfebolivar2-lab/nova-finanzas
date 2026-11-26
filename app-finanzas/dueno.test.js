@@ -1,7 +1,21 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const { filtrarPersonas, contarFiltros, ultimos30Dias, barrasVersiones, registrosParaMeta, porcentaje, validarAviso, sugerenciasPendientes, recientes, recortarTexto,
-  bytesAMegabytes, formatearTamano, tablasMasGrandes, accionesDeCuenta, confirmaCorreo, porcentajesEncuesta, validarEncuesta } = require("./dueno.js");
+  bytesAMegabytes, formatearTamano, tablasMasGrandes, accionesDeCuenta, confirmaCorreo, porcentajesEncuesta, validarEncuesta,
+  descargasRecientes, formatearSegundos } = require("./dueno.js");
+
+test("muestra segundos con un decimal, incluso para segundos enteros", () => {
+  assert.deepEqual([2300, 1000, 125].map(formatearSegundos), ["2,3 s", "1,0 s", "0,1 s"]);
+});
+
+test("las descargas de los últimos 30 días conservan los intervalos registrados", () => {
+  const base = { dia: "2026-10-23", total: 10, nuevas: null, dias: null };
+  const primera = { dia: "2026-10-24", total: 11, nuevas: 1, dias: 1 };
+  const salto = { dia: "2026-10-27", total: 16, nuevas: 5, dias: 3 };
+  const ultima = { dia: "2026-11-22", total: 16, nuevas: 0, dias: 26 };
+  assert.deepEqual(descargasRecientes([base, primera, salto, ultima], "2026-11-22T12:00:00Z"), [primera, salto, ultima]);
+  assert.deepEqual(descargasRecientes(undefined, "2026-11-22T12:00:00Z"), []);
+});
 
 test("calcula porcentajes por opción, incluso sin respuestas o con una sola opción", () => {
   assert.deepEqual(porcentajesEncuesta([0, 0], 0), [0, 0]);

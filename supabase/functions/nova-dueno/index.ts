@@ -1,4 +1,4 @@
-// nova-dueno v11: panel del dueño de NOVA. Cuenta cuántas personas se registraron, cuántas la usan, cuántas veces se
+// nova-dueno v12: panel del dueño de NOVA. Cuenta cuántas personas se registraron, cuántas la usan, cuántas veces se
 // descargó la APK y qué funciones usan. Responde a dueños y administradores autorizados.
 // Por privacidad NO devuelve montos ni movimientos de nadie: solo cuántos hay y cuándo se usó la app.
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
@@ -118,6 +118,26 @@ const clave = (f: unknown) => String(f || "").slice(0, 10);
 // ---- v3: avisos, sugerencias, errores y accesos (todo con la llave de servicio, solo para el dueño) ----
 const rest = (ruta: string, init: RequestInit = {}) =>
   fetch(`${URL_SB}/rest/v1/${ruta}`, { ...init, headers: { ...adm, "Content-Type": "application/json", ...(init.headers || {}) } });
+
+async function historialDescargas(total: number) {
+  const dia = new Date().toISOString().slice(0, 10);
+  await rest("fin_descargas_dia?on_conflict=dia", {
+    method: "POST",
+    headers: { Prefer: "resolution=merge-duplicates,return=minimal" },
+    body: JSON.stringify({ dia, total }),
+  }).catch(() => {});
+  const respuesta = await rest("fin_descargas_dia?select=dia,total&order=dia.desc&limit=31");
+  if (!respuesta.ok) return [];
+  const filas: { dia: string; total: number }[] = await respuesta.json();
+  return filas.reverse().map((fila, i) => {
+    const anterior = filas[i - 1];
+    return {
+      ...fila,
+      nuevas: anterior ? Math.max(0, fila.total - anterior.total) : null,
+      dias: anterior ? (Date.parse(fila.dia) - Date.parse(anterior.dia)) / DIA : null,
+    };
+  });
+}
 const texto = (v: unknown, max: number) => String(v ?? "").trim().slice(0, max);
 const AUDIENCIAS = ["todos", "android", "web"];
 const CLAVES_CONFIG = ["ia_pausada", "ia_mensaje", "version_minima", "notas_version"];
@@ -327,7 +347,7 @@ const nombresUso = new Map(Object.entries({
     anotar: "texto voz foto banco manual rapido",
     ia: `pregunta_texto pregunta_foto pregunta_voz error_cupo error_tiempo error_otro busqueda_web respuesta_ms
       tema_gastos tema_ahorro tema_deudas tema_presupuesto tema_impuestos tema_inversion tema_ingresos tema_otro`,
-    sesion: "duracion",
+    sesion: "duracion carga",
     ajuste: "tema_oscuro tema_claro pin_on pin_off huella_on huella_off modo_conductor_on modo_conductor_off",
     recuadro: `
       oculto_sugerencias-hora oculto_trm-dia oculto_racha oculto_pagos-proximos oculto_rapida oculto_categorias oculto_etiquetas oculto_ingresos-gastos
@@ -369,6 +389,7 @@ async function usoPanel(ahora: number, correoDe: Record<string, string>) {
   const temasIA = new Map<string, number>();
   const preguntasPorPersona = new Map<string, number>();
   const duraciones: number[] = [];
+  const tiemposCarga: number[] = [];
   const temas = new Map<string, string>();
   const pines = new Map<string, string>();
   const huellas = new Map<string, string>();
@@ -406,8 +427,9 @@ async function usoPanel(ahora: number, correoDe: Record<string, string>) {
           const dia = clave(creado_en);
           iaCupoPorDia[dia] = (iaCupoPorDia[dia] || 0) + 1;
         }
-      } else if (tipo === "sesion" && valor !== null && Number.isInteger(valor) && valor >= 5 && valor < 86400) {
-        duraciones.push(valor);
+      } else if (tipo === "sesion" && valor !== null && Number.isInteger(valor)) {
+        if (nombre === "duracion" && valor >= 5 && valor < 86400) duraciones.push(valor);
+        if (nombre === "carga" && valor >= 1 && valor <= 86400) tiemposCarga.push(valor * 100);
       } else if (tipo === "ajuste") {
         const grupo = nombre.startsWith("tema_") ? temas : nombre.startsWith("pin_") ? pines : nombre.startsWith("huella_") ? huellas : conductores;
         if (!grupo.has(user_id)) grupo.set(user_id, nombre);
@@ -430,6 +452,7 @@ async function usoPanel(ahora: number, correoDe: Record<string, string>) {
     iaPorDia,
     ia,
     iaRapidez: rapidezIA(tiemposMs),
+    carga: rapidezIA(tiemposCarga),
     iaTemas: Array.from(temasIA, ([nombre, total]) => ({ nombre, total })).sort(mayorPrimero),
     iaTop: Array.from(preguntasPorPersona, ([id, preguntas]) => ({ correo: correoDe[id], preguntas }))
       .filter(({ correo }) => correo && !/@example\.com$/i.test(correo))
@@ -662,6 +685,7 @@ Deno.serve(async (req) => {
       usuarios(), filas("fin_movimientos", "user_id,fecha,moneda,foto_ruta"), filas("fin_conversaciones", "user_id"), filas("fin_metas", "user_id"),
       filas("fin_espacios", "user_id"), filas("fin_perfiles", "user_id,modo_conductor"), descargasApk(),
     ]);
+    const descargasPorDia = historialDescargas(apk.total).catch(() => []);
     const ahora = Date.now(), hoy = new Date();
     const ahoraMs = Date.now();
     const diasPorUsuario: Record<string, Set<string>> = {};
@@ -738,6 +762,7 @@ Deno.serve(async (req) => {
       miRol,
       ...(miRol === "dueno" ? { admins } : {}),
       apk,
+      descargasPorDia: await descargasPorDia,
       resumen: {
         registrados: reales.length, confirmados: reales.filter((p) => p.confirmado).length,
         nuevos7: reales.filter((p) => ahora - Date.parse(p.registro) <= 7 * DIA).length,

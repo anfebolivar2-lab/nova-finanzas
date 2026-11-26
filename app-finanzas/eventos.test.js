@@ -21,6 +21,16 @@ test("la duración de sesión respeta los límites enteros", () => {
   assert.equal(E.eventoSeguro("anotar", "texto", 2000), null);
 });
 
+test("acepta tiempos de carga de sesión en décimas de segundo", () => {
+  assert.equal(E.decimasRespuesta(2300), 23);
+  for (const valor of [0, 23, 86400]) {
+    assert.deepEqual(E.eventoSeguro("sesion", "carga", valor), { tipo: "sesion", nombre: "carga", valor });
+  }
+  for (const valor of [-1, 86401, 2.3, "23", NaN, Infinity]) {
+    assert.equal(E.eventoSeguro("sesion", "carga", valor), null);
+  }
+});
+
 test("la cola conserva los 50 eventos recientes y devuelve lotes sin mutarla", () => {
   const vacia = [];
   assert.deepEqual(E.lotesParaEnviar(vacia), []);
