@@ -3155,7 +3155,7 @@
     var compartido = await compartirEnlace(
       "NOVA · Tus finanzas personales",
       "Te recomiendo NOVA para llevar tus finanzas: anota gastos con texto, voz o foto, gratis y sin anuncios.",
-      (cfg.enlaceUrl || cfg.sitioUrl || "https://nova-finanza.vercel.app").replace(/\/$/, "") + "/inicio.html"
+      (cfg.sitioUrl || "https://nova-finanzas.vercel.app").replace(/\/$/, "") + "/inicio.html"
     );
     if (!compartido || !clave) return;
     var antes = Number(leerLocal(clave, 0)) || 0;
@@ -10370,7 +10370,7 @@
     document.querySelectorAll(".respaldo, .ayuda-instalar").forEach(function (e) { e.hidden = !si; });
   }
   function enlaceDescarga(apk) {
-    var base = String(cfg.enlaceUrl || cfg.sitioUrl || "https://nova-finanza.vercel.app").replace(/\/+$/, "");
+    var base = String(cfg.sitioUrl || "https://nova-finanzas.vercel.app").replace(/\/+$/, "");
     return base + "/descargar.html" + (/NOVA-avanzada\.apk$/.test(String(apk || "")) ? "?v=avanzada" : "");
   }
   // El botón se ve siempre en el inicio de sesión (y en Configuración): tocarlo baja de una vez la última APK.

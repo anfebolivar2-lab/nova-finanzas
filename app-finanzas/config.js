@@ -11,9 +11,6 @@ window.NOVA_CONFIG = {
   // Dirección pública de la app: a ella lleva el enlace del correo para
   // cambiar la contraseña (también cuando se pide desde la app de Android).
   sitioUrl: "https://nova-finanzas.vercel.app",
-  // Nombre público para compartir y para las vistas previas. Va aparte de sitioUrl porque sitioUrl
-  // lo usan el inicio de sesión con Google y los correos de Supabase (esa dirección debe estar permitida allá).
-  enlaceUrl: "https://nova-finanza.vercel.app",
   // APK para Android. Se baja desde esta misma página (descargas/NOVA.apk) y la app instalada
   // compara su número con descargas/version.json para avisar cuando hay una nueva.
   // apkRespaldoUrl: copia en GitHub, por si el celular no baja el archivo desde la página.
