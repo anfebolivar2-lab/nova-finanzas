@@ -639,8 +639,8 @@ button.inf-ico { width: 44px; height: 44px; padding: 6px; border-radius: 12px; b
 .det-otros .titulo-det { color: var(--muted); font-size: .8rem; letter-spacing: .06em; text-transform: uppercase; }
 
 /* Sin internet */
-.banner-red { position: sticky; top: 0; z-index: 30; margin: 0 0 8px; padding: 8px 12px; border-radius: 12px; font-size: .82rem; font-weight: 600; background: var(--accent-soft); color: var(--ink); border: 1px solid var(--accent); text-align: center; }
-.banner-red.sin { background: rgba(255, 193, 7, .16); border-color: #d9a400; }
+.banner-red { position: sticky; top: 0; z-index: 30; margin: 0 0 8px; padding: 8px 12px; border-radius: 12px; font-size: .82rem; font-weight: 600; background: linear-gradient(var(--accent-soft), var(--accent-soft)), var(--surface); color: var(--ink); border: 1px solid var(--accent); text-align: center; }
+.banner-red.sin { background: linear-gradient(rgba(255, 193, 7, .16), rgba(255, 193, 7, .16)), var(--surface); border-color: #d9a400; }
 
 /* Tasas de cambio */
 .conv-fila { display: flex; gap: 8px; align-items: stretch; }

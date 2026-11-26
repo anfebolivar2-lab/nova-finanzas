@@ -5,7 +5,7 @@
 // envolver(base, opciones) devuelve una fuente de datos con las mismas operaciones que la de Supabase
 // (cargar, crear, crearVarios, actualizar, borrar, guardarPerfil, salir) más: pendientes(), sincronizar(), limpiar().
 // opciones: { almacen: { get(clave), set(clave, valor), del(clave) } (asíncrono), usuarioId, enLinea(), antes() (asíncrono, p. ej. renovar la sesión),
-//             alMapear(mapaIds, filas), alCambiar(estado), alFallar(operacion, error), ahora() }
+//             yaExiste(tabla, fila, idsConocidos), alMapear(mapaIds, filas), alCambiar(estado), alFallar(operacion, error), ahora() }
 (function (raiz) {
   "use strict";
 
@@ -27,14 +27,21 @@
     var almacen = op.almacen, uid = op.usuarioId || "anon";
     var enLinea = op.enLinea || function () { return true; };
     var ahora = op.ahora || function () { return new Date().toISOString(); };
-    var K = { estado: "nova:" + uid + ":estado", meta: "nova:" + uid + ":meta" };
-    var estado = null, cola = [], mapa = {}, temp = 0, listo = null, vaciando = false, fallidas = [], guardando = null, sucio = false;
+    var K = { estado: "nova:" + uid + ":estado", meta: "nova:" + uid + ":meta", fallidas: "nova:" + uid + ":fallidas" };
+    var estado = null, cola = [], mapa = {}, temp = 0, listo = null, operacionActiva = null, fallidas = [], guardando = null, sucio = false;
 
     function iniciar() {
       if (!listo) {
-        listo = almacen.get(K.meta).then(function (m) {
+        function leer(clave) { return almacen.get(clave).catch(function () { return null; }); }
+        listo = Promise.all([leer(K.meta), leer(K.estado), leer(K.fallidas)]).then(function (r) {
+          var m = r[0];
           if (m) { cola = m.cola || []; mapa = m.mapa || {}; temp = m.temp || 0; }
-        }).catch(function () { /* sin almacenamiento: se trabaja en memoria */ });
+          estado = r[1];
+          fallidas = r[2] || [];
+          cola.forEach(function (o) {
+            if (o.t === "crear" && o.enVuelo) { o.dudosa = true; delete o.enVuelo; }
+          });
+        });
       }
       return listo;
     }
@@ -75,7 +82,22 @@
     }
 
     function ejecutar(o) {
-      if (o.t === "crear") return base.crear(o.tabla, conReales(o.fila));
+      if (o.t === "crear") {
+        var fila = conReales(o.fila), ids = [];
+        var buscar = Promise.resolve(null);
+        if (o.dudosa && op.yaExiste) {
+          ids = tabla(o.tabla).map(function (f) { return f.id; }).filter(function (id) { return id > 0; }).concat(Object.values(mapa));
+          buscar = Promise.resolve().then(function () { return op.yaExiste(o.tabla, fila, ids); }).catch(function (e) {
+            if (esReintentable(e)) throw e;
+            return null;
+          });
+        }
+        return buscar.then(function (r) {
+          if (r && r.id != null && !ids.includes(r.id)) return r;
+          o.enVuelo = true;
+          return guardarMeta().then(function () { return base.crear(o.tabla, fila); });
+        });
+      }
       if (o.t === "actualizar") return base.actualizar(o.tabla, real(o.id), conReales(o.cambios));
       if (o.t === "borrar") return base.borrar(o.tabla, real(o.id));
       if (o.t === "perfil") return base.guardarPerfil(o.cambios);
@@ -92,30 +114,43 @@
     function vaciarAhora() {
       return iniciar().then(function () {
         if (!cola.length || !enLinea()) return;
-        vaciando = true;
         return Promise.resolve(op.antes ? op.antes() : null).catch(function () { /* se intenta igual */ }).then(function paso() {
           if (!cola.length) return;
           var o = cola[0];
+          operacionActiva = o;
           return ejecutar(o).then(function (r) {
+            operacionActiva = null;
             if (o.t === "crear" && r && r.id !== undefined) {
               mapa[o.id] = r.id;
               var tmp = o.id;
               var fila = tabla(o.tabla).find(function (x) { return x.id === tmp; });
-              if (fila) Object.assign(fila, r); else tabla(o.tabla).push(copia(r));
+              if (fila) Object.assign(fila, r);
+              else if (!cola.some(function (p) { return p.t === "borrar" && p.id === tmp; })) tabla(o.tabla).push(copia(r));
               cola.shift();
               remapear(tmp, r.id);
-              if (op.alMapear) { try { var m = {}, f = {}; m[tmp] = r.id; f[tmp] = copia(r); op.alMapear(m, f, o.tabla); } catch (e) { /* ver arriba */ } }
+              // Una edición durante el envío queda en la cola y se sigue viendo en la copia local.
+              if (fila) cola.forEach(function (p) {
+                if (p.t === "actualizar" && p.tabla === o.tabla && p.id === r.id) Object.assign(fila, p.cambios);
+              });
+              if (op.alMapear) { try { var m = {}, f = {}; m[tmp] = r.id; f[tmp] = copia(fila || r); op.alMapear(m, f, o.tabla); } catch (e) { /* ver arriba */ } }
             } else cola.shift();
             return guardarMeta().then(guardarEstado).then(avisar).then(paso);
           }, function (e) {
-            if (esReintentable(e)) return; // se queda en la cola para la próxima vez
+            if (o.enVuelo) {
+              delete o.enVuelo;
+              if (esErrorDeRed(e)) o.dudosa = true;
+            }
+            if (esReintentable(e)) { operacionActiva = null; return guardarMeta(); }
             // Error de verdad (por ejemplo, un dato que la base rechaza): no puede frenar todo lo demás.
-            cola.shift();
-            fallidas.push({ operacion: o, error: texto(e) });
-            if (op.alFallar) { try { op.alFallar(o, e); } catch (x) { /* ver arriba */ } }
-            return guardarMeta().then(avisar).then(paso);
+            fallidas.push({ operacion: copia(o), error: texto(e) });
+            return almacen.set(K.fallidas, fallidas).catch(function () { /* sin espacio */ }).then(function () {
+              cola.shift();
+              operacionActiva = null;
+              if (op.alFallar) { try { op.alFallar(o, e); } catch (x) { /* ver arriba */ } }
+              return guardarMeta();
+            }).then(avisar).then(paso);
           });
-        }).then(function () { vaciando = false; }, function (e) { vaciando = false; throw e; });
+        });
       });
     }
 
@@ -127,10 +162,12 @@
       var t = ahora(), def = POR_DEFECTO[nombre] ? POR_DEFECTO[nombre](fila, t) : {};
       return Object.assign({ id: --temp, user_id: uid, creado_en: t }, def, copia(fila));
     }
-    function encolarCrear(nombre, fila) {
+    function encolarCrear(nombre, fila, dudosa) {
       var local = filaLocal(nombre, fila);
       tabla(nombre).push(local);
-      cola.push({ t: "crear", tabla: nombre, id: local.id, fila: copia(fila) });
+      var o = { t: "crear", tabla: nombre, id: local.id, fila: copia(fila) };
+      if (dudosa) o.dudosa = true;
+      cola.push(o);
       return guardarMeta().then(guardarEstado).then(function () { avisar(); intentarVaciar(); return copia(local); });
     }
 
@@ -159,7 +196,7 @@
           if (puedeIrDirecto()) {
             return base.crear(nombre, fila).then(function (r) { tabla(nombre).push(copia(r)); guardarEstado(); return r; }, function (e) {
               if (!esErrorDeRed(e)) throw e;
-              return encolarCrear(nombre, fila);
+              return encolarCrear(nombre, fila, true);
             });
           }
           return encolarCrear(nombre, fila);
@@ -171,7 +208,7 @@
           if (puedeIrDirecto()) {
             return base.crearVarios(nombre, filas).then(function (rs) { rs.forEach(function (r) { tabla(nombre).push(copia(r)); }); guardarEstado(); return rs; }, function (e) {
               if (!esErrorDeRed(e)) throw e;
-              return filas.reduce(function (p, f) { return p.then(function (acc) { return encolarCrear(nombre, f).then(function (r) { acc.push(r); return acc; }); }); }, Promise.resolve([]));
+              return filas.reduce(function (p, f) { return p.then(function (acc) { return encolarCrear(nombre, f, true).then(function (r) { acc.push(r); return acc; }); }); }, Promise.resolve([]));
             });
           }
           return filas.reduce(function (p, f) { return p.then(function (acc) { return encolarCrear(nombre, f).then(function (r) { acc.push(r); return acc; }); }); }, Promise.resolve([]));
@@ -184,12 +221,11 @@
           function local() {
             var fila = tabla(nombre).find(function (x) { return x.id === id; });
             if (fila) Object.assign(fila, copia(cambios));
-            if (id < 0) {
-              // todavía no existe en el servidor: el cambio se suma a su creación
-              var c = cola.find(function (o) { return o.t === "crear" && o.id === id; });
-              if (c) Object.assign(c.fila, copia(cambios));
-            } else {
-              var previa = cola.find(function (o) { return o.t === "actualizar" && o.tabla === nombre && o.id === id; });
+            var c = id < 0 && cola.find(function (o) { return o.t === "crear" && o.id === id; });
+            if (c && c !== operacionActiva && !c.dudosa) {
+              Object.assign(c.fila, copia(cambios));
+            } else if (id > 0 || c) {
+              var previa = cola.find(function (o) { return o !== operacionActiva && o.t === "actualizar" && o.tabla === nombre && o.id === id; });
               if (previa) Object.assign(previa.cambios, copia(cambios)); else cola.push({ t: "actualizar", tabla: nombre, id: id, cambios: copia(cambios) });
             }
             return guardarMeta().then(guardarEstado).then(function () { avisar(); intentarVaciar(); return copia(fila); });
@@ -220,15 +256,17 @@
           }
           function local() {
             quitarLocal();
-            if (id < 0) {
+            var crear = id < 0 && cola.find(function (o) { return o.t === "crear" && o.id === id; });
+            if (id < 0 && (!crear || (crear !== operacionActiva && !crear.dudosa))) {
               // nunca llegó al servidor: se cancela su creación y todo lo que dependía de ella
               cola = cola.filter(function (o) {
+                if (o === operacionActiva) return true;
                 if (o.id === id) return false;
                 var dep = o.fila || o.cambios;
                 return !(dep && Object.keys(dep).some(function (k) { return /_id$/.test(k) && dep[k] === id; }));
               });
             } else {
-              cola = cola.filter(function (o) { return !(o.t === "actualizar" && o.tabla === nombre && o.id === id); });
+              cola = cola.filter(function (o) { return o === operacionActiva || !(o.t === "actualizar" && o.tabla === nombre && o.id === id); });
               cola.push({ t: "borrar", tabla: nombre, id: id });
             }
             return guardarMeta().then(guardarEstado).then(function () { avisar(); intentarVaciar(); });
@@ -245,7 +283,7 @@
           function local() {
             if (!estado) estado = {};
             estado.perfil = Object.assign(estado.perfil || {}, copia(cambios));
-            var previa = cola.find(function (o) { return o.t === "perfil"; });
+            var previa = cola.find(function (o) { return o !== operacionActiva && o.t === "perfil"; });
             if (previa) Object.assign(previa.cambios, copia(cambios)); else cola.push({ t: "perfil", cambios: copia(cambios) });
             return guardarMeta().then(guardarEstado).then(function () { avisar(); intentarVaciar(); return copia(estado.perfil); });
           }
@@ -260,7 +298,14 @@
       fallidas: function () { return fallidas.slice(); },
       sincronizar: function () { return vaciar(); },
       // Al cerrar sesión: se borra la copia de este celular.
-      limpiar: function () { cola = []; mapa = {}; estado = null; return Promise.all([almacen.del(K.estado), almacen.del(K.meta)]).catch(function () { /* nada que borrar */ }); }
+      limpiar: function () {
+        return iniciar().then(function () { return enCurso; }).catch(function () { /* se borra la copia igual */ }).then(function () {
+          cola = []; mapa = {}; estado = null; fallidas = [];
+          return guardando;
+        }).then(function () {
+          return Promise.all([almacen.del(K.estado), almacen.del(K.meta), almacen.del(K.fallidas)]);
+        }).catch(function () { /* nada que borrar */ });
+      }
     };
 
     function desdeCopia() {

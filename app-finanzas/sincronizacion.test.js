@@ -204,3 +204,110 @@ test("los errores de conexión se reconocen", () => {
   assert.ok(!Sync.esErrorDeRed(new Error("new row violates check constraint")));
   assert.ok(Sync.esErrorDeSesion(new Error("JWT expired")));
 });
+
+test("si el servidor guarda y se pierde la respuesta, se recupera el id sin crear otro gasto", async () => {
+  const s = servidor();
+  const al = almacenEnMemoria();
+  const crear = s.base.crear;
+  s.base.crear = async (tabla, fila) => {
+    await crear(tabla, fila);
+    throw new TypeError("Failed to fetch");
+  };
+  const { f, estado } = armar(s, al, {
+    yaExiste: async (tabla, fila, ids) => s.tablas[tabla].find((r) => r.descripcion === fila.descripcion && !ids.includes(r.id))
+  });
+  await f.cargar();
+  const local = await f.crear("movimientos", { descripcion: "Café", monto: 3000 });
+  assert.ok(local.id < 0);
+  await f.sincronizar();
+  assert.equal(s.llamadas.length, 1);
+  assert.equal(f.pendientes(), 0);
+  assert.deepEqual(estado.mapeos, [[{ [local.id]: 100 }, "movimientos"]]);
+  assert.equal((await al.get("nova:u1:estado")).movimientos[0].id, 100);
+});
+
+test("una creación nueva se guarda como en vuelo antes de enviar y no busca coincidencias", async () => {
+  const s = servidor();
+  const al = almacenEnMemoria();
+  const crear = s.base.crear;
+  let enVuelo;
+  let busquedas = 0;
+  s.base.crear = async (tabla, fila) => {
+    enVuelo = (await al.get("nova:u1:meta")).cola[0].enVuelo;
+    return crear(tabla, fila);
+  };
+  const { f, estado } = armar(s, al, { yaExiste: async () => { busquedas++; return null; } });
+  estado.enLinea = false;
+  await f.crear("movimientos", { descripcion: "Café", monto: 3000 });
+  estado.enLinea = true;
+  await f.sincronizar();
+  assert.equal(enVuelo, true);
+  assert.equal(busquedas, 0);
+  assert.equal(s.llamadas.length, 1);
+});
+
+test("al reabrir se busca la creación en vuelo y una fila conocida no cuenta como coincidencia", async () => {
+  const s = servidor();
+  const al = almacenEnMemoria();
+  const conocida = { id: 42, descripcion: "Café", monto: 3000 };
+  s.tablas.movimientos.push(conocida);
+  const primera = armar(s, al);
+  await primera.f.cargar();
+  primera.estado.enLinea = false;
+  await primera.f.crear("movimientos", { descripcion: conocida.descripcion, monto: conocida.monto });
+  const meta = await al.get("nova:u1:meta");
+  meta.cola[0].enVuelo = true;
+  meta.mapa[-10] = 55;
+  await al.set("nova:u1:meta", meta);
+  let recibidos;
+  const otra = armar(s, al, {
+    yaExiste: async (tabla, fila, ids) => { recibidos = ids; return conocida; }
+  });
+  await otra.f.sincronizar();
+  assert.deepEqual(recibidos, [42, 55]);
+  assert.equal(s.llamadas.length, 1);
+  assert.equal(otra.f.pendientes(), 0);
+  assert.deepEqual((await al.get("nova:u1:estado")).movimientos.map((r) => r.id), [42, 100]);
+});
+
+test("si falla la comprobación por red o sesión, la creación dudosa espera", async () => {
+  const s = servidor();
+  const al = almacenEnMemoria();
+  const { f, estado } = armar(s, al, { yaExiste: async () => { throw new Error("JWT expired"); } });
+  estado.enLinea = false;
+  await f.crear("movimientos", { descripcion: "Café", monto: 3000 });
+  estado.enLinea = true;
+  s.caido = true;
+  await f.sincronizar();
+  const meta = await al.get("nova:u1:meta");
+  assert.equal(meta.cola[0].dudosa, true);
+  assert.equal(meta.cola[0].enVuelo, undefined);
+  s.caido = false;
+  const otra = armar(s, al, { yaExiste: async () => { throw new TypeError("Failed to fetch"); } });
+  await f.sincronizar();
+  await otra.f.sincronizar();
+  assert.equal(otra.f.pendientes(), 1);
+  assert.equal(s.llamadas.length, 0);
+  assert.deepEqual(otra.f.fallidas(), []);
+});
+
+test("un cambio rechazado queda guardado al reabrir y se borra al limpiar", async () => {
+  const s = servidor();
+  const al = almacenEnMemoria();
+  const { f, estado } = armar(s, al);
+  estado.enLinea = false;
+  const fila = { descripcion: "Café", monto: -1 };
+  await f.crear("movimientos", fila);
+  estado.enLinea = true;
+  s.rechazar = () => true;
+  await f.sincronizar();
+  const otra = armar(s, al);
+  await otra.f.iniciar();
+  assert.equal(otra.f.pendientes(), 0);
+  assert.equal(otra.f.fallidas().length, 1);
+  assert.deepEqual(otra.f.fallidas()[0].operacion.fila, fila);
+  assert.match(otra.f.fallidas()[0].error, /constraint/);
+  await otra.f.limpiar();
+  assert.deepEqual(otra.f.fallidas(), []);
+  assert.equal(await al.get("nova:u1:fallidas"), null);
+});
