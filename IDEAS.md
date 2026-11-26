@@ -93,7 +93,7 @@ Lista de ideas propuestas para revisar; ninguna está hecha todavía.
 - ✅ Deshacer el último movimiento con un aviso de 5 segundos.
 - ✅ Foto del recibo como adjunto opcional en cualquier gasto.
 - ✅ Autocompletar la descripción con lo que ya escribiste antes.
-- Atajo en la pantalla de inicio de Android: "Nuevo gasto".
+- ✅ Atajo en la pantalla de inicio de Android: "Nuevo gasto". (mantener presionado el ícono)
 - Leer el valor de un pantallazo de Nequi o Daviplata compartido con NOVA.
 - ✅ Duplicar un movimiento y cambiarle solo la fecha.
 - ✅ Gastos en efectivo con un "monedero" aparte que se descuenta solo. (cuenta «Efectivo» + pasar dinero)
