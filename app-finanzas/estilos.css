@@ -1434,3 +1434,7 @@ dialog.tarjeta { color: var(--r-texto); }
 #pantalla-dueno progress::-webkit-progress-bar { background: var(--barra-vacia); border-radius: 999px; }
 #pantalla-dueno progress::-webkit-progress-value { background: var(--r-progreso); border-radius: 999px; }
 #pantalla-dueno progress::-moz-progress-bar { background: var(--r-progreso); border-radius: 999px; }
+
+/* Categoría sugerida por el comercio: pastilla en una sola línea */
+#reg-sugerida { display: inline-flex; flex-direction: row; align-items: center; gap: 8px; width: auto; height: auto; min-height: 44px; padding: 6px 16px; border-radius: 999px; font-weight: 700; white-space: nowrap; }
+#reg-sugerida[hidden] { display: none; }

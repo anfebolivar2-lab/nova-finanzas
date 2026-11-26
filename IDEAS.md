@@ -27,11 +27,11 @@ Lista de funciones para ir sumando poco a poco, probadas una por una.
 ## Para anotar más rápido
 
 - ⭐ Leer facturas electrónicas (correo de la DIAN) y anotarlas solas, preguntando antes.
-- Escanear el código QR de la factura para sacar el valor y el comercio.
+- ✅ Escanear el código QR de la factura para sacar el valor y el comercio. (el valor, el número y la fecha)
 - Widget con botones: anotar un gasto común desde la pantalla de inicio del celular.
 - Anotar por WhatsApp o Telegram: le escribes a NOVA «almuerzo 20 mil» y queda anotado.
-- Categoría sugerida por el comercio: «RAPPI» siempre a Comida, «UBER» a Transporte.
-- Dividir un gasto en varias categorías (mercado con aseo y comida).
+- ✅ Categoría sugerida por el comercio: «RAPPI» siempre a Comida, «UBER» a Transporte.
+- ✅ Dividir un gasto en varias categorías (mercado con aseo y comida).
 - ✅ Gastos compartidos: anotar que alguien te debe su parte y recordarle. (grupos + recordatorio por WhatsApp)
 
 ## Para entender tu plata
