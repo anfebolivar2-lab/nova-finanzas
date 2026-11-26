@@ -3,7 +3,7 @@
   "appName": "NOVA",
   "webDir": "www",
   "android": {
-    "backgroundColor": "#f8fafc"
+    "backgroundColor": "#070908"
   },
   "server": {
     "androidScheme": "https"
@@ -11,7 +11,7 @@
   "plugins": {
     "LocalNotifications": {
       "smallIcon": "ic_stat_nova",
-      "iconColor": "#14A89C"
+      "iconColor": "#2EE06F"
     }
   }
 }
