@@ -4560,11 +4560,12 @@
     var c = datos.categorias.find(function (k) { return k.nombre === x.categoria && k.tipo === "gasto"; });
     abrirRegistro({ tipo: "gasto", categoriaId: c ? c.id : null, expr: d.costo ? String(Math.round(num(d.costo))) : "", desc: d.nombre, documentoId: d.id });
   }
-  function renovarDocumentoListo(docId) {
+  function renovarDocumentoListo(docId, sinAviso) {
     var d = datos.documentos.find(function (x) { return x.id === docId; });
     if (!d) return;
     fuente.actualizar("documentos", d.id, { vence: A.proximoVencimiento(d) }).then(function (n) {
-      Object.assign(d, n); toast("✓ " + d.nombre + " renovado: ahora vence el " + fechaCorta.format(parteFechaLocal(d.vence)) + " " + parteFechaLocal(d.vence).getFullYear());
+      Object.assign(d, n);
+      if (!sinAviso) toast("✓ " + d.nombre + " renovado: ahora vence el " + fechaCorta.format(parteFechaLocal(d.vence)) + " " + parteFechaLocal(d.vence).getFullYear());
       programarAvisos(); pintar();
     }).catch(function (err) { toast("No se pudo mover la fecha: " + err.message); });
   }
@@ -6128,9 +6129,11 @@
     $("reg-partes").hidden = !activo;
     $("reg-categoria").hidden = $("reg-categoria-etiqueta").hidden = activo;
     $("reg-btn-recurrente").hidden = !!reg.editar || activo;
+    $("reg-otro-fila").hidden = !!reg.editar || activo;
     if (activo) {
       $("reg-bloque-viajes").hidden = true;
       $("reg-agregar-parte").disabled = $("reg-partes-lista").children.length >= 6;
+      $("reg-partes-lista").querySelectorAll("input").forEach(function (input) { input.type = ocultos ? "password" : "text"; });
       pintarRestoDivision();
     }
   }
@@ -6203,6 +6206,78 @@
     reg.categoriaId = Number(this.dataset.categoria);
     pintarRegistro();
     $("reg-categoria").focus();
+  });
+
+  var escaneoFactura = null;
+  function detenerQrFactura() {
+    var escaneo = escaneoFactura;
+    if (!escaneo) return;
+    escaneoFactura = null;
+    clearInterval(escaneo.intervalo);
+    if (escaneo.camara) escaneo.camara.getTracks().forEach(function (track) { track.stop(); });
+    $("reg-qr-video").srcObject = null;
+  }
+  function cerrarQrFactura() {
+    detenerQrFactura();
+    if ($("reg-qr-dialogo").open) $("reg-qr-dialogo").close();
+  }
+  $("reg-qr-cancelar").addEventListener("click", cerrarQrFactura);
+  $("reg-qr-dialogo").addEventListener("cancel", function (e) {
+    e.preventDefault();
+    cerrarQrFactura();
+  });
+  $("reg-qr-dialogo").addEventListener("close", function () {
+    if (!this.open) detenerQrFactura();
+  });
+  window.addEventListener("pagehide", cerrarQrFactura);
+  $("reg-qr").addEventListener("click", async function () {
+    var dialogo = $("reg-qr-dialogo"), video = $("reg-qr-video");
+    if (dialogo.open) return;
+    var escaneo = { registro: reg }, detector;
+    try { detector = new window.BarcodeDetector({ formats: ["qr_code"] }); }
+    catch (e) { return mensaje("reg-mensaje", "Este dispositivo no puede leer códigos QR.", true); }
+    detenerQrFactura();
+    escaneoFactura = escaneo;
+    mensaje("reg-mensaje", "");
+    dialogo.showModal();
+    try {
+      var camara = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
+      if (escaneoFactura !== escaneo || !dialogo.open) {
+        camara.getTracks().forEach(function (track) { track.stop(); });
+        return;
+      }
+      escaneo.camara = camara;
+      video.srcObject = camara;
+    } catch (e) {
+      if (escaneoFactura !== escaneo || !dialogo.open) return;
+      cerrarQrFactura();
+      return mensaje("reg-mensaje", "No pude abrir la cámara. Revisa el permiso o escribe el valor.", true);
+    }
+    var leyendo = false;
+    escaneo.intervalo = setInterval(async function () {
+      if (leyendo || !dialogo.open || video.readyState < 2) return;
+      leyendo = true;
+      try {
+        var codigos = await detector.detect(video);
+        if (escaneoFactura !== escaneo || !dialogo.open || reg !== escaneo.registro || !codigos.length) return;
+        var factura = codigos.map(function (c) { return NovaFacturaQr.leerFacturaQr(c.rawValue); }).find(Boolean);
+        cerrarQrFactura();
+        if (!factura) return mensaje("reg-mensaje", "Ese QR no trae el valor de la factura. Escríbelo tú.", true);
+        reg.expr = textoMonto(factura.total);
+        reg.copManual = null;
+        if (factura.fecha) $("reg-fecha").value = factura.fecha;
+        if (factura.numero && !$("reg-desc").value.trim()) $("reg-desc").value = ("Factura " + factura.numero).slice(0, 120);
+        $("teclado").hidden = true;
+        pintarRegistro();
+        toast("Leí la factura: " + dineroConDecimales(factura.total) + ". Revisa y guarda.");
+      } catch (e) {
+        if (escaneoFactura !== escaneo || !dialogo.open) return;
+        cerrarQrFactura();
+        mensaje("reg-mensaje", "No pude leer el QR. Escribe el valor de la factura.", true);
+      } finally {
+        leyendo = false;
+      }
+    }, 300);
   });
   document.querySelectorAll("#reg-tipo button").forEach(function (b) { b.addEventListener("click", function () { reg.tipo = b.dataset.tipo; pintarRegistro(); }); });
   llenarTiposDeducibles($("reg-deducible"));
@@ -6287,22 +6362,31 @@
     var fechaTxt = $("reg-fecha").value;
     if (!fechaTxt) return mensaje("reg-mensaje", "Elige la fecha.", true);
     var recurrente = !reg.editar && !$("reg-bloque-recurrente").hidden;
+    var partes = reg.dividido && puedeDividir() ? leerPartes() : null;
+    if (partes) {
+      if (partes.some(function (p) { return !p.categoria || p.categoria.tipo !== "gasto" || !(p.valor > 0); })) {
+        return mensaje("reg-mensaje", "Elige una categoría y escribe un valor mayor que cero en cada parte.", true);
+      }
+      if (!calcularDivision(monto, partes).ok) {
+        return mensaje("reg-mensaje", "Las partes deben sumar el valor total del gasto.", true);
+      }
+    }
     var hoy = A.claveDia(new Date());
     var fecha = fechaTxt === hoy ? new Date() : new Date(fechaTxt + "T12:00:00");
     if (reg.editar && fechaTxt === A.claveDia(reg.editar.fecha)) fecha = new Date(reg.editar.fecha); // conserva la hora original
     var btn = $("reg-guardar");
     btn.disabled = true;
-    var conCategoria = reg.categoriaId != null ? Promise.resolve(categoria(reg.categoriaId))
+    var conCategoria = partes ? Promise.resolve(partes[0].categoria) : reg.categoriaId != null ? Promise.resolve(categoria(reg.categoriaId))
       : categoriaPorNombre(reg.tipo === "ingreso" ? "Otros ingresos" : "Otros gastos", reg.tipo);
     var registro = reg, editar = reg.editar, otro = $("reg-otro").checked, docId = reg.documentoId;
-    var uso = usoActivoEventos();
+    var uso = usoActivoEventos(), origen = fuente, espacio = espacioId, lista = datos.movimientos;
     conCategoria.then(function (c) {
       var fila = {
         cuenta_id: Number($("reg-cuenta").value) || datos.cuentas[0].id, categoria_id: c.id, tipo: reg.tipo,
-        descripcion: $("reg-desc").value.trim() || c.nombre, monto: monto, fecha: fecha.toISOString(),
+        descripcion: $("reg-desc").value.trim() || (partes ? "Gasto dividido" : c.nombre), monto: monto, fecha: fecha.toISOString(),
         etiquetas: reg.tipo === "gasto" ? reg.etiquetas : A.etiquetasDeducible(reg.etiquetas, ""), estado: $("reg-estado").value, nota: $("reg-nota").value.trim() || null,
         moneda: reg.moneda, monto_original: ext ? montoOriginal : null, tasa: ext ? reg.tasa : null,
-        viajes: A.esGanancia(c) && parseInt($("reg-viajes").value, 10) > 0 ? Math.min(1000, parseInt($("reg-viajes").value, 10)) : null
+        viajes: !partes && A.esGanancia(c) && parseInt($("reg-viajes").value, 10) > 0 ? Math.min(1000, parseInt($("reg-viajes").value, 10)) : null
       };
       if (editar) return fuente.actualizar("movimientos", editar.id, fila).then(function (n) { Object.assign(editar, n); return { m: editar, c: c }; });
       var prog = Promise.resolve(null);
@@ -6318,26 +6402,52 @@
         if (pr) fila.programado_id = pr.p.id;
         return ubicacionActual().then(function (lugar) {
           if (lugar) { fila.lat = lugar.lat; fila.lng = lugar.lng; precargarMapa(lugar.lat, lugar.lng); }
+          if (partes) {
+            if (fila.etiquetas.indexOf("dividido") < 0) fila.etiquetas = fila.etiquetas.concat("dividido");
+            return origen.crearVarios("movimientos", partes.map(function (p) {
+              return Object.assign({}, fila, { categoria_id: p.categoria.id, monto: p.valor });
+            }));
+          }
           return fuente.crear("movimientos", fila);
-        }).then(function (m) { datos.movimientos.push(m); return { m: m, c: c, programado: pr && pr.p }; });
+        }).then(function (m) {
+          if (partes) {
+            var destino = fuente === origen && espacioId === espacio ? datos.movimientos : lista;
+            m.forEach(function (mov) { if (!destino.some(function (x) { return x.id === mov.id; })) destino.push(mov); });
+            return { m: m[0], partes: m };
+          }
+          datos.movimientos.push(m);
+          return { m: m, c: c, programado: pr && pr.p };
+        });
       });
     }).then(function (r) {
       if (!editar && r.m) registrarEventoDe(uso, "anotar", registro.via);
+      if (r.partes && (fuente !== origen || espacioId !== espacio)) return;
       ordenarMovimientos();
-      var redondeo = !editar && r.m && r.m.tipo === "gasto" ? sumarAlcancia(num(r.m.monto)) : 0;
-      if (docId) renovarDocumentoListo(docId);
-      var accion = !editar && r.m ? deshacerRegistro(r.m, redondeo) : null;
+      var redondeo = !editar && r.m && r.m.tipo === "gasto" ? sumarAlcancia(r.partes ? monto : num(r.m.monto)) : 0;
+      if (docId) renovarDocumentoListo(docId, !!r.partes);
+      var accion = !editar && r.m && !r.partes ? deshacerRegistro(r.m, redondeo) : null;
       var etiquetaDesc = r.m ? r.m.descripcion : r.programado.descripcion;
       var detalle = etiquetaDesc + (r.m && r.m.viajes ? " · " + r.m.viajes + (r.m.viajes === 1 ? " viaje" : " viajes") : "") +
         (r.programado ? " · 🔁 " + A.FRECUENCIAS[r.programado.frecuencia].toLowerCase() : "");
       var valor = dinero(monto) + (ext && !ocultos ? " · " + Mon.formatoMonto(montoOriginal, reg.moneda) : "");
-      toast(editar ? "¡Cambios guardados!" : "¡Guardado!", detalle, valor, accion, !!r.m);
+      if (r.partes) toast("¡Anotado en " + r.partes.length + " categorías!", null, null, null, true);
+      else toast(editar ? "¡Cambios guardados!" : "¡Guardado!", detalle, valor, accion, !!r.m);
       pintar();
-      if (!editar && r.m && r.m.tipo === "gasto") avisarGastoAlto(r.m);
-      if (accion) {
-        var origen = fuente, espacio = espacioId;
+      if (r.partes) {
         setTimeout(function () {
-          if (fuente !== origen || espacioId !== espacio || accion.borrando || datos.movimientos.indexOf(r.m) < 0) return;
+          if (fuente !== origen || espacioId !== espacio) return;
+          var vigentes = r.partes.filter(function (m) { return datos.movimientos.indexOf(m) >= 0; });
+          if (!vigentes.length) return;
+          avisarGastoAlto(vigentes[0]);
+          var hubo = alertaLimites(vigentes.map(function (m) { return m.categoria_id; }));
+          var inusual = vigentes.map(function (m) { return NovaConsejos.gastoInusual(m, datos.movimientos); }).find(Boolean);
+          if (inusual) setTimeout(function () { toast("Gasto fuera de lo normal", r.m.descripcion, Math.round(inusual.veces * 10) / 10 + "× lo habitual"); }, hubo ? 7000 : 0);
+        }, 5000);
+      } else if (!editar && r.m && r.m.tipo === "gasto") avisarGastoAlto(r.m);
+      if (accion) {
+        var origenAviso = fuente, espacioAviso = espacioId;
+        setTimeout(function () {
+          if (fuente !== origenAviso || espacioId !== espacioAviso || accion.borrando || datos.movimientos.indexOf(r.m) < 0) return;
           if (r.m.tipo === "ingreso") proponerApartar(r.m);
           else {
             var hubo = alertaLimites(r.m.categoria_id), raro = NovaConsejos.gastoInusual(r.m, datos.movimientos);
@@ -6346,7 +6456,7 @@
         }, accion.duracion);
       }
       if (reg !== registro || pilaCapas[pilaCapas.length - 1] !== "pantalla-registro") return;
-      if (otro && !editar) {
+      if (otro && !editar && !r.partes) {
         abrirRegistro({ tipo: registro.tipo, tandaActiva: true, tanda: registro.tanda + (r.m ? 1 : 0) });
         $("reg-monto").focus();
       } else cerrarCapa();
@@ -11726,9 +11836,10 @@
 
   // ---------- Alerta de límites: avisa al 80 % y al 100 % ----------
   function alertaLimites(categoriaId) {
+    var categorias = Array.isArray(categoriaId) ? categoriaId : [categoriaId];
     var peor = null;
     datos.limites.forEach(function (l) {
-      if (l.categoria_id != null && l.categoria_id !== categoriaId) return;
+      if (l.categoria_id != null && categorias.indexOf(l.categoria_id) < 0) return;
       var e = estadoLimite(l); if (!e.vigente || !(num(l.monto) > 0)) return;
       var p = e.gastado / num(l.monto);
       if (p >= 0.8 && (!peor || p > peor.p)) peor = { p: p, l: l, falta: num(l.monto) - e.gastado };

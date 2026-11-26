@@ -149,7 +149,7 @@
 
   function repartirGasto(total, partes) {
     partes = Array.isArray(partes) ? partes.slice() : [];
-    var valores = partes.map(centavos);
+    var valores = Array.from(partes, centavos);
     var diferencia = centavos(total) - valores.reduce(function (suma, valor) { return suma + valor; }, 0);
     return { ok: diferencia === 0 && partes.length >= 2 && partes.length <= 6 &&
       valores.every(function (valor) { return valor > 0; }), resto: diferencia / 100, partes: partes };

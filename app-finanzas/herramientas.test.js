@@ -1,7 +1,46 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const { simular, actualizarNotas, enNoMolestar, horaAviso, referenciaAvisos, gastoAltoDelDia,
-  fechaDeMeta, alcanzaDeseo, gastosHormigaTop } = require("./herramientas");
+  fechaDeMeta, alcanzaDeseo, gastosHormigaTop, repartirGasto, repartoSugerido,
+  categoriaSugeridaPorComercio } = require("./herramientas");
+
+test("valida la suma del reparto y devuelve lo que falta o sobra", () => {
+  assert.deepEqual(repartirGasto(100, [40, 60]), { ok: true, resto: 0, partes: [40, 60] });
+  assert.deepEqual(repartirGasto(100, [40, 59]), { ok: false, resto: 1, partes: [40, 59] });
+  assert.equal(repartirGasto(100, [40, 61]).resto, -1);
+  assert.equal(repartirGasto(0.3, [0.1, 0.2]).ok, true);
+});
+
+test("rechaza repartos que tienen valores inválidos o un número inválido de partes", () => {
+  for (const partes of [[100], [0, 100], [-1, 101], ["40", 60], [NaN, 100], [50.001, 49.999],
+    [100, , 0], [94, 1, 1, 1, 1, 1, 1]]) {
+    assert.equal(repartirGasto(100, partes).ok, false);
+  }
+});
+
+test("la primera parte sugerida se queda con el resto", () => {
+  assert.deepEqual(repartoSugerido(100, 3), [34, 33, 33]);
+  assert.deepEqual(repartoSugerido(100.01, 2), [50.01, 50]);
+});
+
+const gastoComercio = (descripcion, categoria_id, extra) => ({ descripcion, categoria_id, tipo: "gasto", ...extra });
+
+test("encuentra por primera palabra y exige al menos dos gastos del comercio", () => {
+  const uno = gastoComercio("Rappi domicilio", 1);
+  const dos = gastoComercio("rappi", 1);
+  assert.deepEqual(categoriaSugeridaPorComercio("RAPPI", [uno, dos]), { categoria_id: 1, veces: 2, total: 2 });
+  assert.equal(categoriaSugeridaPorComercio("RAPPI", [uno]), null);
+  assert.equal(categoriaSugeridaPorComercio("RAPPI DOMICILIO", [uno, dos]), null);
+});
+
+test("ignora ingresos, borrados y gastos sin categoría, y acepta exactamente el 60 %", () => {
+  const historial = [1, 1, 1, 2, 2].map((id) => gastoComercio("Café  del Sol!", id));
+  historial.push(gastoComercio("Café del Sol", 2, { tipo: "ingreso" }),
+    gastoComercio("Café del Sol", 2, { borrado: true }), gastoComercio("Café del Sol", null));
+  assert.deepEqual(categoriaSugeridaPorComercio("  cafe del sol ", historial), { categoria_id: 1, veces: 3, total: 5 });
+  assert.equal(categoriaSugeridaPorComercio("cafe del sol", historial.slice(1)), null);
+  assert.equal(categoriaSugeridaPorComercio("  ", historial), null);
+});
 
 test("calcula la fecha de la meta con el aporte exacto, el ahorro previo y el redondeo", () => {
   const hoy = new Date(2026, 0, 15);
