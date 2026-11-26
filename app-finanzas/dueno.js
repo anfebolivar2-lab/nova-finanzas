@@ -87,6 +87,15 @@
     return serieDiaria(porDia, ahora, 30, ["total"]);
   }
 
+  function descargasRecientes(filas, ahora) {
+    if (!Array.isArray(filas)) return [];
+    var hoy = Math.floor(fecha(ahora) / DIA);
+    return filas.filter(function (fila) {
+      var dia = fecha(fila.dia) / DIA;
+      return dia > hoy - 30 && dia <= hoy;
+    });
+  }
+
   function nuevosDesdeVisita(personas, visita, ahora) {
     var anterior = fecha(visita), hasta = fecha(ahora);
     if (!Number.isFinite(anterior) || hasta <= anterior) return 0;
@@ -236,14 +245,18 @@
   }
 
   var bytesPorMB = 1000000;
-  var formatoMB = new Intl.NumberFormat("es-CO", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+  var formatoDecimal = new Intl.NumberFormat("es-CO", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
 
   function bytesAMegabytes(bytes) {
     return cantidad(bytes) / bytesPorMB;
   }
 
   function formatearTamano(bytes) {
-    return formatoMB.format(bytesAMegabytes(bytes)) + " MB";
+    return formatoDecimal.format(bytesAMegabytes(bytes)) + " MB";
+  }
+
+  function formatearSegundos(ms) {
+    return formatoDecimal.format(ms / 1000) + " s";
   }
 
   function tablasMasGrandes(tablas) {
@@ -266,6 +279,7 @@
   }
 
   var api = {
+    descargasRecientes: descargasRecientes, formatearSegundos: formatearSegundos,
     rangoDias: rangoDias, serieDiaria: serieDiaria, nuevosDesdeVisita: nuevosDesdeVisita, ayudaNumeros: ayudaNumeros,
     validarPlantilla: validarPlantilla, listarPlantillas: listarPlantillas, agregarPlantilla: agregarPlantilla,
     borrarPlantilla: borrarPlantilla, maximoPlantillas: maximoPlantillas,

@@ -12,7 +12,7 @@
     anotar: "texto voz foto banco manual rapido",
     ia: `pregunta_texto pregunta_foto pregunta_voz error_cupo error_tiempo error_otro busqueda_web respuesta_ms
       tema_gastos tema_ahorro tema_deudas tema_presupuesto tema_impuestos tema_inversion tema_ingresos tema_otro`,
-    sesion: "duracion",
+    sesion: "duracion carga",
     ajuste: "tema_oscuro tema_claro pin_on pin_off huella_on huella_off modo_conductor_on modo_conductor_off",
     recuadro: `
       oculto_sugerencias-hora oculto_trm-dia oculto_racha oculto_pagos-proximos oculto_rapida oculto_categorias oculto_etiquetas oculto_ingresos-gastos
