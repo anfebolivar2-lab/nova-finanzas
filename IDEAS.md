@@ -96,7 +96,7 @@ Lista de ideas propuestas para revisar; ninguna está hecha todavía.
 - Atajo en la pantalla de inicio de Android: "Nuevo gasto".
 - Leer el valor de un pantallazo de Nequi o Daviplata compartido con NOVA.
 - ✅ Duplicar un movimiento y cambiarle solo la fecha.
-- Gastos en efectivo con un "monedero" aparte que se descuenta solo.
+- ✅ Gastos en efectivo con un "monedero" aparte que se descuenta solo. (cuenta «Efectivo» + pasar dinero)
 
 ## Para entender tu plata
 
@@ -170,7 +170,7 @@ Lista de ideas propuestas para revisar; ninguna está hecha todavía.
 - ✅ Racha de días anotando, con recompensas visuales.
 - ✅ Aviso del día de pago: "¿anotamos tu sueldo?".
 - ✅ Resumen de fin de año compartible como imagen.
-- Notificación silenciosa de "gasto alto del día".
+- ✅ Notificación silenciosa de "gasto alto del día".
 - ✅ Horario de "no molestar" para las notificaciones.
 - ✅ Consejo financiero corto del día (uno distinto cada día).
 
