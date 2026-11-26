@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+    <shortcut android:shortcutId="nuevo_gasto" android:enabled="true" android:icon="@mipmap/ic_launcher"
+        android:shortcutShortLabel="@string/atajo_nuevo_gasto_corto" android:shortcutLongLabel="@string/atajo_nuevo_gasto_largo">
+        <intent android:action="android.intent.action.VIEW" android:data="co.novafinanzas.app://nuevo-gasto"
+            android:targetPackage="co.novafinanzas.app" android:targetClass="co.novafinanzas.app.MainActivity" />
+    </shortcut>
+</shortcuts>
