@@ -10470,8 +10470,12 @@
     }).catch(function () { return null; /* sin conexión o APK armada sin número de versión */ });
   }
   // Actualización automática.
+  var Actualizacion = window.NovaActualizacion;
   var otaMetaCache = "nova-ota-meta", otaMetaUrl = "/__ota-meta__", otaMalosUrl = "/__ota-malos__";
-  var otaRevision = "nova-ota-revision", revisandoWeb = false;
+  var otaRevision = "nova-ota-revision", revisandoWeb = false, recargarAlVolver = false;
+  var vigilarVersionWeb = Actualizacion && !enApp && location.hostname !== "localhost";
+  var versionWebInicial = null, versionesWebAvisadas = new Set(), consultaVersionWeb = null;
+  var webOcultaDesde = document.hidden ? Date.now() : null, cambiosVisibilidadWeb = 0;
 
   async function leerJsonOta(cache, url) {
     var respuesta = await cache.match(url);
@@ -10560,7 +10564,7 @@
       var http = window.Capacitor.Plugins && window.Capacitor.Plugins.CapacitorHttp;
       if (!ota || !http || !cfg.otaManifestUrl || !cfg.otaArchivosUrl) return;
       var ahora = Date.now();
-      if (!forzar && ahora - Number(localStorage.getItem(otaRevision)) < 30 * 60 * 1000) return;
+      if (!Actualizacion.tocaRevisarOta(ahora, Number(localStorage.getItem(otaRevision)), forzar)) return;
       localStorage.setItem(otaRevision, ahora);
       var respuesta = await fetch("ota-base.json", { cache: "no-store" });
       if (!respuesta.ok) return;
@@ -10582,15 +10586,70 @@
       function aplicar() { return aplicarWeb(cacheMeta, meta, manifiesto, plan, descargados, ota); }
       var aplicada = await (navigator.locks ? navigator.locks.request(otaMetaCache, aplicar) : aplicar());
       if (aplicada) {
+        recargarAlVolver = true;
         pintarVersionLocal();
-        toast("NOVA se actualizó en segundo plano", "Verás lo nuevo al volver a abrirla");
+        toast("NOVA se actualizó", "Toca «Ver ahora» para estrenar lo nuevo", null, {
+          texto: "Ver ahora", fn: function () { location.reload(); }
+        });
       }
+      return aplicada;
     } catch (e) { /* Si falla la revisión, sigue la versión que ya estaba. */ }
     finally { revisandoWeb = false; }
   }
 
+  function webPuedeRevisar() {
+    return enLinea() && !(fuente && fuente.demo);
+  }
+
+  function recargaSegura() {
+    var appVisible = !$("pantalla-app").hidden;
+    var borrador = appVisible && (
+      ["inicio", "analisis", "buscar"].indexOf(enVista) < 0 ||
+      !!$("entrada-rapida").value || !$("vista-previa").hidden
+    );
+    if (!$("pantalla-auth").hidden) {
+      borrador = borrador || Array.from($("pantalla-auth").querySelectorAll("input, textarea")).some(function (campo) {
+        return campo.value !== campo.defaultValue;
+      });
+    }
+    return Actualizacion.puedeRecargar({
+      capas: pilaCapas.length,
+      bloqueada: !$("bloqueo").hidden,
+      escribiendo: !!document.activeElement && document.activeElement.matches("input, textarea"),
+      borrador: borrador || (enApp && !appVisible)
+    });
+  }
+
+  async function revisarVersionPagina(ocultaDesde) {
+    if (!webPuedeRevisar()) return;
+    var regresoLargo = Actualizacion.permiteRecargaWeb(Date.now(), ocultaDesde);
+    var visibilidad = cambiosVisibilidadWeb;
+    try {
+      if (!consultaVersionWeb) {
+        consultaVersionWeb = fetch("index.html", { method: "HEAD", cache: "no-store" }).then(function (respuesta) {
+          return respuesta.ok ? Actualizacion.versionWeb(respuesta.headers) : null;
+        }).finally(function () { consultaVersionWeb = null; });
+      }
+      var version = await consultaVersionWeb;
+      if (!version || !webPuedeRevisar()) return;
+      if (!versionWebInicial) versionWebInicial = version;
+      if (document.hidden || visibilidad !== cambiosVisibilidadWeb ||
+          !Actualizacion.cambioVersionWeb(versionWebInicial, version)) return;
+      if (regresoLargo && recargaSegura()) {
+        location.reload();
+        return;
+      }
+      if (versionesWebAvisadas.has(version)) return;
+      versionesWebAvisadas.add(version);
+      toast("Hay una versión nueva", null, null, {
+        texto: "Actualizar", fn: function () { location.reload(); }
+      });
+    } catch (e) { /* Una revisión fallida se reintenta en la siguiente ocasión. */ }
+  }
+
   window.addEventListener("load", function () {
-    if (enApp) setTimeout(function () { revisarWeb(false); }, 4000);
+    if (enApp) setTimeout(function () { revisarWeb(true); }, 4000);
+    if (vigilarVersionWeb) setTimeout(function () { revisarVersionPagina(null); }, 5000);
     if (location.hostname !== "localhost" || !navigator.serviceWorker || !navigator.serviceWorker.controller) return;
     // Lee el SHA antes de que la revisión pueda instalar otra versión.
     var controlador = navigator.serviceWorker.controller;
@@ -10600,9 +10659,6 @@
         if (meta) controlador.postMessage({ tipo: enApp ? "ota-ok" : "ota-descartar", sha: meta.sha });
       }).catch(function () { /* La app puede seguir sin avisar al servicio. */ });
     }, 5000);
-  });
-  if (enApp) document.addEventListener("visibilitychange", function () {
-    if (!document.hidden) revisarWeb(false);
   });
 
   function pintarVersionLocal() {
@@ -10617,11 +10673,14 @@
   }
   function accionBuscarActualizacion(boton) {
     boton.disabled = true; var texto = boton.textContent;
-    revisarWeb(true).then(function () { return buscarActualizacion(true); }).then(function (r) {
-      if (!r) toast("No se pudo revisar", "Revisa tu conexión e intenta otra vez");
-      else if (r.error) toast("No se pudo revisar", "No pude leer la versión publicada");
-      else if (r.hayNueva) toast("¡Hay una versión nueva!", "Versión " + r.remota.versionName, null, { texto: "Descargar", fn: function () { window.open(r.enlace, "_blank"); } });
-      else toast("Ya tienes la última versión", "Versión " + r.local.versionName);
+    revisarWeb(true).then(function (aplicada) {
+      return buscarActualizacion(true).then(function (r) {
+        if (aplicada) return;
+        if (!r) toast("No se pudo revisar", "Revisa tu conexión e intenta otra vez");
+        else if (r.error) toast("No se pudo revisar", "No pude leer la versión publicada");
+        else if (r.hayNueva) toast("¡Hay una versión nueva!", "Versión " + r.remota.versionName, null, { texto: "Descargar", fn: function () { window.open(r.enlace, "_blank"); } });
+        else toast("Ya tienes la última versión", "Versión " + r.local.versionName);
+      });
     }).finally(function () { boton.disabled = false; });
   }
   if (enApp) {
@@ -10958,6 +11017,28 @@
     document.addEventListener(evento, registrarActividad, { capture: true, passive: true });
   });
   document.addEventListener("visibilitychange", revisarInactividad);
+  if (Actualizacion && (enApp || vigilarVersionWeb)) {
+    document.addEventListener("visibilitychange", function () {
+      if (enApp) {
+        if (document.hidden) return;
+        if (recargarAlVolver && recargaSegura()) location.reload();
+        else revisarWeb(false);
+        return;
+      }
+      cambiosVisibilidadWeb++;
+      if (document.hidden) {
+        webOcultaDesde = Date.now();
+        return;
+      }
+      revisarVersionPagina(webOcultaDesde);
+      webOcultaDesde = null;
+    });
+    setInterval(function () {
+      if (document.hidden) return;
+      if (enApp) revisarWeb(false);
+      else revisarVersionPagina(null);
+    }, Actualizacion.INTERVALO_REVISION);
+  }
   window.addEventListener("pageshow", revisarInactividad);
   pintarEstadoPin();
 

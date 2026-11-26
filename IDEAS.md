@@ -19,7 +19,7 @@ Lista de funciones para ir sumando poco a poco, probadas una por una.
 - ⭐ «Cancela y ahorra»: si una suscripción lleva meses sin usarse, te dice cuánto ahorrarías al año.
 - Reto de no gastar: elige días o una semana sin gastos en algo (domicilios, ropa) y NOVA lleva la cuenta.
 - Metas con fecha automática: dices cuánto puedes guardar al mes y NOVA calcula cuándo llegas.
-- Alcancía por redondeo con meta: lo que sobra de redondear va directo a una meta.
+- ✅ Alcancía por redondeo con meta: lo que sobra de redondear va directo a una meta. (tarjeta «Alcancía»)
 - Comparar precios de una compra grande en varias tiendas (con la IA que busca en internet).
 - Lista de deseos: cosas que quieres comprar, con precio y «¿me alcanza?» para cada una.
 - Aviso de «gasto hormiga del mes»: tus 3 gastos pequeños que más suman.
@@ -32,23 +32,23 @@ Lista de funciones para ir sumando poco a poco, probadas una por una.
 - Anotar por WhatsApp o Telegram: le escribes a NOVA «almuerzo 20 mil» y queda anotado.
 - Categoría sugerida por el comercio: «RAPPI» siempre a Comida, «UBER» a Transporte.
 - Dividir un gasto en varias categorías (mercado con aseo y comida).
-- Gastos compartidos: anotar que alguien te debe su parte y recordarle.
+- ✅ Gastos compartidos: anotar que alguien te debe su parte y recordarle. (grupos + recordatorio por WhatsApp)
 
 ## Para entender tu plata
 
 - ⭐ Resumen de fin de mes por notificación: cuánto ganaste, gastaste y ahorraste, y en qué se te fue más.
-- Tu «número de libertad»: cuántos meses podrías vivir con tus ahorros si dejaras de recibir ingresos.
-- Comparar tu mes con el promedio de tus últimos 6 meses, categoría por categoría.
-- Mapa de calor de gastos por hora del día y día de la semana.
-- Inflación personal: cuánto subió lo que tú compras, comparado con el año pasado.
-- Informe anual «Tu año en NOVA» con lo más destacado.
-- Proyección del saldo a fin de mes con los pagos programados.
+- ✅ Tu «número de libertad»: cuántos meses podrías vivir con tus ahorros si dejaras de recibir ingresos.
+- ✅ Comparar tu mes con el promedio de tus últimos 6 meses, categoría por categoría.
+- ✅ Mapa de calor de gastos por hora del día y día de la semana.
+- ✅ Inflación personal: cuánto subió lo que tú compras, comparado con el año pasado.
+- ✅ Informe anual «Tu año en NOVA» con lo más destacado.
+- ✅ Proyección del saldo a fin de mes con los pagos programados.
 
 ## Deudas y crédito
 
 - ⭐ Simulador de tarjeta de crédito: cuánto pagas de intereses si solo pagas el mínimo.
-- Calendario de pagos de tarjetas y créditos con aviso 3 días antes.
-- Plan bola de nieve o avalancha con fecha estimada de «libre de deudas».
+- ✅ Calendario de pagos de tarjetas y créditos con aviso 3 días antes. (tarjeta «Cortes y pagos de tarjetas»)
+- ✅ Plan bola de nieve o avalancha con fecha estimada de «libre de deudas».
 - Avisar cuando una cuota se pasa del 30 % de tus ingresos.
 
 ## Trabajo e impuestos (Colombia)
@@ -56,28 +56,28 @@ Lista de funciones para ir sumando poco a poco, probadas una por una.
 - ⭐ Calculadora de declaración de renta: si te toca declarar según tus ingresos y patrimonio (UVT del año).
 - Retención en la fuente y aportes a salud y pensión para independientes.
 - Cuenta de cobro y factura simple para independientes, en PDF.
-- Prima, cesantías e intereses: cuánto te toca y cuándo.
+- ✅ Prima, cesantías e intereses: cuánto te toca y cuándo. (calculadora de liquidación + aviso de junio y diciembre)
 - Modo conductor: meta de ganancia por día y por hora conectada.
 
 ## Familia y grupos
 
 - Espacios compartidos con la pareja o la familia, cada uno con su teléfono.
 - Mesada para hijos: cuánto les das y en qué se les va.
-- Gastos de la casa entre roommates con saldo de quién le debe a quién.
+- ✅ Gastos de la casa entre roommates con saldo de quién le debe a quién. (grupos con saldos)
 
 ## Seguridad y respaldo
 
 - Respaldo automático a Google Drive cada semana (sin tener que tocar nada).
 - Entrar con la huella o la cara.
-- Modo viaje: ocultar valores en pantalla cuando estás en la calle.
-- Exportar todo a Excel con un dashboard listo para imprimir.
+- ✅ Modo viaje: ocultar valores en pantalla cuando estás en la calle. (ojo para ocultar montos)
+- ✅ Exportar todo a Excel con un dashboard listo para imprimir. (exportar a Excel y PDF)
 
 ## Para que sea más fácil de usar
 
 - Modo sencillo con letra grande y solo lo básico (para papás y abuelos).
 - Hablarle a NOVA sin tocar la pantalla: «Oye NOVA, gasté 5 mil en pan».
 - Temas de colores y el ícono de la app a elección.
-- Tutorial corto la primera vez que abres cada pantalla.
+- ✅ Tutorial corto la primera vez que abres cada pantalla.
 
 # 100 ideas nuevas (noviembre 2026)
 
@@ -226,7 +226,7 @@ Ideas para el panel del dueño. El panel muestra cómo se usa la app, nunca los 
 
 - ⭐ Buscador de usuarios por correo. ✅ (en PR)
 - ⭐ Filtros: activos, inactivos, de prueba, sin confirmar, Android o web. ✅ (en PR)
-- Ordenar por último uso, por fecha de registro o por cantidad de movimientos. ✅ (en PR)
+- ✅ Ordenar por último uso, por fecha de registro o por cantidad de movimientos.
 - ✅ Total de usuarios nuevos por día, semana y mes.
 - ✅ Gráfico de crecimiento acumulado de usuarios.
 - ✅ Usuarios activos hoy, en los últimos 7 días y en los últimos 30 días (DAU/WAU/MAU).
@@ -347,4 +347,4 @@ Ideas para el panel del dueño. El panel muestra cómo se usa la app, nunca los 
 - ✅ Atajo para abrir el panel desde la pantalla de inicio.
 - ✅ Tema oscuro del panel.
 - ✅ Ayuda corta (ℹ️) en cada número para explicar qué significa.
-- Guardar la vista preferida (filtros y orden). ✅ (en PR)
+- ✅ Guardar la vista preferida (filtros y orden).
