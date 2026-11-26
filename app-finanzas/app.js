@@ -43,6 +43,7 @@
   var numeroCO = { format: function (v) { v = Math.round(Number(v) || 0); return (v < 0 ? "-" : "") + miles(v); } };
   var hora = new Intl.DateTimeFormat("es-CO", { hour: "numeric", minute: "2-digit" });
   var fechaCorta = new Intl.DateTimeFormat("es-CO", { day: "numeric", month: "short" });
+  var fechaMes = new Intl.DateTimeFormat("es-CO", { month: "long", year: "numeric" });
   var fechaLarga = new Intl.DateTimeFormat("es-CO", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
   var DIAS = ["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"];
 
@@ -270,9 +271,13 @@
 
   // ---------- Tema y valores ocultos ----------
   var temaElegido;
+  var sistemaOscuro = window.matchMedia("(prefers-color-scheme: dark)");
   function actualizarTema() {
     var tema = temaElegido === "hora" ? A.temaPorHora(new Date()) : temaElegido;
     document.documentElement.setAttribute("data-theme", tema);
+    var metaTema = document.querySelector('meta[name="theme-color"]');
+    metaTema.content = tema === "oscuro" || (tema === "sistema" && sistemaOscuro.matches)
+      ? "#0b1110" : "#f8fafc";
   }
   function aplicarTema(t) {
     temaElegido = t;
@@ -281,6 +286,8 @@
     document.querySelectorAll("[data-tema]").forEach(function (b) { b.setAttribute("aria-checked", String(b.dataset.tema === t)); });
   }
   aplicarTema((function () { try { return localStorage.getItem("nova-tema") || "sistema"; } catch (e) { return "sistema"; } })());
+  if (sistemaOscuro.addEventListener) sistemaOscuro.addEventListener("change", actualizarTema);
+  else if (sistemaOscuro.addListener) sistemaOscuro.addListener(actualizarTema);
 
   var ocultos = leerLocal("nova-ocultos", false);
   function dinero(v) { return ocultos ? "$ ••••" : pesos.format(v); }
@@ -763,7 +770,7 @@
   }
   function pintarInicio() {
     var ciclo = cicloEfectivo(), rango = rangoInicio();
-    $("inicio-periodo").textContent = A.nombrePeriodo(ciclo, rango);
+    $("inicio-periodo").textContent = ciclo === "mensual" ? fechaMes.format(rango.desde) : A.nombrePeriodo(ciclo, rango);
     var movs = A.enRango(datos.movimientos, rango), t = A.totales(movs);
     $("saldo-total").textContent = ocultos ? "$ ••••" : (t.neto < 0 ? "−" : "") + pesos.format(Math.abs(t.neto));
     var disponible = t.ingresos > 0 ? Math.max(0, Math.min(100, (t.neto / t.ingresos) * 100)) : 0;
@@ -771,15 +778,16 @@
     $("saldo-barra").style.width = disponible + "%";
     $("saldo-ingresos").textContent = ocultos ? "$ ••••" : "+" + pesos.format(t.ingresos);
     $("saldo-gastos").textContent = ocultos ? "$ ••••" : "−" + pesos.format(t.gastos);
-    $("saldo-cuentas").textContent = "Saldo en cuentas: " + dinero(saldoTotal());
+    $("saldo-cuentas-valor").textContent = dinero(saldoTotal());
     $("tarjeta-deficit").hidden = t.neto >= 0;
     $("deficit-valor").textContent = ocultos ? "$ ••••" : "−" + pesos.format(Math.abs(t.neto));
 
-    pintarSeguro(); pintarPresupuesto(); pintarFrecuentes(); pintarMiniTarjetas(); pintarProyeccionPeriodo(movs, rango); pintarSaludo(); pintarSugerencias(); pintarProximoPago(); pintarApartar(); actualizarWidget();
+    pintarSeguro(); pintarPresupuesto(); pintarFrecuentes(); pintarMiniTarjetas(); pintarProyeccionPeriodo(movs, rango); pintarSugerencias(); pintarProximoPago(); pintarApartar(); actualizarWidget();
     $("btn-repetir-ultimo").hidden = !A.ultimoGasto(datos.movimientos);
     pintarAvisoInicio();
     pintarWidgets($("widgets-inicio"), true);
     listaPorDia($("lista-inicio"), movs, desfaseInicio === 0 ? "Aún no hay movimientos en este periodo. Toca + para agregar el primero." : "No hubo movimientos en este periodo.", 60);
+    pintarSaludo(movs.length === 0);
   }
   document.querySelectorAll("[data-periodo-inicio]").forEach(function (b) {
     b.addEventListener("click", function () { desfaseInicio += Number(b.dataset.periodoInicio); pintarInicio(); });
@@ -801,12 +809,13 @@
     tarjeta.hidden = datos.perfil.mostrar_seguro === false || desfaseInicio !== 0 || !(b.limite > 0);
     if (tarjeta.hidden) return;
     var s = A.seguroParaGastar(b.limite, b.gastado, b.rango);
-    $("seguro-valor").textContent = dinero(s.porDia) + " por día";
+    $("seguro-valor").textContent = dinero(Math.max(0, s.resto));
     var ultimo = new Date(b.rango.hasta.getTime() - 1);
     $("seguro-nota").textContent = s.resto > 0
-      ? "Te quedan " + dinero(s.resto) + (b.conPresupuesto ? " del presupuesto" : " de lo que entró") + " hasta el " + fechaCorta.format(ultimo) + " (" + s.dias + (s.dias === 1 ? " día)" : " días)")
+      ? dinero(s.porDia) + " / día · " + s.dias + (s.dias === 1 ? " día restante" : " días restantes")
       : "Ya gastaste todo lo " + (b.conPresupuesto ? "del presupuesto" : "que entró") + " en este periodo.";
     $("seguro-nota").className = "nota" + (s.resto > 0 ? "" : " mal");
+    $("seguro-nota").title = s.resto > 0 ? (b.conPresupuesto ? "Del presupuesto" : "De lo que entró") + " hasta el " + fechaCorta.format(ultimo) : "";
   }
 
   function pintarPresupuesto() {
@@ -3112,9 +3121,10 @@
       var o = el("option"); o.value = d; dl.append(o);
     });
   }
-  function pintarSaludo() {
+  function pintarSaludo(vacio) {
     var h = new Date().getHours(), nombre = (fuente && fuente.nombre ? String(fuente.nombre).split(" ")[0] : "");
     $("saludo").textContent = (h < 12 ? "Buenos días" : h < 19 ? "Buenas tardes" : "Buenas noches") + (nombre ? ", " + nombre : "") + " 👋";
+    if (vacio) $("lista-inicio").prepend(el("p", "saludo-vacio", "¡Hola" + (nombre ? ", " + nombre : "") + "!"));
   }
   function compartirTexto(titulo, texto) {
     var P = (window.Capacitor && window.Capacitor.Plugins) || {};
@@ -5393,6 +5403,8 @@
   function ir(vista) {
     if (vista === "ajustes-invitar" && (!fuente || fuente.demo)) vista = "ajustes";
     document.querySelectorAll(".vista").forEach(function (v) { v.hidden = v.dataset.vista !== vista; });
+    $("pantalla-app").classList.toggle("en-inicio", vista === "inicio");
+    if (vista !== "inicio") document.querySelector(".periodo-inicio").open = false;
     var principal = PRINCIPALES.indexOf(vista) >= 0 ? vista : vista === "trabajo" ? "inicio" : "ajustes";
     document.querySelectorAll(".nav-inferior button").forEach(function (b) {
       b.classList.toggle("activo", b.dataset.ir === principal);
@@ -5408,14 +5420,17 @@
     if (vista === "ajustes-invitar") pintarInvitacion();
     window.scrollTo(0, 0);
   }
-  // El botón + se esconde donde estorba: en pantallas de configuración y mientras se ve la entrada rápida del inicio.
+  // La entrada rápida conserva todo el ancho mientras se escribe.
   var enVista = "inicio", rapidoVisible = false;
   function actualizarFab() {
-    $("btn-mas").classList.toggle("oculto", ["inicio", "analisis", "buscar", "planes"].indexOf(enVista) < 0 || (enVista === "inicio" && rapidoVisible));
+    var escribiendo = enVista === "inicio" && rapidoVisible && document.activeElement === $("entrada-rapida");
+    $("btn-mas").classList.toggle("oculto", ["inicio", "analisis", "buscar", "planes"].indexOf(enVista) < 0 || escribiendo);
   }
   if ("IntersectionObserver" in window) {
     new IntersectionObserver(function (e) { rapidoVisible = e[0].isIntersecting; actualizarFab(); }).observe($("form-rapido"));
   }
+  $("entrada-rapida").addEventListener("focus", actualizarFab);
+  $("entrada-rapida").addEventListener("blur", function () { setTimeout(actualizarFab, 0); });
   document.querySelectorAll("[data-ir]").forEach(function (b) { b.addEventListener("click", function () { ir(b.dataset.ir); }); });
   document.querySelectorAll("[data-tema]").forEach(function (b) { b.addEventListener("click", function () { aplicarTema(b.dataset.tema); }); });
   document.querySelectorAll("button[data-acento]").forEach(function (b) { b.addEventListener("click", function () { aplicarAcento(b.dataset.acento); }); });
@@ -6643,6 +6658,7 @@
   });
   $("btn-cuadrar").addEventListener("click", function () { abrirCuadrar(datos.cuentas[0] && datos.cuentas[0].id); });
   $("saldo-cuentas").addEventListener("click", function () { abrirCuadrar(datos.cuentas[0] && datos.cuentas[0].id); });
+  document.querySelector(".saldo-titulo").addEventListener("click", function () { $("saldo-cuentas").click(); });
 
   // ---------- Anotar mensajes del banco (app Android) ----------
   // La persona comparte un mensaje del banco con NOVA (mantener presionado el mensaje → Compartir → NOVA). Android deja
@@ -10502,10 +10518,25 @@
     setInterval(function () { if (!document.hidden) buscarActualizacion(); }, 30 * 60 * 1000);   // y cada media hora si la app queda abierta
   }
 
+  function ocultarSplash() {
+    var splash = $("splash");
+    if (splash.hidden || splash.classList.contains("splash-saliendo")) return;
+    requestAnimationFrame(function () {
+      var espera = Math.max(0, 600 - (performance.now() - Number(splash.dataset.inicio)));
+      setTimeout(function () {
+        if (splash.hidden || splash.classList.contains("splash-saliendo")) return;
+        splash.classList.add("splash-saliendo");
+        setTimeout(function () { splash.hidden = true; }, window.matchMedia("(prefers-reduced-motion: reduce)").matches ? 0 : 250);
+      }, espera);
+    });
+  }
+
   function mostrar(pantalla) {
     $("cargando").hidden = true;
     $("pantalla-auth").hidden = pantalla !== "auth";
     $("pantalla-app").hidden = pantalla !== "app";
+    document.body.classList.toggle("app-visible", pantalla === "app");
+    ocultarSplash();
     if (pantalla === "auth") medirCargaInicial();
   }
 

@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="theme-color" content="#070908">
+<meta name="theme-color" content="#f8fafc">
 <title>NOVA</title>
 <meta name="description" content="NOVA: tus finanzas personales claras y en un solo lugar. Anota gastos con texto, voz o foto, crea metas, controla deudas y pregúntale a NOVA IA. Gratis y sin anuncios.">
 <meta property="og:type" content="website">
@@ -27,12 +27,65 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap">
+<style>
+  #splash {
+    position: fixed; inset: 0; z-index: 9999; isolation: isolate;
+    display: grid; place-items: center; overflow: hidden;
+    background: #f8fafc; opacity: 1; transition: opacity 250ms ease;
+  }
+  :root[data-theme="oscuro"] #splash { background: #0b1110; }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="claro"]) #splash { background: #0b1110; }
+  }
+  #splash::before {
+    content: ""; position: absolute; width: 300px; height: 300px; z-index: -1;
+    background: radial-gradient(circle, rgba(20,184,166,.18), transparent 70%);
+    animation: splash-resplandor 2s ease-in-out infinite alternate;
+  }
+  #splash svg { width: 80px; height: 80px; }
+  #splash path {
+    stroke-dasharray: 1; stroke-dashoffset: 0;
+    animation: splash-trazo 600ms ease-out both;
+  }
+  #splash.splash-saliendo { opacity: 0; pointer-events: none; }
+  #splash[hidden] { display: none; pointer-events: none; }
+  @keyframes splash-resplandor {
+    from { transform: scale(.86); opacity: .55; }
+    to { transform: scale(1.1); opacity: 1; }
+  }
+  @keyframes splash-trazo { from { stroke-dashoffset: 1; } }
+  @media (prefers-reduced-motion: reduce) {
+    #splash, #splash::before, #splash path { animation: none; transition: none; }
+  }
+</style>
 <link rel="stylesheet" href="estilos.css">
 <link rel="icon" type="image/png" href="iconos/favicon.png">
 <link rel="apple-touch-icon" href="iconos/apple-touch-icon.png">
 <link rel="manifest" href="manifest.webmanifest">
 </head>
 <body>
+<div id="splash" role="status" aria-label="Cargando NOVA">
+  <svg viewBox="0 0 24 24" aria-hidden="true">
+    <path d="M3 18l5-5 4 4 8-11" pathLength="1" fill="none" stroke="#14b8a6" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"/>
+    <circle cx="20" cy="6" r="1.65" fill="#99f6e4" stroke="none"/>
+  </svg>
+</div>
+<script>
+  (function () {
+    var splash = document.getElementById("splash");
+    splash.dataset.inicio = performance.now();
+    requestAnimationFrame(function (ahora) { splash.dataset.inicio = ahora; });
+    try {
+      var tema = localStorage.getItem("nova-tema");
+      if (tema === "hora") {
+        var hora = new Date().getHours();
+        tema = hora >= 6 && hora < 18 ? "claro" : "oscuro";
+      }
+      if (tema) document.documentElement.setAttribute("data-theme", tema);
+    } catch (e) { /* sin almacenamiento */ }
+    setTimeout(function () { splash.hidden = true; }, 4000);
+  })();
+</script>
 
 <!-- Inicio de sesión -->
 <!-- Solo dentro de la app instalada: avisa cuando hay una APK más nueva -->
@@ -145,7 +198,7 @@
 
 
 <!-- App -->
-<div id="pantalla-app" class="app" hidden>
+<div id="pantalla-app" class="app en-inicio" hidden>
   <div id="banner-red" class="banner-red" role="status" hidden></div>
   <p id="aviso-demo" class="aviso-demo" hidden>Modo demostración: los datos son de ejemplo y no se guardan.</p>
 
@@ -155,8 +208,18 @@
   </aside>
 
   <header class="cabecera">
-    <div class="logo"><span>NOVA</span><svg class="chispa" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2l2.2 7.8L22 12l-7.8 2.2L12 22l-2.2-7.8L2 12l7.8-2.2z"/></svg></div>
-    <button type="button" id="btn-espacio" class="chip-espacio" aria-haspopup="dialog" aria-label="Cambiar de espacio"><span id="esp-ico" class="esp-ico" aria-hidden="true">👛</span><span id="esp-nombre">Principal</span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></button>
+    <div class="logo"><span>NOVA</span><svg class="chispa" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2l2.2 7.8L22 12l-7.8 2.2L12 22l-2.2-7.8L2 12l7.8-2.2z"/></svg><svg class="logo-inicio" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 18l5-5 4 4 8-11" stroke-width="2.3"/><circle cx="20" cy="6" r="1.65" fill="#99f6e4" stroke="none"/></svg></div>
+    <div class="cabecera-contexto">
+      <button type="button" id="btn-espacio" class="chip-espacio" aria-haspopup="dialog" aria-label="Cambiar de espacio"><span id="esp-ico" class="esp-ico" aria-hidden="true">👛</span><span id="esp-nombre">Principal</span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></button>
+      <details class="periodo-inicio">
+        <summary><span id="inicio-periodo"></span></summary>
+        <div class="periodo-nav">
+          <button type="button" class="icono-btn" data-periodo-inicio="-1" aria-label="Periodo anterior"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button>
+          <button type="button" class="icono-btn" data-periodo-inicio="1" aria-label="Periodo siguiente"><svg viewBox="0 0 24 24"><path d="M9 5l7 7-7 7"/></svg></button>
+          <button type="button" class="icono-btn btn-calendario" data-calendario="inicio" aria-label="Ver calendario día por día"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg></button>
+        </div>
+      </details>
+    </div>
     <button type="button" id="btn-ojo" class="icono-btn" aria-pressed="false" aria-label="Ocultar los valores"></button>
     <button type="button" class="avatar" id="avatar" data-ir="ajustes" aria-label="Configuración"></button>
   </header>
@@ -167,23 +230,18 @@
       <div id="aviso-nube-inicio" class="widgets"></div>
       <div id="encuesta-nube-inicio" class="widgets" aria-live="polite"></div>
       <p id="saludo" class="saludo"></p>
-      <div class="periodo-nav">
-        <button type="button" class="icono-btn" data-periodo-inicio="-1" aria-label="Periodo anterior"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button>
-        <strong id="inicio-periodo"></strong>
-        <button type="button" class="icono-btn" data-periodo-inicio="1" aria-label="Periodo siguiente"><svg viewBox="0 0 24 24"><path d="M9 5l7 7-7 7"/></svg></button><button type="button" class="icono-btn btn-calendario" data-calendario="inicio" aria-label="Ver calendario día por día"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg></button>
-      </div>
-      <div class="inf-barra"><span>Descargar informe</span><span class="inf-iconos"><button type="button" class="inf-ico" data-informe="pdf" data-ctx="inicio" aria-label="Descargar informe en PDF"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 2h8l5 5v13a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2z" fill="#e5483d"/><path d="M14 2v5h5" fill="#f2a29c"/><text x="12" y="17" text-anchor="middle" font-size="6.2" font-weight="800" fill="#fff" font-family="Arial,sans-serif">PDF</text></svg></button><button type="button" class="inf-ico" data-informe="excel" data-ctx="inicio" aria-label="Descargar informe en Excel"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 2h8l5 5v13a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2z" fill="#1f9d55"/><path d="M14 2v5h5" fill="#8fd1ac"/><text x="12" y="17" text-anchor="middle" font-size="6.2" font-weight="800" fill="#fff" font-family="Arial,sans-serif">XLS</text></svg></button></span></div>
-
       <article class="tarjeta saldo">
-        <span class="etiqueta">Balance disponible</span>
+        <button type="button" class="saldo-titulo">Balance disponible <span aria-hidden="true">›</span></button>
         <strong id="saldo-total" class="saldo-valor"></strong>
+        <button type="button" id="saldo-cuentas" class="pildora pildora-boton" aria-label="Cuadrar el saldo de tus cuentas">
+          <span>Saldo en cuentas</span><strong id="saldo-cuentas-valor"></strong>
+        </button>
         <div class="saldo-disponible"><span>Disponible</span><span id="saldo-pct"></span></div>
         <div class="barra clara"><span id="saldo-barra"></span></div>
         <div class="saldo-partes">
-          <div><small>↗ Ingresos</small><strong id="saldo-ingresos"></strong></div>
-          <div><small>↘ Gastos</small><strong id="saldo-gastos"></strong></div>
+          <div><small><span class="saldo-icono ingresos"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 17l6-6 4 4 7-8m-5 0h5v5"/></svg></span>Ingresos</small><strong id="saldo-ingresos"></strong></div>
+          <div><small><span class="saldo-icono gastos"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7l6 6 4-4 7 8m-5 0h5v-5"/></svg></span>Gastos</small><strong id="saldo-gastos"></strong></div>
         </div>
-        <button type="button" id="saldo-cuentas" class="pildora pildora-boton" aria-label="Cuadrar el saldo de tus cuentas"></button>
       </article>
 
       <article id="tarjeta-deficit" class="tarjeta deficit" hidden>
@@ -193,10 +251,19 @@
       </article>
 
       <article id="tarjeta-seguro" class="tarjeta seguro" hidden>
-        <span class="etiqueta">🛡 Seguro para gastar</span>
+        <h2 class="seguro-titulo"><span class="seguro-icono"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="6" width="18" height="14" rx="2"/><path d="M3 9h18M16 14h1"/></svg></span>Seguro para gastar</h2>
         <strong id="seguro-valor"></strong>
-        <span id="seguro-nota" class="nota"></span>
+        <div class="seguro-diario">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="3" width="14" height="18" rx="2"/><path d="M8 7h8m-8 4h8m-8 4h.01M12 15h.01M16 15h.01M8 18h.01M12 18h.01M16 18h.01"/></svg>
+          <span id="seguro-nota" class="nota"></span>
+        </div>
       </article>
+      <div class="seccion-cabecera inicio-movimientos">
+        <h2>Movimientos</h2>
+        <button type="button" class="enlace" data-ir="buscar">Ver todo</button>
+      </div>
+      <div id="lista-inicio" class="dias"></div>
+
       <button type="button" id="tarjeta-deudas" class="tarjeta tarjeta-deudas" hidden>
         <span class="etiqueta">💸 Tus deudas</span>
         <strong id="deudas-inicio-valor"></strong>
@@ -315,11 +382,7 @@
 
       <div id="widgets-inicio" class="widgets"></div>
 
-      <div class="seccion-cabecera">
-        <h2>Movimientos</h2>
-        <button type="button" class="enlace" data-ir="buscar">Ver todo</button>
-      </div>
-      <div id="lista-inicio" class="dias"></div>
+      <div class="inf-barra"><span>Descargar informe</span><span class="inf-iconos"><button type="button" class="inf-ico" data-informe="pdf" data-ctx="inicio" aria-label="Descargar informe en PDF"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 2h8l5 5v13a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2z" fill="#e5483d"/><path d="M14 2v5h5" fill="#f2a29c"/><text x="12" y="17" text-anchor="middle" font-size="6.2" font-weight="800" fill="#fff" font-family="Arial,sans-serif">PDF</text></svg></button><button type="button" class="inf-ico" data-informe="excel" data-ctx="inicio" aria-label="Descargar informe en Excel"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 2h8l5 5v13a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2z" fill="#1f9d55"/><path d="M14 2v5h5" fill="#8fd1ac"/><text x="12" y="17" text-anchor="middle" font-size="6.2" font-weight="800" fill="#fff" font-family="Arial,sans-serif">XLS</text></svg></button></span></div>
     </section>
 
     <!-- PLANES -->
@@ -888,11 +951,11 @@
   <button type="button" id="btn-mas" class="fab" aria-label="Agregar"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></button>
 
   <nav class="nav-inferior" aria-label="Secciones">
-    <button type="button" data-ir="inicio"><svg viewBox="0 0 24 24"><path d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6h-6v6H4a1 1 0 0 1-1-1z"/></svg>Inicio</button>
-    <button type="button" data-ir="planes"><svg viewBox="0 0 24 24"><rect x="3" y="6" width="18" height="13" rx="2"/><path d="M3 10h18M7 3h10"/></svg>Planes</button>
-    <button type="button" data-ir="ia" class="centro-ia"><span class="pastilla-ia"><svg viewBox="0 0 24 24"><path d="M4 5h16v11H9l-5 4z"/><path d="M8.5 10.5h.01M12 10.5h.01M15.5 10.5h.01"/></svg></span>NOVA IA</button>
-    <button type="button" data-ir="analisis"><svg viewBox="0 0 24 24"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>Análisis</button>
-    <button type="button" data-ir="buscar"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg>Buscar</button>
+    <button type="button" aria-label="Inicio" title="Inicio" data-ir="inicio"><svg viewBox="0 0 24 24"><path d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6h-6v6H4a1 1 0 0 1-1-1z"/></svg><span class="sr">Inicio</span></button>
+    <button type="button" aria-label="Planes" title="Planes" data-ir="planes"><svg viewBox="0 0 24 24"><rect x="3" y="6" width="18" height="13" rx="2"/><path d="M3 10h18M7 3h10"/></svg><span class="sr">Planes</span></button>
+    <button type="button" aria-label="NOVA IA" title="NOVA IA" data-ir="ia" class="centro-ia"><span class="pastilla-ia"><svg viewBox="0 0 24 24"><path d="M4 5h16v11H9l-5 4z"/><path d="M8.5 10.5h.01M12 10.5h.01M15.5 10.5h.01"/></svg></span><span class="sr">NOVA IA</span></button>
+    <button type="button" aria-label="Análisis" title="Análisis" data-ir="analisis"><svg viewBox="0 0 24 24"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg><span class="sr">Análisis</span></button>
+    <button type="button" aria-label="Buscar" title="Buscar" data-ir="buscar"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg><span class="sr">Buscar</span></button>
   </nav>
 </div>
 
