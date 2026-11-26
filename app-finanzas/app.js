@@ -10473,7 +10473,7 @@
   var Actualizacion = window.NovaActualizacion;
   var otaMetaCache = "nova-ota-meta", otaMetaUrl = "/__ota-meta__", otaMalosUrl = "/__ota-malos__";
   var otaRevision = "nova-ota-revision", revisandoWeb = false, recargarAlVolver = false;
-  var vigilarVersionWeb = !enApp && location.hostname !== "localhost";
+  var vigilarVersionWeb = Actualizacion && !enApp && location.hostname !== "localhost";
   var versionWebInicial = null, versionesWebAvisadas = new Set(), consultaVersionWeb = null;
   var webOcultaDesde = document.hidden ? Date.now() : null, cambiosVisibilidadWeb = 0;
 
@@ -10641,7 +10641,7 @@
       }
       if (versionesWebAvisadas.has(version)) return;
       versionesWebAvisadas.add(version);
-      toast("Hay una versión nueva de NOVA", null, null, {
+      toast("Hay una versión nueva", null, null, {
         texto: "Actualizar", fn: function () { location.reload(); }
       });
     } catch (e) { /* Una revisión fallida se reintenta en la siguiente ocasión. */ }
@@ -10676,10 +10676,10 @@
     revisarWeb(true).then(function (aplicada) {
       return buscarActualizacion(true).then(function (r) {
         if (aplicada) return;
-      if (!r) toast("No se pudo revisar", "Revisa tu conexión e intenta otra vez");
-      else if (r.error) toast("No se pudo revisar", "No pude leer la versión publicada");
-      else if (r.hayNueva) toast("¡Hay una versión nueva!", "Versión " + r.remota.versionName, null, { texto: "Descargar", fn: function () { window.open(r.enlace, "_blank"); } });
-      else toast("Ya tienes la última versión", "Versión " + r.local.versionName);
+        if (!r) toast("No se pudo revisar", "Revisa tu conexión e intenta otra vez");
+        else if (r.error) toast("No se pudo revisar", "No pude leer la versión publicada");
+        else if (r.hayNueva) toast("¡Hay una versión nueva!", "Versión " + r.remota.versionName, null, { texto: "Descargar", fn: function () { window.open(r.enlace, "_blank"); } });
+        else toast("Ya tienes la última versión", "Versión " + r.local.versionName);
       });
     }).finally(function () { boton.disabled = false; });
   }
@@ -11017,12 +11017,12 @@
     document.addEventListener(evento, registrarActividad, { capture: true, passive: true });
   });
   document.addEventListener("visibilitychange", revisarInactividad);
-  if (enApp || vigilarVersionWeb) {
+  if (Actualizacion && (enApp || vigilarVersionWeb)) {
     document.addEventListener("visibilitychange", function () {
       if (enApp) {
         if (document.hidden) return;
         if (recargarAlVolver && recargaSegura()) location.reload();
-        else revisarWeb(true);
+        else revisarWeb(false);
         return;
       }
       cambiosVisibilidadWeb++;
