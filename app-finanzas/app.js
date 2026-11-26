@@ -5026,6 +5026,10 @@
   $("rec-noche-hora").addEventListener("change", function (e) { guardarLocal("nova-rec-noche-hora", Number(e.target.value)); programarAvisos(); toast("Recordatorio a las " + e.target.selectedOptions[0].textContent); });
   $("rec-programados").checked = !!leerLocal("nova-rec-programados", false);
   $("rec-respaldo").checked = !!leerLocal("nova-rec-respaldo", false);
+  $("aviso-gasto-alto").checked = !!leerLocal("nova-aviso-gasto-alto", false);
+  $("aviso-gasto-alto").addEventListener("change", function (e) {
+    guardarLocal("nova-aviso-gasto-alto", e.target.checked);
+  });
   $("rec-rapido").checked = !!leerLocal("nova-rec-rapido", false);
   $("rec-respaldo").addEventListener("change", function (e) { guardarLocal("nova-rec-respaldo", e.target.checked); programarAvisos(); toast(e.target.checked ? "Respaldo semanal activado" : "Respaldo semanal apagado"); });
   $("rec-rapido").addEventListener("change", function (e) {
@@ -5058,6 +5062,58 @@
       if (fuente && datos && datos.frecuentes.length) anotarTeclaRapida(ev.actionId); else accionesPendientes.push(ev.actionId);   // si la app aún está abriendo, queda en espera
     });
   })();
+  var canalGastoAltoPreparado = false, avisoGastoAltoEnCurso = false, diaToastGastoAlto = "";
+  async function avisarGastoAlto(movimiento) {
+    try {
+      if (!fuente || fuente.demo || movimiento.tipo !== "gasto" || movimiento.transferencia ||
+          (Array.isArray(movimiento.etiquetas) && movimiento.etiquetas.indexOf("deuda") !== -1) ||
+          !leerLocal("nova-aviso-gasto-alto", false)) return;
+      var ahora = new Date(), hoy = A.claveDia(ahora);
+      if (A.claveDia(movimiento.fecha) !== hoy || NovaHerramientas.enNoMolestar(ahora, leerLocal("nova-no-molestar", null))) return;
+      var moneda = monedaBase();
+      var gasto = NovaHerramientas.gastoAltoDelDia(datos.movimientos, ahora, {
+        moneda: moneda, ultimoAviso: leerLocal("nova-ultimo-gasto-alto", "")
+      });
+      if (!gasto) return;
+      var veces = gasto.veces.toFixed(1).replace(".", ",");
+      if (diaToastGastoAlto !== hoy) {
+        diaToastGastoAlto = hoy;
+        toast("Hoy vas con un gasto alto (≈ " + veces + " veces tu día normal)");
+      }
+      var N = enApp && window.Capacitor.Plugins && window.Capacitor.Plugins.LocalNotifications;
+      if (!N || avisoGastoAltoEnCurso) return;
+      avisoGastoAltoEnCurso = true;
+      try {
+        if (!canalGastoAltoPreparado) {
+          try {
+            await N.createChannel({
+              id: "gasto-alto", name: "Gasto alto del día", description: "Aviso discreto cuando gastas mucho en un día",
+              importance: 2, vibration: false
+            });
+          } catch (e) {
+            // Sin canal silencioso, Android puede usar el sonido del sistema.
+            if (window.Capacitor.getPlatform && window.Capacitor.getPlatform() === "android") return;
+          }
+          canalGastoAltoPreparado = true;
+        }
+        var permiso = N.checkPermissions ? await N.checkPermissions() : null;
+        if (!permiso || permiso.display !== "granted") permiso = await N.requestPermissions();
+        if (!permiso || permiso.display !== "granted") return;
+        var actual = new Date();
+        if (A.claveDia(actual) !== hoy || !leerLocal("nova-aviso-gasto-alto", false) ||
+            NovaHerramientas.enNoMolestar(actual, leerLocal("nova-no-molestar", null))) return;
+        await N.schedule({ notifications: [{
+          id: 760000000 + Number(hoy.replace(/-/g, "")), channelId: "gasto-alto",
+          title: "Hoy vas con un gasto alto", interruptionLevel: "passive",
+          body: "Llevas " + dineroEn(gasto.total, moneda) + " hoy, unas " + veces + " veces tu día normal (" + dineroEn(gasto.promedio, moneda) + ")."
+        }] });
+        guardarLocal("nova-ultimo-gasto-alto", hoy);
+      } finally {
+        avisoGastoAltoEnCurso = false;
+      }
+    } catch (e) { /* El gasto ya quedó guardado. */ }
+  }
+
   function programarAvisos() {
     var N = enApp && window.Capacitor.Plugins && window.Capacitor.Plugins.LocalNotifications;
     if (!N || !fuente || fuente.demo) return Promise.resolve();
@@ -5068,7 +5124,10 @@
       .map(function (a) { return Object.assign(a, { cuando: NovaHerramientas.horaAviso(a.cuando, silencio) }); })
       .filter(function (a) { return a.cuando > ahora; }).slice(0, 60);
     return N.getPending().then(function (p) {
-      var viejos = (p && p.notifications || []).map(function (n) { return { id: n.id }; });
+      var viejos = (p && p.notifications || []).filter(function (n) {
+        // Android también devuelve aquí el aviso de gasto alto ya entregado.
+        return n.id < 780000000 || n.id >= 790000000;
+      }).map(function (n) { return { id: n.id }; });
       return viejos.length ? N.cancel({ notifications: viejos }) : null;
     }).then(function () {
       if (!avisos.length) return null;
@@ -5996,6 +6055,7 @@
       var valor = dinero(monto) + (ext && !ocultos ? " · " + Mon.formatoMonto(montoOriginal, reg.moneda) : "");
       toast(editar ? "¡Cambios guardados!" : "¡Guardado!", detalle, valor, accion, !!r.m);
       pintar();
+      if (!editar && r.m && r.m.tipo === "gasto") avisarGastoAlto(r.m);
       if (accion) {
         var origen = fuente, espacio = espacioId;
         setTimeout(function () {
@@ -8985,7 +9045,9 @@
       var fila = { cuenta_id: m.cuenta_id, categoria_id: m.categoria_id, tipo: m.tipo, monto: m.monto, descripcion: m.descripcion, etiquetas: m.etiquetas || [], fecha: new Date().toISOString() };
       ["moneda", "monto_original", "tasa"].forEach(function (k) { if (m[k] != null) fila[k] = m[k]; });
       var uso = usoActivoEventos();
-      fuente.crear("movimientos", fila).then(function (n) { registrarEventoDe(uso, "anotar", "rapido"); datos.movimientos.push(n); ordenarMovimientos(); toast("¡Repetido!", n.descripcion, dinero(num(n.monto)), deshacerRegistro(n, 0)); pintar(); })
+      fuente.crear("movimientos", fila).then(function (n) { registrarEventoDe(uso, "anotar", "rapido"); datos.movimientos.push(n); ordenarMovimientos(); toast("¡Repetido!", n.descripcion, dinero(num(n.monto)), deshacerRegistro(n, 0)); pintar();
+        if (n.tipo === "gasto") avisarGastoAlto(n);
+      })
         .catch(function (err) { toast("No se pudo repetir: " + err.message); }).finally(function () { repetir.disabled = false; });
     });
     var duplicar = el("button", "mini", "Duplicar"); duplicar.type = "button";
@@ -9809,6 +9871,7 @@
   // Guarda un registro interpretado. Devuelve una promesa que no falla (los errores se muestran).
   function guardarRegistro(r, nombreCat, comoFrecuente, textoOriginal) {
     var uso = usoActivoEventos();
+    var guardado;
     return Promise.all([categoriaPorNombre(nombreCat || r.categoria, r.tipo, r.icono), ubicacionActual()]).then(function (res) {
       var c = res[0], lugar = res[1];
       if (r.moneda && !r.listo) throw new Error("Falta la tasa de cambio para convertir " + r.moneda + ". Anótalo con el botón + y escribe la tasa.");
@@ -9819,6 +9882,7 @@
       if (lugar) { fila.lat = lugar.lat; fila.lng = lugar.lng; precargarMapa(lugar.lat, lugar.lng); }
       return fuente.crear("movimientos", fila);
     }).then(function (m) {
+      guardado = m;
       registrarEventoDe(uso, "anotar", r.via || "rapido");
       datos.movimientos.push(m);
       ordenarMovimientos();
@@ -9832,6 +9896,7 @@
       mensaje("rapido-mensaje", "");
       toast(aviso, null, null, null, true);
       pintar();
+      if (guardado.tipo === "gasto") avisarGastoAlto(guardado);
       return true;
     }).catch(function (e) { alerta(e); return false; });
   }
