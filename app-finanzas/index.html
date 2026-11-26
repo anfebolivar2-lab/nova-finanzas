@@ -465,9 +465,24 @@
         <input id="meta-objetivo" required inputmode="numeric" placeholder="2 millones">
         <label for="meta-fecha">¿Para cuándo la quieres? (opcional)</label>
         <input id="meta-fecha" type="date">
+        <label for="meta-aporte">¿Cuánto puedes guardar al mes?</label>
+        <input id="meta-aporte" inputmode="numeric" placeholder="200 mil" aria-describedby="meta-aporte-nota">
+        <p id="meta-aporte-nota" class="nota" aria-live="polite"></p>
         <button type="submit" class="primario">Crear meta</button>
         <p class="mensaje" id="meta-mensaje" role="status"></p>
       </form>
+      <article class="tarjeta">
+        <h2 class="titulo-tarjeta">Lista de deseos</h2>
+        <form id="form-deseo" class="formulario">
+          <label for="deseo-nombre">¿Qué quieres comprar?</label>
+          <input id="deseo-nombre" maxlength="60" required>
+          <label for="deseo-precio">Precio</label>
+          <input id="deseo-precio" inputmode="numeric" placeholder="200 mil" required>
+          <button type="submit" class="primario">Agregar</button>
+        </form>
+        <p id="deseo-mensaje" class="mensaje" role="status"></p>
+        <ul id="lista-deseos" class="lista-banco"></ul>
+      </article>
     </section>
 
     <!-- ANÁLISIS -->
