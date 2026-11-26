@@ -466,7 +466,7 @@
         <label for="meta-fecha">¿Para cuándo la quieres? (opcional)</label>
         <input id="meta-fecha" type="date">
         <label for="meta-aporte">¿Cuánto puedes guardar al mes?</label>
-        <input id="meta-aporte" inputmode="numeric" placeholder="200 mil" aria-describedby="meta-aporte-nota">
+        <input id="meta-aporte" class="monto-entrada" inputmode="numeric" placeholder="200 mil" aria-describedby="meta-aporte-nota">
         <p id="meta-aporte-nota" class="nota" aria-live="polite"></p>
         <button type="submit" class="primario">Crear meta</button>
         <p class="mensaje" id="meta-mensaje" role="status"></p>
@@ -477,7 +477,7 @@
           <label for="deseo-nombre">¿Qué quieres comprar?</label>
           <input id="deseo-nombre" maxlength="60" required>
           <label for="deseo-precio">Precio</label>
-          <input id="deseo-precio" inputmode="numeric" placeholder="200 mil" required>
+          <input id="deseo-precio" class="monto-entrada" inputmode="numeric" placeholder="Ej: 1 millón" required>
           <button type="submit" class="primario">Agregar</button>
         </form>
         <p id="deseo-mensaje" class="mensaje" role="status"></p>

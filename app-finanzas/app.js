@@ -1523,6 +1523,7 @@
       if (dia < inicio) inicio = dia;
       return dia >= primero && dia < fin;
     });
+    // Incluye los meses terminados desde que hay registros, incluso si alguno quedó sin movimientos.
     var meses = 0;
     for (var i = 1; i <= 3; i++) {
       if (inicio < A.claveDia(A.desplazar("mensual", ahora, 1 - i).desde)) meses++;
@@ -1531,7 +1532,7 @@
     return meses && neto > 0 ? neto / meses : null;
   }
 
-  var deseosPasandoAMeta = new Set();
+  var estadoDeseoAMeta = new Map();
   function pintarDeseos() {
     var origen = fuente, clave = claveDeseos(), lista = leerDeseos(origen, clave);
     var ul = $("lista-deseos");
@@ -1552,25 +1553,29 @@
         li.append(el("p", "nota", "¿Me alcanza? " + texto));
       }
       var meta = botonHabito("Pasar a meta", function () {
-        if (deseosPasandoAMeta.has(d.id)) return;
-        deseosPasandoAMeta.add(d.id);
+        if (estadoDeseoAMeta.has(d.id)) return;
+        estadoDeseoAMeta.set(d.id, "creando");
+        mensaje("deseo-mensaje", "");
         pintarDeseos();
         origen.crear("metas", { nombre: d.nombre, objetivo: d.precio }).then(function (m) {
+          estadoDeseoAMeta.set(d.id, "creada");
           var guardado = quitarDeseo(origen, clave, d.id);
+          if (guardado) estadoDeseoAMeta.delete(d.id);
           if (origen !== fuente || clave !== claveDeseos()) return;
           if (!datos.metas.some(function (x) { return x.id === m.id; })) datos.metas.push(m);
           if (guardado) toast("Ahora es una meta");
           else mensaje("deseo-mensaje", "La meta se creó, pero no se pudo quitar el deseo de este dispositivo.", true);
           pintar();
         }).catch(function (err) {
+          if (estadoDeseoAMeta.get(d.id) === "creando") estadoDeseoAMeta.delete(d.id);
           if (origen === fuente && clave === claveDeseos()) mensaje("deseo-mensaje", err.message, true);
         }).finally(function () {
-          deseosPasandoAMeta.delete(d.id);
           if (origen === fuente && clave === claveDeseos()) pintarDeseos();
         });
       });
       function quitar(texto) {
         if (!quitarDeseo(origen, clave, d.id)) return mensaje("deseo-mensaje", "No se pudo guardar en este dispositivo.", true);
+        estadoDeseoAMeta.delete(d.id);
         mensaje("deseo-mensaje", "");
         pintarDeseos();
         toast(texto);
@@ -1580,7 +1585,8 @@
         if (confirm("¿Quitar «" + d.nombre + "» de la lista?")) quitar("Deseo quitado");
       });
       [meta, comprada, borrar].forEach(function (boton) {
-        boton.disabled = deseosPasandoAMeta.has(d.id) || (boton === meta && ocultos);
+        boton.disabled = estadoDeseoAMeta.get(d.id) === "creando" ||
+          (boton === meta && (ocultos || estadoDeseoAMeta.has(d.id)));
         boton.setAttribute("aria-label", boton.textContent + " · " + d.nombre);
       });
       acciones.append(meta, comprada, borrar);

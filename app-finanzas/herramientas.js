@@ -67,7 +67,7 @@
     var falta = objetivo - ahorrado;
     if (!Number.isFinite(falta) || falta <= 0 || !Number.isFinite(aporteMensual) || aporteMensual <= 0) return null;
     var meses = Math.max(1, Math.ceil(falta / aporteMensual));
-    var fecha = new Date(hoy);
+    var fecha = new Date(typeof hoy === "string" && /^\d{4}-\d{2}-\d{2}$/.test(hoy) ? hoy + "T00:00:00" : hoy);
     if (meses > 600 || !Number.isFinite(fecha.getTime())) return null;
     var dia = fecha.getDate();
     fecha.setMonth(fecha.getMonth() + meses + 1, 0);
@@ -100,9 +100,10 @@
       var valor = Number(m.monto);
       if (!Number.isFinite(valor) || valor <= 0 || valor > tope) return;
       var descripcion = typeof m.descripcion === "string" ? m.descripcion.trim() : "";
-      var nombre = (descripcion || (opciones.nombreCategoria && opciones.nombreCategoria(m.categoria_id)) ||
-        m.categoria || "Sin categoría").replace(/\s+/g, " ").trim();
-      var clave = nombre.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+      var categoria = opciones.nombreCategoria ? opciones.nombreCategoria(m.categoria_id) : m.categoria;
+      var nombre = (descripcion || (typeof categoria === "string" && categoria.trim()) ||
+        "Sin categoría").replace(/\s+/g, " ");
+      var clave = Analisis.sinTildes(nombre);
       var grupo = grupos.get(clave);
       if (!grupo) {
         grupo = { nombre: nombre[0].toUpperCase() + nombre.slice(1), veces: 0, total: 0 };
