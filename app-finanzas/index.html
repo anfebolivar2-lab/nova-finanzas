@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="theme-color" content="#f8fafc">
+<meta name="theme-color" content="#070908">
 <title>NOVA</title>
 <meta name="description" content="NOVA: tus finanzas personales claras y en un solo lugar. Anota gastos con texto, voz o foto, crea metas, controla deudas y pregúntale a NOVA IA. Gratis y sin anuncios.">
 <meta property="og:type" content="website">
@@ -11,9 +11,9 @@
 <meta property="og:locale" content="es_CO">
 <meta property="og:title" content="NOVA · Tus finanzas personales">
 <meta property="og:description" content="Anota gastos con texto, voz o foto, crea metas y controla deudas con NOVA. Gratis y sin anuncios.">
-<meta property="og:url" content="https://nova-finanza.vercel.app/">
-<meta property="og:image" content="https://nova-finanza.vercel.app/iconos/compartir.jpg">
-<meta property="og:image:secure_url" content="https://nova-finanza.vercel.app/iconos/compartir.jpg">
+<meta property="og:url" content="https://nova-finanzas.vercel.app/">
+<meta property="og:image" content="https://nova-finanzas.vercel.app/iconos/compartir.jpg">
+<meta property="og:image:secure_url" content="https://nova-finanzas.vercel.app/iconos/compartir.jpg">
 <meta property="og:image:type" content="image/jpeg">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
@@ -21,8 +21,8 @@
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="NOVA · Tus finanzas personales">
 <meta name="twitter:description" content="Anota gastos con texto, voz o foto, crea metas y controla deudas con NOVA. Gratis y sin anuncios.">
-<meta name="twitter:image" content="https://nova-finanza.vercel.app/iconos/compartir.jpg">
-<link rel="canonical" href="https://nova-finanza.vercel.app/">
+<meta name="twitter:image" content="https://nova-finanzas.vercel.app/iconos/compartir.jpg">
+<link rel="canonical" href="https://nova-finanzas.vercel.app/">
 <meta name="author" content="OPITA-DIGITAL">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -31,21 +31,23 @@
   #splash {
     position: fixed; inset: 0; z-index: 9999; isolation: isolate;
     display: grid; place-items: center; overflow: hidden;
-    background: #f8fafc; opacity: 1; transition: opacity 250ms ease;
+    --splash-fondo: #070908; --splash-verde: #2ee06f;
+    background: var(--splash-fondo); opacity: 1; transition: opacity 250ms ease;
   }
-  :root[data-theme="oscuro"] #splash { background: #0b1110; }
-  @media (prefers-color-scheme: dark) {
-    :root:not([data-theme="claro"]) #splash { background: #0b1110; }
+  :root[data-theme="claro"] #splash { --splash-fondo: #eeece3; --splash-verde: #1f9d55; }
+  @media (prefers-color-scheme: light) {
+    :root:is(:not([data-theme]), [data-theme="sistema"]) #splash {
+      --splash-fondo: #eeece3; --splash-verde: #1f9d55;
+    }
   }
   #splash::before {
     content: ""; position: absolute; width: 300px; height: 300px; z-index: -1;
-    background: radial-gradient(circle, rgba(20,184,166,.18), transparent 70%);
+    background: radial-gradient(circle, rgba(46,224,111,.22), transparent 70%);
     animation: splash-resplandor 2s ease-in-out infinite alternate;
   }
-  #splash svg { width: 80px; height: 80px; }
-  #splash path {
-    stroke-dasharray: 1; stroke-dashoffset: 0;
-    animation: splash-trazo 600ms ease-out both;
+  #splash svg {
+    width: 96px; height: 96px; fill: var(--splash-verde); stroke: none;
+    animation: splash-aparecer 600ms ease-out both;
   }
   #splash.splash-saliendo { opacity: 0; pointer-events: none; }
   #splash[hidden] { display: none; pointer-events: none; }
@@ -53,9 +55,9 @@
     from { transform: scale(.86); opacity: .55; }
     to { transform: scale(1.1); opacity: 1; }
   }
-  @keyframes splash-trazo { from { stroke-dashoffset: 1; } }
+  @keyframes splash-aparecer { from { opacity: 0; transform: scale(.84); } }
   @media (prefers-reduced-motion: reduce) {
-    #splash, #splash::before, #splash path { animation: none; transition: none; }
+    #splash, #splash::before, #splash svg { animation: none; transition: none; }
   }
 </style>
 <link rel="stylesheet" href="estilos.css">
@@ -65,9 +67,10 @@
 </head>
 <body>
 <div id="splash" role="status" aria-label="Cargando NOVA">
-  <svg viewBox="0 0 24 24" aria-hidden="true">
-    <path d="M3 18l5-5 4 4 8-11" pathLength="1" fill="none" stroke="#14b8a6" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"/>
-    <circle cx="20" cy="6" r="1.65" fill="#99f6e4" stroke="none"/>
+  <svg viewBox="0 0 512 512" aria-hidden="true">
+    <path d="M240 122l36 113 114 37-114 37-36 113-36-113-114-37 114-37z"/>
+    <path d="M372 104l12 35 34 11-34 11-12 35-12-35-34-11 34-11z"/>
+    <circle cx="392" cy="232" r="9"/>
   </svg>
 </div>
 <script>
@@ -95,7 +98,7 @@
 </a>
 
 <section id="pantalla-auth" class="auth" hidden>
-  <div class="logo grande"><svg class="logo-inicio" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 18l5-5 4 4 8-11" stroke-width="2.3"/><circle cx="20" cy="6" r="1.65" fill="#99f6e4" stroke="none"/></svg><span>NOVA</span></div>
+  <div class="logo grande"><span>NOVA</span><svg class="chispa" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2l2.2 7.8L22 12l-7.8 2.2L12 22l-2.2-7.8L2 12l7.8-2.2z"/></svg></div>
   <p class="auth-lema">Anota tus gastos escribiendo o hablando. NOVA hace las cuentas.</p>
   <form id="form-auth" class="tarjeta auth-form" novalidate>
     <label for="auth-email">Correo</label>
@@ -208,7 +211,7 @@
   </aside>
 
   <header class="cabecera">
-    <div class="logo"><span>NOVA</span><svg class="chispa" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2l2.2 7.8L22 12l-7.8 2.2L12 22l-2.2-7.8L2 12l7.8-2.2z"/></svg><svg class="logo-inicio" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 18l5-5 4 4 8-11" stroke-width="2.3"/><circle cx="20" cy="6" r="1.65" fill="#99f6e4" stroke="none"/></svg></div>
+    <div class="logo"><span>NOVA</span><svg class="chispa" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2l2.2 7.8L22 12l-7.8 2.2L12 22l-2.2-7.8L2 12l7.8-2.2z"/></svg></div>
     <div class="cabecera-contexto">
       <p id="cabecera-titulo" class="cabecera-titulo" hidden></p>
       <button type="button" id="btn-espacio" class="chip-espacio" aria-haspopup="dialog" aria-label="Cambiar de espacio"><span id="esp-ico" class="esp-ico" aria-hidden="true">👛</span><span id="esp-nombre">Principal</span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></button>

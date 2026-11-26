@@ -21,9 +21,8 @@ Supabase (la app lo pregunta a `/auth/v1/settings`), así que no hay que volver 
 1. **Authentication → Sign In / Providers → Google**: activarlo y pegar el ID de cliente y el secreto.
 2. **Authentication → URL Configuration**:
    - **Site URL**: `https://nova-finanzas.vercel.app`
-   - **Redirect URLs** (agregar estas tres):
+   - **Redirect URLs** (agregar las dos):
      - `https://nova-finanzas.vercel.app`
-     - `https://nova-finanza.vercel.app`  ← segundo nombre público del sitio (sin la «s»)
      - `co.novafinanzas.app://login-callback`  ← para la app instalada
 
 ## Cómo funciona
