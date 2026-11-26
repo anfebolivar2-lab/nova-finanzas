@@ -142,9 +142,56 @@
     return veces >= factor ? { total: total, promedio: promedio, veces: veces } : null;
   }
 
+  function centavos(valor) {
+    var unidades = Math.round(valor * 100);
+    return Number.isSafeInteger(unidades) && unidades / 100 === valor ? unidades : NaN;
+  }
+
+  function repartirGasto(total, partes) {
+    partes = Array.isArray(partes) ? partes.slice() : [];
+    var valores = partes.map(centavos);
+    var diferencia = centavos(total) - valores.reduce(function (suma, valor) { return suma + valor; }, 0);
+    return { ok: diferencia === 0 && partes.length >= 2 && partes.length <= 6 &&
+      valores.every(function (valor) { return valor > 0; }), resto: diferencia / 100, partes: partes };
+  }
+
+  function repartoSugerido(total, n) {
+    var unidades = centavos(total);
+    if (!(unidades > 0) || !Number.isInteger(n) || n < 2 || n > 6) return [];
+    var escala = Number.isInteger(total) ? 1 : 100;
+    var valor = escala === 1 ? total : unidades;
+    var base = Math.floor(valor / n);
+    return Array.from({ length: n }, function (_, i) { return (base + (i === 0 ? valor % n : 0)) / escala; });
+  }
+
+  function normalizarComercio(texto) {
+    return Analisis.sinTildes(texto).replace(/[^\p{L}\p{N}]+/gu, " ").trim();
+  }
+
+  function categoriaSugeridaPorComercio(descripcion, movimientos, opciones) {
+    var texto = normalizarComercio(descripcion);
+    if (!texto) return null;
+    var unaPalabra = texto.indexOf(" ") < 0;
+    var conteo = new Map(), total = 0;
+    (movimientos || []).forEach(function (m) {
+      if (!m || m.tipo !== "gasto" || m.borrado || m.estado === "borrado" || m.categoria_id == null ||
+          (opciones && opciones.omitirId != null && m.id === opciones.omitirId)) return;
+      var anterior = normalizarComercio(m.descripcion);
+      if (anterior !== texto && !(unaPalabra && anterior.indexOf(texto + " ") === 0)) return;
+      total++;
+      conteo.set(m.categoria_id, (conteo.get(m.categoria_id) || 0) + 1);
+    });
+    var sugerida = null;
+    if (total >= 2) conteo.forEach(function (veces, id) {
+      if (veces * 5 >= total * 3) sugerida = { categoria_id: id, veces: veces, total: total };
+    });
+    return sugerida;
+  }
+
   var api = { simular: simular, actualizarNotas: actualizarNotas, enNoMolestar: enNoMolestar, horaAviso: horaAviso,
     referenciaAvisos: referenciaAvisos, gastoAltoDelDia: gastoAltoDelDia, fechaDeMeta: fechaDeMeta,
-    alcanzaDeseo: alcanzaDeseo, gastosHormigaTop: gastosHormigaTop };
+    alcanzaDeseo: alcanzaDeseo, gastosHormigaTop: gastosHormigaTop, repartirGasto: repartirGasto,
+    repartoSugerido: repartoSugerido, categoriaSugeridaPorComercio: categoriaSugeridaPorComercio };
   if (typeof module === "object" && module.exports) module.exports = api;
   else raiz.NovaHerramientas = api;
 })(typeof window !== "undefined" ? window : this);

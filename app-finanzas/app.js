@@ -5690,6 +5690,7 @@
     var id = pilaCapas.pop();
     var foco = pilaFocos.pop();
     if (id) $(id).hidden = true;
+    if (id === "pantalla-registro") cerrarQrFactura();
     if (id === "hoja-respaldo") limpiarClaveRespaldo();
     if (id === "pantalla-dueno") {
       detenerRelojDueno();
@@ -5741,6 +5742,7 @@
   var reg = null;
   function abrirRegistro(o) {
     o = o || {};
+    cerrarQrFactura();
     var m = o.movimiento || o.repetir;
     var categoriaId = m ? m.categoria_id : o.categoriaId;
     var usaMontoOriginal = m && m.moneda && m.moneda !== monedaBase() && num(m.monto_original) > 0;
@@ -5766,6 +5768,8 @@
     $("reg-fecha").value = A.claveDia(editado ? editado.fecha : new Date());
     $("reg-desc").value = m ? m.descripcion : (o.desc || "");
     pintarSugerencias();
+    $("reg-partes-lista").replaceChildren();
+    $("reg-qr").hidden = !("BarcodeDetector" in window);
     $("reg-viajes").value = (editado || o.duplicar) && m.viajes ? m.viajes : "";
     $("reg-nota").value = (editado || o.duplicar) && m.nota ? m.nota : "";
     $("reg-estado").value = (editado || o.duplicar) && m.estado ? m.estado : "pagado";
@@ -6084,7 +6088,122 @@
     $("reg-btn-estado").classList.toggle("activo", !$("reg-bloque-estado").hidden);
     $("reg-btn-nota").classList.toggle("activo", !$("reg-bloque-nota").hidden);
     $("reg-btn-recurrente").classList.toggle("activo", !$("reg-bloque-recurrente").hidden);
+    pintarDivision();
+    pintarCategoriaSugerida();
   }
+  function puedeDividir() {
+    return reg.tipo === "gasto" && !reg.editar && reg.via !== "rapido" &&
+      reg.moneda === monedaBase() && $("reg-bloque-recurrente").hidden;
+  }
+  function leerPartes() {
+    return Array.from($("reg-partes-lista").children, function (fila) {
+      var texto = fila.querySelector("input").value.trim();
+      var valor = /^\d+(?:[.,]\d{1,2})?$/.test(texto) ? Number(texto.replace(",", ".")) : 0;
+      return { categoria: categoria(Number(fila.querySelector("select").value)), valor: valor };
+    });
+  }
+  function calcularDivision(total, partes) {
+    return NovaHerramientas.repartirGasto(total, partes.map(function (p) { return p.valor; }));
+  }
+  function pintarRestoDivision() {
+    var reparto = calcularDivision(A.evaluar(reg.expr), leerPartes());
+    var resto = reparto.resto;
+    var texto = !Number.isFinite(resto) ? "Escribe el valor total para repartir." :
+      resto > 0 ? "Faltan " + dineroConDecimales(resto) + " por repartir" :
+      resto < 0 ? "Sobran " + dineroConDecimales(-resto) :
+      reparto.ok ? "✅ Cuadra" : "Escribe un valor mayor que cero en cada parte.";
+    if ($("reg-partes-resto").textContent !== texto) $("reg-partes-resto").textContent = texto;
+  }
+  function dineroConDecimales(valor) {
+    if (ocultos) return dinero(valor);
+    return monedaBase() === "COP" ? "$ " + formatearExpr(textoMonto(valor)) : dinero(valor);
+  }
+  function pintarDivision() {
+    var disponible = puedeDividir();
+    if (!disponible) reg.dividido = false;
+    var activo = !!reg.dividido;
+    $("reg-dividir").hidden = !disponible;
+    $("reg-dividir").textContent = activo ? "Dejar de dividir" : "Dividir en varias categorías";
+    $("reg-dividir").setAttribute("aria-expanded", String(activo));
+    $("reg-partes").hidden = !activo;
+    $("reg-categoria").hidden = $("reg-categoria-etiqueta").hidden = activo;
+    $("reg-btn-recurrente").hidden = !!reg.editar || activo;
+    if (activo) {
+      $("reg-bloque-viajes").hidden = true;
+      $("reg-agregar-parte").disabled = $("reg-partes-lista").children.length >= 6;
+      pintarRestoDivision();
+    }
+  }
+  function agregarParte(valor, categoriaId) {
+    var lista = $("reg-partes-lista"), n = lista.children.length + 1;
+    var fila = el("div", "formulario"), select = el("select"), input = el("input");
+    select.id = "reg-parte-categoria-" + n;
+    var opcion = el("option", null, "Seleccionar categoría");
+    opcion.value = "";
+    select.append(opcion);
+    datos.categorias.filter(function (c) { return c.tipo === "gasto"; }).forEach(function (c) {
+      var op = el("option", null, etiquetaCategoria(c));
+      op.value = c.id;
+      select.append(op);
+    });
+    if (categoriaId != null) select.value = categoriaId;
+    input.id = "reg-parte-valor-" + n;
+    input.inputMode = "decimal";
+    input.maxLength = 16;
+    input.value = valor > 0 ? textoMonto(valor) : "";
+    input.addEventListener("input", pintarRestoDivision);
+    input.addEventListener("focus", function () { $("teclado").hidden = true; });
+    var etiquetaCategoriaParte = el("label", null, "Categoría de la parte " + n);
+    etiquetaCategoriaParte.htmlFor = select.id;
+    var etiquetaValor = el("label", null, "Valor de la parte " + n);
+    etiquetaValor.htmlFor = input.id;
+    fila.append(etiquetaCategoriaParte, select, etiquetaValor, input);
+    lista.append(fila);
+    return select;
+  }
+  $("reg-dividir").addEventListener("click", function () {
+    if (!puedeDividir()) return;
+    reg.dividido = !reg.dividido;
+    $("reg-partes-lista").replaceChildren();
+    if (reg.dividido) {
+      var valores = NovaHerramientas.repartoSugerido(A.evaluar(reg.expr), 2);
+      agregarParte(valores[0], reg.categoriaId);
+      agregarParte(valores[1]);
+      $("teclado").hidden = true;
+    }
+    mensaje("reg-mensaje", "");
+    pintarRegistro();
+  });
+  $("reg-agregar-parte").addEventListener("click", function () {
+    if (!reg.dividido || $("reg-partes-lista").children.length >= 6) return;
+    var select = agregarParte();
+    pintarDivision();
+    select.focus();
+  });
+
+  function pintarCategoriaSugerida() {
+    var boton = $("reg-sugerida"), sugerencia = null;
+    if (reg.tipo === "gasto" && reg.categoriaId == null && !reg.dividido) {
+      sugerencia = NovaHerramientas.categoriaSugeridaPorComercio($("reg-desc").value, datos.movimientos, {
+        omitirId: reg.editar && reg.editar.id
+      });
+    }
+    var c = sugerencia && categoria(sugerencia.categoria_id);
+    boton.hidden = !c || c.tipo !== "gasto";
+    if (boton.hidden) return;
+    boton.dataset.categoria = c.id;
+    if ($("reg-sugerida-nombre").textContent !== c.nombre) {
+      $("reg-sugerida-texto").textContent = "Sugerida:";
+      pintarIcono($("reg-sugerida-icono"), c);
+      $("reg-sugerida-nombre").textContent = c.nombre;
+    }
+  }
+  $("reg-sugerida").addEventListener("click", function () {
+    if (this.hidden || reg.categoriaId != null) return;
+    reg.categoriaId = Number(this.dataset.categoria);
+    pintarRegistro();
+    $("reg-categoria").focus();
+  });
   document.querySelectorAll("#reg-tipo button").forEach(function (b) { b.addEventListener("click", function () { reg.tipo = b.dataset.tipo; pintarRegistro(); }); });
   llenarTiposDeducibles($("reg-deducible"));
   $("reg-deducible").addEventListener("change", function () {
@@ -6129,14 +6248,11 @@
   });
   $("reg-desc").addEventListener("input", function () {
     pintarSugerencias();
-    if (!reg || reg.editar || (reg.categoriaId != null && !reg.catAuto)) return;
-    var id = NovaConsejos.sugerirCategoria($("reg-desc").value, reg.tipo, datos.movimientos);
-    if (id != null && categoria(id)) { reg.categoriaId = id; reg.catAuto = true; pintarRegistro(); }
-    else if (reg.catAuto) { reg.categoriaId = null; reg.catAuto = false; pintarRegistro(); }
+    pintarCategoriaSugerida();
   });
   ["reg-desc", "reg-etiqueta", "reg-nota"].forEach(function (id) { $(id).addEventListener("focus", function () { $("teclado").hidden = true; }); });
   $("reg-categoria").addEventListener("click", function () {
-    elegirCategoria(reg.tipo, function (c) { if (c) { reg.catAuto = false; reg.categoriaId = c.id; if (c.tipo !== reg.tipo) reg.tipo = c.tipo; } pintarRegistro(); });
+    elegirCategoria(reg.tipo, function (c) { if (c) { reg.categoriaId = c.id; if (c.tipo !== reg.tipo) reg.tipo = c.tipo; } pintarRegistro(); });
   });
   function agregarEtiquetaEscrita() {
     var t = limpiarEtiqueta($("reg-etiqueta").value);
