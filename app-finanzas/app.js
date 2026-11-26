@@ -125,11 +125,11 @@
   var toastTimer = null, deshacerHasta = 0;
   // Mascota de NOVA (Novi, un búho verde con la chispa del logo), dibujada aquí mismo.
   var NOVI = '<svg class="toast-novi" viewBox="0 0 64 76" aria-hidden="true"><ellipse cx="32" cy="72" rx="20" ry="3" fill="rgba(0,0,0,.18)"/>' +
-    '<path d="M10 30 L8 8 L24 20 Z M54 30 L56 8 L40 20 Z" fill="#12805c"/><ellipse cx="32" cy="44" rx="25" ry="27" fill="#1f9d6f"/>' +
-    '<ellipse cx="32" cy="52" rx="16" ry="18" fill="#cdeee0"/><path d="M32 40l2.2 7.8L42 50l-7.8 2.2L32 60l-2.2-7.8L22 50l7.8-2.2z" fill="#1f9d6f"/>' +
-    '<circle cx="22" cy="31" r="9" fill="#fff"/><circle cx="42" cy="31" r="9" fill="#fff"/><circle cx="23" cy="32" r="4.6" fill="#17302a"/><circle cx="41" cy="32" r="4.6" fill="#17302a"/>' +
+    '<path d="M10 30 L8 8 L24 20 Z M54 30 L56 8 L40 20 Z" fill="#1a7f47"/><ellipse cx="32" cy="44" rx="25" ry="27" fill="#1f9d55"/>' +
+    '<ellipse cx="32" cy="52" rx="16" ry="18" fill="#d3eedc"/><path d="M32 40l2.2 7.8L42 50l-7.8 2.2L32 60l-2.2-7.8L22 50l7.8-2.2z" fill="#1f9d55"/>' +
+    '<circle cx="22" cy="31" r="9" fill="#fff"/><circle cx="42" cy="31" r="9" fill="#fff"/><circle cx="23" cy="32" r="4.6" fill="#173023"/><circle cx="41" cy="32" r="4.6" fill="#173023"/>' +
     '<circle cx="24.6" cy="30.2" r="1.5" fill="#fff"/><circle cx="42.6" cy="30.2" r="1.5" fill="#fff"/><path d="M28 38 L32 44 L36 38 Z" fill="#f3b23c"/>' +
-    '<path d="M50 52c6-2 10 2 8 8-1 3-6 4-9 1z" fill="#1f9d6f"/><rect x="53" y="44" width="5" height="11" rx="2.5" fill="#1f9d6f" transform="rotate(-18 55 50)"/>' +
+    '<path d="M50 52c6-2 10 2 8 8-1 3-6 4-9 1z" fill="#1f9d55"/><rect x="53" y="44" width="5" height="11" rx="2.5" fill="#1f9d55" transform="rotate(-18 55 50)"/>' +
     '<path d="M24 70l-3 4h8zM40 70l3 4h-8z" fill="#f3b23c"/></svg>';
   // Tarjeta de arriba: titulo, detalle y valor opcionales.
   function toast(titulo, detalle, valor, accion, movimientoGuardado) {
@@ -277,7 +277,7 @@
     document.documentElement.setAttribute("data-theme", tema);
     var metaTema = document.querySelector('meta[name="theme-color"]');
     metaTema.content = tema === "oscuro" || (tema === "sistema" && sistemaOscuro.matches)
-      ? "#0b1110" : "#f8fafc";
+      ? "#070908" : "#eeece3";
   }
   function aplicarTema(t) {
     temaElegido = t;
@@ -665,7 +665,7 @@
 
   // ---------- Listas de movimientos ----------
   function filaMovimiento(m, conFecha) {
-    var c = categoria(m.categoria_id) || (m.transferencia ? { nombre: "Entre espacios", icono: "⇄", color: "#14b8a6" } : { nombre: "Sin categoría", icono: "otro" });
+    var c = categoria(m.categoria_id) || (m.transferencia ? { nombre: "Entre espacios", icono: "⇄", color: "#2ee06f" } : { nombre: "Sin categoría", icono: "otro" });
     var li = el("li", "mov-deslizable");
     var fila = el("div", "mov");
     var cuerpo = el("div", "mov-cuerpo");
@@ -3220,11 +3220,11 @@
     svg.setAttribute("viewBox", "0 0 120 120"); svg.setAttribute("class", "dona"); svg.setAttribute("role", "img");
     svg.setAttribute("aria-label", "Gastos por categoría: " + filas.map(function (f) { return nombreCategoriaVisible(f.id) + " " + dinero(f.total); }).join(", "));
     var acumulado = 0, R = 46, L = 2 * Math.PI * R;
-    filas.forEach(function (f, i) {
+    filas.forEach(function (f) {
       var c = document.createElementNS(NS, "circle");
       c.setAttribute("cx", 60); c.setAttribute("cy", 60); c.setAttribute("r", R);
       c.setAttribute("fill", "none"); c.setAttribute("stroke-width", 16);
-      c.style.stroke = "var(--r-grafico-" + (i % 7 + 1) + ")";
+      c.setAttribute("stroke", colorDe(categoria(f.id) || { icono: "otro" }));
       var parte = (f.total / total) * L;
       c.setAttribute("stroke-dasharray", Math.max(0, parte - 1.5) + " " + (L - Math.max(0, parte - 1.5)));
       c.setAttribute("stroke-dashoffset", -acumulado);
@@ -3240,7 +3240,7 @@
     filas.forEach(function (f, i) {
       var c = categoria(f.id) || { nombre: "Sin categoría", icono: "otro" };
       var li = el("li", "cat-fila" + (i >= 6 ? " extra" : ""));
-      var punto = el("span", "punto"); punto.style.background = "var(--r-grafico-" + (i % 7 + 1) + ")";
+      var punto = el("span", "punto"); punto.style.background = colorDe(c);
       var nombre = el("span", "cat-nombre"); nombre.append(punto, document.createTextNode(etiquetaCategoria(c)));
       li.append(nombre, el("strong", null, dinero(f.total)), el("small", "nota", Math.round((f.total / total) * 100) + "%"));
       li.tabIndex = 0; li.setAttribute("role", "button");
@@ -6630,7 +6630,7 @@
     c.replaceChildren();
     if (n.iconos) {
       var fila = el("div", "nov-iconos");
-      n.iconos.forEach(function (x, i) { var s = el("span", null, x); s.style.background = ["#14b8a6", "#6d5bd0", "#f59e0b", "#1d7bf0"][i]; fila.append(s); });
+      n.iconos.forEach(function (x, i) { var s = el("span", null, x); s.style.background = ["#2ee06f", "#6d5bd0", "#f59e0b", "#1d7bf0"][i]; fila.append(s); });
       c.append(fila);
     }
     var h = el("h2", null, n.titulo); h.id = "nov-titulo";
