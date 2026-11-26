@@ -4560,11 +4560,12 @@
     var c = datos.categorias.find(function (k) { return k.nombre === x.categoria && k.tipo === "gasto"; });
     abrirRegistro({ tipo: "gasto", categoriaId: c ? c.id : null, expr: d.costo ? String(Math.round(num(d.costo))) : "", desc: d.nombre, documentoId: d.id });
   }
-  function renovarDocumentoListo(docId) {
+  function renovarDocumentoListo(docId, sinAviso) {
     var d = datos.documentos.find(function (x) { return x.id === docId; });
     if (!d) return;
     fuente.actualizar("documentos", d.id, { vence: A.proximoVencimiento(d) }).then(function (n) {
-      Object.assign(d, n); toast("✓ " + d.nombre + " renovado: ahora vence el " + fechaCorta.format(parteFechaLocal(d.vence)) + " " + parteFechaLocal(d.vence).getFullYear());
+      Object.assign(d, n);
+      if (!sinAviso) toast("✓ " + d.nombre + " renovado: ahora vence el " + fechaCorta.format(parteFechaLocal(d.vence)) + " " + parteFechaLocal(d.vence).getFullYear());
       programarAvisos(); pintar();
     }).catch(function (err) { toast("No se pudo mover la fecha: " + err.message); });
   }
@@ -5690,6 +5691,7 @@
     var id = pilaCapas.pop();
     var foco = pilaFocos.pop();
     if (id) $(id).hidden = true;
+    if (id === "pantalla-registro") cerrarQrFactura();
     if (id === "hoja-respaldo") limpiarClaveRespaldo();
     if (id === "pantalla-dueno") {
       detenerRelojDueno();
@@ -5741,6 +5743,7 @@
   var reg = null;
   function abrirRegistro(o) {
     o = o || {};
+    cerrarQrFactura();
     var m = o.movimiento || o.repetir;
     var categoriaId = m ? m.categoria_id : o.categoriaId;
     var usaMontoOriginal = m && m.moneda && m.moneda !== monedaBase() && num(m.monto_original) > 0;
@@ -5766,6 +5769,8 @@
     $("reg-fecha").value = A.claveDia(editado ? editado.fecha : new Date());
     $("reg-desc").value = m ? m.descripcion : (o.desc || "");
     pintarSugerencias();
+    $("reg-partes-lista").replaceChildren();
+    $("reg-qr").hidden = !("BarcodeDetector" in window);
     $("reg-viajes").value = (editado || o.duplicar) && m.viajes ? m.viajes : "";
     $("reg-nota").value = (editado || o.duplicar) && m.nota ? m.nota : "";
     $("reg-estado").value = (editado || o.duplicar) && m.estado ? m.estado : "pagado";
@@ -6084,7 +6089,196 @@
     $("reg-btn-estado").classList.toggle("activo", !$("reg-bloque-estado").hidden);
     $("reg-btn-nota").classList.toggle("activo", !$("reg-bloque-nota").hidden);
     $("reg-btn-recurrente").classList.toggle("activo", !$("reg-bloque-recurrente").hidden);
+    pintarDivision();
+    pintarCategoriaSugerida();
   }
+  function puedeDividir() {
+    return reg.tipo === "gasto" && !reg.editar && reg.via !== "rapido" &&
+      reg.moneda === monedaBase() && $("reg-bloque-recurrente").hidden;
+  }
+  function leerPartes() {
+    return Array.from($("reg-partes-lista").children, function (fila) {
+      var texto = fila.querySelector("input").value.trim();
+      var valor = /^\d+(?:[.,]\d{1,2})?$/.test(texto) ? Number(texto.replace(",", ".")) : 0;
+      return { categoria: categoria(Number(fila.querySelector("select").value)), valor: valor };
+    });
+  }
+  function calcularDivision(total, partes) {
+    return NovaHerramientas.repartirGasto(total, partes.map(function (p) { return p.valor; }));
+  }
+  function pintarRestoDivision() {
+    var reparto = calcularDivision(A.evaluar(reg.expr), leerPartes());
+    var resto = reparto.resto;
+    var texto = !Number.isFinite(resto) ? "Escribe el valor total para repartir." :
+      resto > 0 ? "Faltan " + dineroConDecimales(resto) + " por repartir" :
+      resto < 0 ? "Sobran " + dineroConDecimales(-resto) :
+      reparto.ok ? "✅ Cuadra" : "Escribe un valor mayor que cero en cada parte.";
+    if ($("reg-partes-resto").textContent !== texto) $("reg-partes-resto").textContent = texto;
+  }
+  function dineroConDecimales(valor) {
+    if (ocultos) return dinero(valor);
+    return monedaBase() === "COP" ? "$ " + formatearExpr(textoMonto(valor)) : dinero(valor);
+  }
+  function pintarDivision() {
+    var disponible = puedeDividir();
+    if (!disponible) reg.dividido = false;
+    var activo = !!reg.dividido;
+    $("reg-dividir").hidden = !disponible;
+    $("reg-dividir").textContent = activo ? "Dejar de dividir" : "Dividir en varias categorías";
+    $("reg-dividir").setAttribute("aria-expanded", String(activo));
+    $("reg-partes").hidden = !activo;
+    $("reg-categoria").hidden = $("reg-categoria-etiqueta").hidden = activo;
+    $("reg-btn-recurrente").hidden = !!reg.editar || activo;
+    $("reg-otro-fila").hidden = !!reg.editar || activo;
+    if (activo) {
+      $("reg-bloque-viajes").hidden = true;
+      $("reg-agregar-parte").disabled = $("reg-partes-lista").children.length >= 6;
+      $("reg-partes-lista").querySelectorAll("input").forEach(function (input) { input.type = ocultos ? "password" : "text"; });
+      pintarRestoDivision();
+    }
+  }
+  function agregarParte(valor, categoriaId) {
+    var lista = $("reg-partes-lista"), n = lista.children.length + 1;
+    var fila = el("div", "formulario"), select = el("select"), input = el("input");
+    select.id = "reg-parte-categoria-" + n;
+    var opcion = el("option", null, "Seleccionar categoría");
+    opcion.value = "";
+    select.append(opcion);
+    datos.categorias.filter(function (c) { return c.tipo === "gasto"; }).forEach(function (c) {
+      var op = el("option", null, etiquetaCategoria(c));
+      op.value = c.id;
+      select.append(op);
+    });
+    if (categoriaId != null) select.value = categoriaId;
+    input.id = "reg-parte-valor-" + n;
+    input.inputMode = "decimal";
+    input.maxLength = 16;
+    input.value = valor > 0 ? textoMonto(valor) : "";
+    input.addEventListener("input", pintarRestoDivision);
+    input.addEventListener("focus", function () { $("teclado").hidden = true; });
+    var etiquetaCategoriaParte = el("label", null, "Categoría de la parte " + n);
+    etiquetaCategoriaParte.htmlFor = select.id;
+    var etiquetaValor = el("label", null, "Valor de la parte " + n);
+    etiquetaValor.htmlFor = input.id;
+    fila.append(etiquetaCategoriaParte, select, etiquetaValor, input);
+    lista.append(fila);
+    return select;
+  }
+  $("reg-dividir").addEventListener("click", function () {
+    if (!puedeDividir()) return;
+    reg.dividido = !reg.dividido;
+    $("reg-partes-lista").replaceChildren();
+    if (reg.dividido) {
+      var valores = NovaHerramientas.repartoSugerido(A.evaluar(reg.expr), 2);
+      agregarParte(valores[0], reg.categoriaId);
+      agregarParte(valores[1]);
+      $("teclado").hidden = true;
+    }
+    mensaje("reg-mensaje", "");
+    pintarRegistro();
+  });
+  $("reg-agregar-parte").addEventListener("click", function () {
+    if (!reg.dividido || $("reg-partes-lista").children.length >= 6) return;
+    var select = agregarParte();
+    pintarDivision();
+    select.focus();
+  });
+
+  function pintarCategoriaSugerida() {
+    var boton = $("reg-sugerida"), sugerencia = null;
+    if (reg.tipo === "gasto" && reg.categoriaId == null && !reg.dividido) {
+      sugerencia = NovaHerramientas.categoriaSugeridaPorComercio($("reg-desc").value, datos.movimientos, {
+        omitirId: reg.editar && reg.editar.id
+      });
+    }
+    var c = sugerencia && categoria(sugerencia.categoria_id);
+    boton.hidden = !c || c.tipo !== "gasto";
+    if (boton.hidden) return;
+    boton.dataset.categoria = c.id;
+    if ($("reg-sugerida-nombre").textContent !== c.nombre) {
+      $("reg-sugerida-texto").textContent = "Sugerida:";
+      pintarIcono($("reg-sugerida-icono"), c);
+      $("reg-sugerida-nombre").textContent = c.nombre;
+    }
+  }
+  $("reg-sugerida").addEventListener("click", function () {
+    if (this.hidden || reg.categoriaId != null) return;
+    reg.categoriaId = Number(this.dataset.categoria);
+    pintarRegistro();
+    $("reg-categoria").focus();
+  });
+
+  var escaneoFactura = null;
+  function detenerQrFactura() {
+    var escaneo = escaneoFactura;
+    if (!escaneo) return;
+    escaneoFactura = null;
+    clearInterval(escaneo.intervalo);
+    if (escaneo.camara) escaneo.camara.getTracks().forEach(function (track) { track.stop(); });
+    $("reg-qr-video").srcObject = null;
+  }
+  function cerrarQrFactura() {
+    detenerQrFactura();
+    if ($("reg-qr-dialogo").open) $("reg-qr-dialogo").close();
+  }
+  $("reg-qr-cancelar").addEventListener("click", cerrarQrFactura);
+  $("reg-qr-dialogo").addEventListener("cancel", function (e) {
+    e.preventDefault();
+    cerrarQrFactura();
+  });
+  $("reg-qr-dialogo").addEventListener("close", function () {
+    if (!this.open) detenerQrFactura();
+  });
+  window.addEventListener("pagehide", cerrarQrFactura);
+  $("reg-qr").addEventListener("click", async function () {
+    var dialogo = $("reg-qr-dialogo"), video = $("reg-qr-video");
+    if (dialogo.open) return;
+    var escaneo = { registro: reg }, detector;
+    try { detector = new window.BarcodeDetector({ formats: ["qr_code"] }); }
+    catch (e) { return mensaje("reg-mensaje", "Este dispositivo no puede leer códigos QR.", true); }
+    detenerQrFactura();
+    escaneoFactura = escaneo;
+    mensaje("reg-mensaje", "");
+    dialogo.showModal();
+    try {
+      var camara = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
+      if (escaneoFactura !== escaneo || !dialogo.open) {
+        camara.getTracks().forEach(function (track) { track.stop(); });
+        return;
+      }
+      escaneo.camara = camara;
+      video.srcObject = camara;
+    } catch (e) {
+      if (escaneoFactura !== escaneo || !dialogo.open) return;
+      cerrarQrFactura();
+      return mensaje("reg-mensaje", "No pude abrir la cámara. Revisa el permiso o escribe el valor.", true);
+    }
+    var leyendo = false;
+    escaneo.intervalo = setInterval(async function () {
+      if (leyendo || !dialogo.open || video.readyState < 2) return;
+      leyendo = true;
+      try {
+        var codigos = await detector.detect(video);
+        if (escaneoFactura !== escaneo || !dialogo.open || reg !== escaneo.registro || !codigos.length) return;
+        var factura = codigos.map(function (c) { return NovaFacturaQr.leerFacturaQr(c.rawValue); }).find(Boolean);
+        cerrarQrFactura();
+        if (!factura) return mensaje("reg-mensaje", "Ese QR no trae el valor de la factura. Escríbelo tú.", true);
+        reg.expr = textoMonto(factura.total);
+        reg.copManual = null;
+        if (factura.fecha) $("reg-fecha").value = factura.fecha;
+        if (factura.numero && !$("reg-desc").value.trim()) $("reg-desc").value = ("Factura " + factura.numero).slice(0, 120);
+        $("teclado").hidden = true;
+        pintarRegistro();
+        toast("Leí la factura: " + dineroConDecimales(factura.total) + ". Revisa y guarda.");
+      } catch (e) {
+        if (escaneoFactura !== escaneo || !dialogo.open) return;
+        cerrarQrFactura();
+        mensaje("reg-mensaje", "No pude leer el QR. Escribe el valor de la factura.", true);
+      } finally {
+        leyendo = false;
+      }
+    }, 300);
+  });
   document.querySelectorAll("#reg-tipo button").forEach(function (b) { b.addEventListener("click", function () { reg.tipo = b.dataset.tipo; pintarRegistro(); }); });
   llenarTiposDeducibles($("reg-deducible"));
   $("reg-deducible").addEventListener("change", function () {
@@ -6129,14 +6323,11 @@
   });
   $("reg-desc").addEventListener("input", function () {
     pintarSugerencias();
-    if (!reg || reg.editar || (reg.categoriaId != null && !reg.catAuto)) return;
-    var id = NovaConsejos.sugerirCategoria($("reg-desc").value, reg.tipo, datos.movimientos);
-    if (id != null && categoria(id)) { reg.categoriaId = id; reg.catAuto = true; pintarRegistro(); }
-    else if (reg.catAuto) { reg.categoriaId = null; reg.catAuto = false; pintarRegistro(); }
+    pintarCategoriaSugerida();
   });
   ["reg-desc", "reg-etiqueta", "reg-nota"].forEach(function (id) { $(id).addEventListener("focus", function () { $("teclado").hidden = true; }); });
   $("reg-categoria").addEventListener("click", function () {
-    elegirCategoria(reg.tipo, function (c) { if (c) { reg.catAuto = false; reg.categoriaId = c.id; if (c.tipo !== reg.tipo) reg.tipo = c.tipo; } pintarRegistro(); });
+    elegirCategoria(reg.tipo, function (c) { if (c) { reg.categoriaId = c.id; if (c.tipo !== reg.tipo) reg.tipo = c.tipo; } pintarRegistro(); });
   });
   function agregarEtiquetaEscrita() {
     var t = limpiarEtiqueta($("reg-etiqueta").value);
@@ -6171,22 +6362,31 @@
     var fechaTxt = $("reg-fecha").value;
     if (!fechaTxt) return mensaje("reg-mensaje", "Elige la fecha.", true);
     var recurrente = !reg.editar && !$("reg-bloque-recurrente").hidden;
+    var partes = reg.dividido && puedeDividir() ? leerPartes() : null;
+    if (partes) {
+      if (partes.some(function (p) { return !p.categoria || p.categoria.tipo !== "gasto" || !(p.valor > 0); })) {
+        return mensaje("reg-mensaje", "Elige una categoría y escribe un valor mayor que cero en cada parte.", true);
+      }
+      if (!calcularDivision(monto, partes).ok) {
+        return mensaje("reg-mensaje", "Las partes deben sumar el valor total del gasto.", true);
+      }
+    }
     var hoy = A.claveDia(new Date());
     var fecha = fechaTxt === hoy ? new Date() : new Date(fechaTxt + "T12:00:00");
     if (reg.editar && fechaTxt === A.claveDia(reg.editar.fecha)) fecha = new Date(reg.editar.fecha); // conserva la hora original
     var btn = $("reg-guardar");
     btn.disabled = true;
-    var conCategoria = reg.categoriaId != null ? Promise.resolve(categoria(reg.categoriaId))
+    var conCategoria = partes ? Promise.resolve(partes[0].categoria) : reg.categoriaId != null ? Promise.resolve(categoria(reg.categoriaId))
       : categoriaPorNombre(reg.tipo === "ingreso" ? "Otros ingresos" : "Otros gastos", reg.tipo);
     var registro = reg, editar = reg.editar, otro = $("reg-otro").checked, docId = reg.documentoId;
-    var uso = usoActivoEventos();
+    var uso = usoActivoEventos(), origen = fuente, espacio = espacioId, lista = datos.movimientos;
     conCategoria.then(function (c) {
       var fila = {
         cuenta_id: Number($("reg-cuenta").value) || datos.cuentas[0].id, categoria_id: c.id, tipo: reg.tipo,
-        descripcion: $("reg-desc").value.trim() || c.nombre, monto: monto, fecha: fecha.toISOString(),
+        descripcion: $("reg-desc").value.trim() || (partes ? "Gasto dividido" : c.nombre), monto: monto, fecha: fecha.toISOString(),
         etiquetas: reg.tipo === "gasto" ? reg.etiquetas : A.etiquetasDeducible(reg.etiquetas, ""), estado: $("reg-estado").value, nota: $("reg-nota").value.trim() || null,
         moneda: reg.moneda, monto_original: ext ? montoOriginal : null, tasa: ext ? reg.tasa : null,
-        viajes: A.esGanancia(c) && parseInt($("reg-viajes").value, 10) > 0 ? Math.min(1000, parseInt($("reg-viajes").value, 10)) : null
+        viajes: !partes && A.esGanancia(c) && parseInt($("reg-viajes").value, 10) > 0 ? Math.min(1000, parseInt($("reg-viajes").value, 10)) : null
       };
       if (editar) return fuente.actualizar("movimientos", editar.id, fila).then(function (n) { Object.assign(editar, n); return { m: editar, c: c }; });
       var prog = Promise.resolve(null);
@@ -6202,26 +6402,52 @@
         if (pr) fila.programado_id = pr.p.id;
         return ubicacionActual().then(function (lugar) {
           if (lugar) { fila.lat = lugar.lat; fila.lng = lugar.lng; precargarMapa(lugar.lat, lugar.lng); }
+          if (partes) {
+            if (fila.etiquetas.indexOf("dividido") < 0) fila.etiquetas = fila.etiquetas.concat("dividido");
+            return origen.crearVarios("movimientos", partes.map(function (p) {
+              return Object.assign({}, fila, { categoria_id: p.categoria.id, monto: p.valor });
+            }));
+          }
           return fuente.crear("movimientos", fila);
-        }).then(function (m) { datos.movimientos.push(m); return { m: m, c: c, programado: pr && pr.p }; });
+        }).then(function (m) {
+          if (partes) {
+            var destino = fuente === origen && espacioId === espacio ? datos.movimientos : lista;
+            m.forEach(function (mov) { if (!destino.some(function (x) { return x.id === mov.id; })) destino.push(mov); });
+            return { m: m[0], partes: m };
+          }
+          datos.movimientos.push(m);
+          return { m: m, c: c, programado: pr && pr.p };
+        });
       });
     }).then(function (r) {
       if (!editar && r.m) registrarEventoDe(uso, "anotar", registro.via);
+      if (r.partes && (fuente !== origen || espacioId !== espacio)) return;
       ordenarMovimientos();
-      var redondeo = !editar && r.m && r.m.tipo === "gasto" ? sumarAlcancia(num(r.m.monto)) : 0;
-      if (docId) renovarDocumentoListo(docId);
-      var accion = !editar && r.m ? deshacerRegistro(r.m, redondeo) : null;
+      var redondeo = !editar && r.m && r.m.tipo === "gasto" ? sumarAlcancia(r.partes ? monto : num(r.m.monto)) : 0;
+      if (docId) renovarDocumentoListo(docId, !!r.partes);
+      var accion = !editar && r.m && !r.partes ? deshacerRegistro(r.m, redondeo) : null;
       var etiquetaDesc = r.m ? r.m.descripcion : r.programado.descripcion;
       var detalle = etiquetaDesc + (r.m && r.m.viajes ? " · " + r.m.viajes + (r.m.viajes === 1 ? " viaje" : " viajes") : "") +
         (r.programado ? " · 🔁 " + A.FRECUENCIAS[r.programado.frecuencia].toLowerCase() : "");
       var valor = dinero(monto) + (ext && !ocultos ? " · " + Mon.formatoMonto(montoOriginal, reg.moneda) : "");
-      toast(editar ? "¡Cambios guardados!" : "¡Guardado!", detalle, valor, accion, !!r.m);
+      if (r.partes) toast("¡Anotado en " + r.partes.length + " categorías!", null, null, null, true);
+      else toast(editar ? "¡Cambios guardados!" : "¡Guardado!", detalle, valor, accion, !!r.m);
       pintar();
-      if (!editar && r.m && r.m.tipo === "gasto") avisarGastoAlto(r.m);
-      if (accion) {
-        var origen = fuente, espacio = espacioId;
+      if (r.partes) {
         setTimeout(function () {
-          if (fuente !== origen || espacioId !== espacio || accion.borrando || datos.movimientos.indexOf(r.m) < 0) return;
+          if (fuente !== origen || espacioId !== espacio) return;
+          var vigentes = r.partes.filter(function (m) { return datos.movimientos.indexOf(m) >= 0; });
+          if (!vigentes.length) return;
+          avisarGastoAlto(vigentes[0]);
+          var hubo = alertaLimites(vigentes.map(function (m) { return m.categoria_id; }));
+          var inusual = vigentes.map(function (m) { return NovaConsejos.gastoInusual(m, datos.movimientos); }).find(Boolean);
+          if (inusual) setTimeout(function () { toast("Gasto fuera de lo normal", r.m.descripcion, Math.round(inusual.veces * 10) / 10 + "× lo habitual"); }, hubo ? 7000 : 0);
+        }, 5000);
+      } else if (!editar && r.m && r.m.tipo === "gasto") avisarGastoAlto(r.m);
+      if (accion) {
+        var origenAviso = fuente, espacioAviso = espacioId;
+        setTimeout(function () {
+          if (fuente !== origenAviso || espacioId !== espacioAviso || accion.borrando || datos.movimientos.indexOf(r.m) < 0) return;
           if (r.m.tipo === "ingreso") proponerApartar(r.m);
           else {
             var hubo = alertaLimites(r.m.categoria_id), raro = NovaConsejos.gastoInusual(r.m, datos.movimientos);
@@ -6230,7 +6456,7 @@
         }, accion.duracion);
       }
       if (reg !== registro || pilaCapas[pilaCapas.length - 1] !== "pantalla-registro") return;
-      if (otro && !editar) {
+      if (otro && !editar && !r.partes) {
         abrirRegistro({ tipo: registro.tipo, tandaActiva: true, tanda: registro.tanda + (r.m ? 1 : 0) });
         $("reg-monto").focus();
       } else cerrarCapa();
@@ -11610,9 +11836,10 @@
 
   // ---------- Alerta de límites: avisa al 80 % y al 100 % ----------
   function alertaLimites(categoriaId) {
+    var categorias = Array.isArray(categoriaId) ? categoriaId : [categoriaId];
     var peor = null;
     datos.limites.forEach(function (l) {
-      if (l.categoria_id != null && l.categoria_id !== categoriaId) return;
+      if (l.categoria_id != null && categorias.indexOf(l.categoria_id) < 0) return;
       var e = estadoLimite(l); if (!e.vigente || !(num(l.monto) > 0)) return;
       var p = e.gastado / num(l.monto);
       if (p >= 0.8 && (!peor || p > peor.p)) peor = { p: p, l: l, falta: num(l.monto) - e.gastado };

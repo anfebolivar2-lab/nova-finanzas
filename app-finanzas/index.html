@@ -1052,6 +1052,7 @@
     </div>
     <label for="reg-fecha">Fecha</label>
     <input id="reg-fecha" type="date" required>
+    <button type="button" id="reg-qr" class="boton-borde" hidden>Escanear QR de factura</button>
     <div id="reg-bloque-viajes" class="formulario" hidden>
       <label for="reg-viajes">¿Cuántos viajes fueron? (opcional)</label>
       <input id="reg-viajes" inputmode="numeric" maxlength="4" placeholder="Ej. 6">
@@ -1059,8 +1060,17 @@
     <label for="reg-desc">Descripción (opcional)</label>
     <input id="reg-desc" maxlength="120" placeholder="¿En qué gastaste?" list="lista-desc" autocomplete="off">
     <datalist id="lista-desc"></datalist>
-    <label>Categoría</label>
+    <div aria-live="polite">
+      <button type="button" id="reg-sugerida" class="chip-opcion" hidden><span id="reg-sugerida-texto"></span> <span class="mov-icono chico" id="reg-sugerida-icono" aria-hidden="true"></span> <span id="reg-sugerida-nombre"></span></button>
+    </div>
+    <label id="reg-categoria-etiqueta" for="reg-categoria">Categoría</label>
     <button type="button" id="reg-categoria" class="selector"><span class="mov-icono chico" id="reg-cat-icono"></span><span id="reg-cat-nombre">Seleccionar categoría</span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5l7 7-7 7"/></svg></button>
+    <button type="button" id="reg-dividir" class="boton-borde" aria-expanded="false" aria-controls="reg-partes" hidden>Dividir en varias categorías</button>
+    <div id="reg-partes" class="tarjeta formulario" hidden>
+      <div id="reg-partes-lista" class="formulario"></div>
+      <button type="button" id="reg-agregar-parte" class="boton-borde">Agregar otra parte</button>
+      <p id="reg-partes-resto" class="nota" aria-live="polite"></p>
+    </div>
     <label id="reg-cuenta-etiqueta" for="reg-cuenta">Cuenta</label>
     <select id="reg-cuenta"></select>
     <label for="reg-etiqueta">Etiquetas (opcional)</label>
@@ -1097,6 +1107,13 @@
     <button type="button" id="reg-duplicar" hidden>Duplicar</button>
     <button type="button" class="peligro" id="reg-borrar" hidden>Borrar movimiento</button>
   </form>
+  <dialog id="reg-qr-dialogo" class="tarjeta" aria-labelledby="reg-qr-titulo" style="width: min(90vw, 440px)">
+    <div class="formulario">
+      <p id="reg-qr-titulo">Apunta al código QR de la factura</p>
+      <video id="reg-qr-video" playsinline muted autoplay style="width: 100%; max-height: 50vh"></video>
+      <button type="button" id="reg-qr-cancelar" class="boton-borde" autofocus>Cancelar</button>
+    </div>
+  </dialog>
 </section>
 
 <!-- Nueva o editar categoría -->
@@ -1987,6 +2004,7 @@
 <script src="espacios.js"></script>
 <script src="respuestas.js"></script>
 <script src="herramientas.js"></script>
+<script src="factura-qr.js"></script>
 <script src="sincronizacion.js"></script>
 <script src="vendor/supabase.js"></script>
 <script src="tarjeta.js"></script>
