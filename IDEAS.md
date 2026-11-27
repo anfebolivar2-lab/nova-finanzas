@@ -54,15 +54,15 @@ Lista de funciones para ir sumando poco a poco, probadas una por una.
 ## Trabajo e impuestos (Colombia)
 
 - ⭐ Calculadora de declaración de renta: si te toca declarar según tus ingresos y patrimonio (UVT del año).
-- Retención en la fuente y aportes a salud y pensión para independientes.
-- Cuenta de cobro y factura simple para independientes, en PDF.
+- ✅ Retención en la fuente y aportes a salud y pensión para independientes.
+- ✅ Cuenta de cobro y factura simple para independientes, en PDF.
 - ✅ Prima, cesantías e intereses: cuánto te toca y cuándo. (calculadora de liquidación + aviso de junio y diciembre)
 - ✅ Modo conductor: meta de ganancia por día y por hora conectada.
 
 ## Familia y grupos
 
 - Espacios compartidos con la pareja o la familia, cada uno con su teléfono.
-- Mesada para hijos: cuánto les das y en qué se les va.
+- ✅ Mesada para hijos: cuánto les das y en qué se les va.
 - ✅ Gastos de la casa entre roommates con saldo de quién le debe a quién. (grupos con saldos)
 
 ## Seguridad y respaldo

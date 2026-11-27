@@ -22,6 +22,9 @@
     pension: { valor: 0.04, anio: 2008 }, // Ley 797 de 2003 y Decreto 4982 de 2007
     umbralSolidaridad: { valor: 4, anio: 2003 }, // Ley 797, art. 7
     solidaridad: { valor: 0.01, anio: 2003 },
+    saludIndependiente: { valor: 0.125, anio: 2007 }, // Ley 100 de 1993, art. 204, modificado por la Ley 1122 de 2007
+    pensionIndependiente: { valor: 0.16, anio: 2008 }, // Ley 797 de 2003 y Decreto 4982 de 2007
+    solidaridadIndependiente: { valor: 0.01, anio: 2003 }, // Ley 797 de 2003, art. 7
     gmf: { valor: 0.004, anio: 2014 }, // Estatuto Tributario, art. 872
     retencionCdt: { valor: 4 }, // Valor inicial de la simulación, editable según el banco
     uvt: { valor: 52374, anio: 2026 }, // Resolución DIAN 000238 de 2025
@@ -249,13 +252,34 @@
     return diferencia < 0 && saldo > 0 ? -saldo : saldo;
   }
 
+  function independiente(ingresoMes, opciones) {
+    if (!Number.isFinite(ingresoMes) || ingresoMes <= 0) return null;
+    opciones = opciones || {};
+    var retencionPct = opciones.retencionPct === undefined ? 10 : opciones.retencionPct;
+    var costos = opciones.costos === undefined ? 0 : opciones.costos;
+    var ibcPct = opciones.ibcPct === undefined ? 40 : opciones.ibcPct;
+    if (!Number.isFinite(retencionPct) || !Number.isFinite(costos) || !noNegativos([ibcPct])) return null;
+    retencionPct = Math.max(0, Math.min(100, retencionPct));
+    costos = Math.max(0, Math.min(ingresoMes, costos));
+    var minimo = CONSTANTES.salarioMinimo.valor;
+    var ibc = Math.round(Math.max(minimo, Math.min(25 * minimo, (ingresoMes - costos) * (ibcPct / 100))));
+    var salud = ibc * CONSTANTES.saludIndependiente.valor;
+    var pension = ibc * CONSTANTES.pensionIndependiente.valor;
+    var solidaridad = ibc >= CONSTANTES.umbralSolidaridad.valor * minimo ? ibc * CONSTANTES.solidaridadIndependiente.valor : 0;
+    var aportes = salud + pension + solidaridad;
+    var retencion = Math.round(ingresoMes * (retencionPct / 100));
+    var descuentos = aportes + retencion;
+    return { ibc: ibc, salud: salud, pension: pension, solidaridad: solidaridad, aportes: aportes,
+      retencion: retencion, descuentos: descuentos, neto: ingresoMes - descuentos };
+  }
+
   var api = { CONSTANTES: CONSTANTES, MAX_ANIOS: MAX_ANIOS, diasComerciales: diasComerciales, liquidacion: liquidacion,
     recargoFestivo: recargoFestivo, horasExtra: horasExtra, salarioNeto: salarioNeto, gmf: gmf,
     gmfMovimientos: gmfMovimientos, interesCompuesto: interesCompuesto, reglaCuatro: reglaCuatro,
     horasDeTrabajo: horasDeTrabajo, cuotaCredito: cuotaCredito, compararCreditos: compararCreditos,
     creditoVivienda: creditoVivienda, compraCartera: compraCartera,
     rendimientoCdt: rendimientoCdt, compararCdt: compararCdt, ahorroTributarioAporte: ahorroTributarioAporte,
-    ivaPrecio: ivaPrecio, ivaPeriodo: ivaPeriodo };
+    ivaPrecio: ivaPrecio, ivaPeriodo: ivaPeriodo, independiente: independiente };
   if (typeof module === "object" && module.exports) module.exports = api;
   else raiz.NovaCalculadoras = api;
 })(typeof window !== "undefined" ? window : this);

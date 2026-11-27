@@ -291,3 +291,45 @@ test("IVA del periodo admite saldo a favor y redondea la diferencia a pesos", ()
   assert.equal(C.ivaPeriodo(0, -1), null);
   assert.equal(C.ivaPeriodo(0, NaN), null);
 });
+
+test("independiente rechaza ingresos inválidos", () => {
+  [undefined, "4000000", NaN, Infinity, 0, -1].forEach(ingreso => {
+    assert.equal(C.independiente(ingreso), null);
+  });
+});
+
+test("independiente aplica el mínimo del IBC a ingresos bajos", () => {
+  const minimo = C.CONSTANTES.salarioMinimo.valor;
+  assert.equal(C.independiente(500000).ibc, minimo);
+});
+
+test("independiente calcula aportes y retención con la base predeterminada", () => {
+  const minimo = C.CONSTANTES.salarioMinimo.valor;
+  const r = C.independiente(4000000);
+  assert.equal(r.ibc, Math.max(minimo, 1600000));
+  cerca(r.salud, r.ibc * 0.125);
+  cerca(r.pension, r.ibc * 0.16);
+  assert.equal(r.solidaridad, 0);
+  cerca(r.aportes, r.salud + r.pension);
+  assert.equal(r.retencion, 400000);
+  cerca(r.descuentos, r.aportes + 400000);
+  cerca(r.neto, 4000000 - r.descuentos);
+  assert.equal(C.independiente(6000000, { costos: 1000000 }).ibc, 2000000);
+});
+
+test("independiente limita el IBC a 25 salarios mínimos", () => {
+  assert.equal(C.independiente(200000000).ibc, 25 * C.CONSTANTES.salarioMinimo.valor);
+});
+
+test("independiente aplica solidaridad desde cuatro salarios mínimos", () => {
+  const umbral = 4 * C.CONSTANTES.salarioMinimo.valor;
+  assert.equal(C.independiente(umbral - 1, { ibcPct: 100 }).solidaridad, 0);
+  const r = C.independiente(umbral, { ibcPct: 100 });
+  cerca(r.solidaridad, umbral * 0.01);
+  cerca(r.aportes, r.salud + r.pension + r.solidaridad);
+});
+
+test("independiente admite retención de 0 % y redondea la de 11 %", () => {
+  assert.equal(C.independiente(4000000, { retencionPct: 0 }).retencion, 0);
+  assert.equal(C.independiente(4000005, { retencionPct: 11 }).retencion, 440001);
+});
