@@ -105,6 +105,32 @@
     }).length;
   }
 
+  function factorTotpVerificado(factores) {
+    if (!Array.isArray(factores)) return null;
+    var factor = factores.find(function (f) {
+      return f && f.factor_type === "totp" && f.status === "verified" && typeof f.id === "string" && f.id;
+    });
+    return factor ? factor.id : null;
+  }
+
+  function codigoMfaValido(texto) {
+    if (typeof texto !== "string") return null;
+    var codigo = texto.replace(/[\s-]/g, "");
+    return /^[0-9]{6}$/.test(codigo) ? codigo : null;
+  }
+
+  function nuevosDesde(registros, desdeIso, ahoraMs) {
+    var anterior = fecha(desdeIso);
+    if (!Number.isFinite(anterior)) anterior = ahoraMs - 7 * DIA;
+    var lista = (Array.isArray(registros) ? registros : []).filter(function (r) {
+      if (!r || typeof r.creado !== "string" || typeof r.correo !== "string" || !r.correo ||
+          /@example\.com$/i.test(r.correo)) return false;
+      var creado = fecha(r.creado);
+      return creado > anterior && creado <= ahoraMs;
+    }).sort(function (a, b) { return fecha(b.creado) - fecha(a.creado); });
+    return { total: lista.length, lista: lista };
+  }
+
   var ayudaNumeros = Object.freeze({
     registrados: "Personas que han creado una cuenta en NOVA.",
     activos7: "Personas que abrieron NOVA en los últimos 7 días.",
@@ -255,6 +281,27 @@
     return formatoDecimal.format(bytesAMegabytes(bytes)) + " MB";
   }
 
+  function formatearBytes(valor) {
+    var bytes = typeof valor === "number" ? cantidad(valor) : 0;
+    if (bytes >= bytesPorMB) return formatoDecimal.format(bytesAMegabytes(bytes)) + " MB";
+    if (bytes >= 1000) return Math.round(bytes / 1000) + " KB";
+    return bytes + " B";
+  }
+
+  var fechaRespaldo = new Intl.DateTimeFormat("es-CO", {
+    dateStyle: "medium", timeStyle: "short", timeZone: "America/Bogota"
+  });
+
+  function resumenRespaldo(r) {
+    var creado = fecha(r && r.creado_en);
+    if (!Number.isFinite(creado)) return "Todavía no hay respaldos";
+    var filas = Object.values(r.filas || {}).reduce(function (total, n) {
+      return total + (typeof n === "number" ? cantidad(n) : 0);
+    }, 0);
+    return "Último respaldo: " + fechaRespaldo.format(creado) + " · " + formatearBytes(r.bytes) + " · " +
+      filas + (filas === 1 ? " fila" : " filas");
+  }
+
   function formatearSegundos(ms) {
     return formatoDecimal.format(ms / 1000) + " s";
   }
@@ -279,6 +326,8 @@
   }
 
   var api = {
+    factorTotpVerificado: factorTotpVerificado, codigoMfaValido: codigoMfaValido,
+    formatearBytes: formatearBytes, resumenRespaldo: resumenRespaldo, nuevosDesde: nuevosDesde,
     descargasRecientes: descargasRecientes, formatearSegundos: formatearSegundos,
     rangoDias: rangoDias, serieDiaria: serieDiaria, nuevosDesdeVisita: nuevosDesdeVisita, ayudaNumeros: ayudaNumeros,
     validarPlantilla: validarPlantilla, listarPlantillas: listarPlantillas, agregarPlantilla: agregarPlantilla,

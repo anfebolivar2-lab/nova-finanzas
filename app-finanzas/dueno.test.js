@@ -2,7 +2,8 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const { filtrarPersonas, contarFiltros, ultimos30Dias, barrasVersiones, registrosParaMeta, porcentaje, validarAviso, sugerenciasPendientes, recientes, recortarTexto,
   bytesAMegabytes, formatearTamano, tablasMasGrandes, accionesDeCuenta, confirmaCorreo, porcentajesEncuesta, validarEncuesta,
-  descargasRecientes, formatearSegundos } = require("./dueno.js");
+  descargasRecientes, formatearSegundos, factorTotpVerificado, codigoMfaValido,
+  formatearBytes, resumenRespaldo, nuevosDesde } = require("./dueno.js");
 
 test("muestra segundos con un decimal, incluso para segundos enteros", () => {
   assert.deepEqual([2300, 1000, 125].map(formatearSegundos), ["2,3 s", "1,0 s", "0,1 s"]);
@@ -264,4 +265,47 @@ test("protege los ejemplos y limita el total de plantillas a diez", () => {
   assert.deepEqual(listarPlantillas([null, {}, { titulo: "", mensaje: "Inválido" }]), ejemplos);
   ejemplos[0].titulo = "Cambiado";
   assert.equal(listarPlantillas(null)[0].titulo, "Nueva versión");
+});
+
+test("elige el primer factor TOTP verificado e ignora factores inválidos", () => {
+  const pendiente = { id: "pendiente", factor_type: "totp", status: "unverified" };
+  const telefono = { id: "otro", factor_type: "phone", status: "verified" };
+  const verificado = { id: "elegido", factor_type: "totp", status: "verified" };
+  assert.equal(factorTotpVerificado([null, pendiente, telefono, verificado]), "elegido");
+  assert.equal(factorTotpVerificado([pendiente, telefono]), null);
+  assert.equal(factorTotpVerificado({ all: [verificado] }), null);
+});
+
+test("normaliza códigos MFA con espacios y guiones y conserva ceros iniciales", () => {
+  assert.equal(codigoMfaValido(" 01- 23 45 "), "012345");
+  for (const invalido of [123456, null, "", "12345", "1234567", "123a56", "123.456"]) {
+    assert.equal(codigoMfaValido(invalido), null);
+  }
+});
+
+test("formatea el tamaño y suma solo los conteos de tablas respaldadas", () => {
+  assert.equal(formatearBytes(1200000), "1,2 MB");
+  assert.equal(formatearBytes(830000), "830 KB");
+  assert.equal(formatearBytes(12), "12 B");
+  for (const invalido of [0, -1, Infinity, NaN, null, true, {}, "830000"]) {
+    assert.equal(formatearBytes(invalido), "0 B");
+  }
+  assert.equal(resumenRespaldo(null), "Todavía no hay respaldos");
+  assert.equal(resumenRespaldo({ creado_en: "?" }), "Todavía no hay respaldos");
+  const r = { creado_en: "2026-11-26T01:40:00Z", bytes: 1200000, filas: { a: 2, b: 3, c: -1 } };
+  assert.match(resumenRespaldo(r), /^Último respaldo: .+ · 1,2 MB · 5 filas$/);
+});
+
+test("ordena registros nuevos desde la última visita, con siete días por defecto", () => {
+  const ahora = Date.parse("2026-11-27T12:00:00Z");
+  const primero = { correo: "a@nova.co", creado: "2026-11-25T12:00:00Z" };
+  const segundo = { correo: "b@nova.co", creado: "2026-11-27T12:00:00Z" };
+  const registros = Object.freeze([primero, null, segundo,
+    { correo: "prueba@EXAMPLE.com", creado: segundo.creado },
+    { correo: "c@nova.co", creado: "inválida" },
+    { correo: "d@nova.co", creado: "2026-11-28T00:00:00Z" },
+    { correo: "e@nova.co", creado: "2026-11-19T00:00:00Z" }]);
+  assert.deepEqual(nuevosDesde(registros, null, ahora), { total: 2, lista: [segundo, primero] });
+  assert.deepEqual(nuevosDesde(registros, primero.creado, ahora), { total: 1, lista: [segundo] });
+  assert.deepEqual(nuevosDesde(null, null, ahora), { total: 0, lista: [] });
 });

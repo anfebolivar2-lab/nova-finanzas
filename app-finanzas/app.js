@@ -5917,6 +5917,7 @@
     if (id === "pantalla-registro") cerrarQrFactura();
     if (id === "hoja-respaldo") limpiarClaveRespaldo();
     if (id === "pantalla-dueno") {
+      cerrarVisitaDueno();
       detenerRelojDueno();
       cerrarEtiquetaDueno();
       cerrarAyudaDueno();
@@ -8163,6 +8164,7 @@
     permisosDueno = window.NovaPermisos.permisosPanel(rol);
     panelDueno.classList.toggle("dueno-sin-acciones", !permisosDueno.actuar);
     $("dueno-rol-mensaje").hidden = rol !== "ver";
+    $("dueno-respaldo-crear").hidden = !permisosDueno.actuar;
     $("dueno-admins-seccion").hidden = !permisosDueno.gestionarAdmins;
     if (!permisosDueno.gestionarAdmins) $("dueno-admins-lista").replaceChildren();
     if (confirmacionCuenta.open && (!permisosDueno.actuar ||
@@ -8258,16 +8260,16 @@
     boton.disabled = true;
     mensaje(idMensaje, "Guardando…");
     Promise.resolve().then(function () {
-      return cliente.functions.invoke("nova-dueno", { body: cuerpo });
+      return invocarDueno(cuerpo, "No se pudo guardar el cambio. Intenta otra vez.");
     }).then(function (r) {
       if (fuente !== origen) return;
-      if (r.error || !r.data || !r.data.ok) throw new Error("No se guardó");
+      if (!r.ok) throw new Error("No se guardó");
       if (alGuardar) alGuardar();
       mensaje(idMensaje, "");
       toast(exito);
       return recargarTrasCambioDueno();
-    }).catch(function () {
-      if (fuente === origen) mensaje(idMensaje, "No se pudo guardar el cambio. Intenta otra vez.", true);
+    }).catch(function (error) {
+      if (fuente === origen && !error.cancelado) mensaje(idMensaje, error.message, true);
     }).finally(function () { boton.disabled = false; });
   }
 
@@ -8727,7 +8729,7 @@
     pintarCostosDueno(false);
 
     var nuevos = Analitica.nuevosPor(personas, ahora);
-    kpisAnaliticaDueno("dueno-nuevos", [["Hoy", nuevos.dia, "", "nuevosHoy"],
+    kpisAnaliticaDueno("dueno-nuevos-kpis", [["Hoy", nuevos.dia, "", "nuevosHoy"],
       ["Esta semana", nuevos.semana, "", "nuevosSemana"], ["Este mes", nuevos.mes, "", "nuevosMes"]]);
     pintarCrecimientoDueno(d, ahora);
 
@@ -8849,9 +8851,7 @@
 
   function pedirAccionDueno(cuerpo) {
     var fallo = "No se pudo completar la acción.";
-    return cliente.functions.invoke("nova-dueno", { body: cuerpo }).then(function (res) {
-      return datosDeFuncionDueno(res, fallo);
-    }).then(function (res) {
+    return invocarDueno(cuerpo, fallo).then(function (res) {
       if (!res.ok) throw new Error(fallo);
       return res;
     });
@@ -8881,7 +8881,7 @@
         (res.auditoria === false ? " No se pudo guardar en el historial." : ""));
       return recargarTrasCambioDueno();
     }).catch(function (error) {
-      if (origen === fuente) mensaje("dueno-admins-mensaje", error.message, true);
+      if (origen === fuente && !error.cancelado) mensaje("dueno-admins-mensaje", error.message, true);
     }).finally(function () {
       actuandoCuenta = campo.disabled = selector.disabled = boton.disabled = false;
     });
@@ -8922,7 +8922,7 @@
       toast(exito);
       return recargarTrasCambioDueno();
     }).catch(function (error) {
-      if (origen === fuente && soyDueno()) mensaje("dueno-confirmar-mensaje", error.message || fallo, true);
+      if (origen === fuente && soyDueno() && !error.cancelado) mensaje("dueno-confirmar-mensaje", error.message || fallo, true);
     }).finally(function () {
       actuandoCuenta = false;
       cancelarCuenta.disabled = correoCuenta.disabled = false;
@@ -9052,7 +9052,7 @@
       Dueno.formatearTamano(fotos.bytes) + (fotos.archivos >= 5000 ? " (conteo limitado a 5.000 archivos)" : "") : "Datos de fotos no disponibles.";
     listaDueno("dueno-salud-acciones", acciones || [], acciones ? "Todavía no hay acciones registradas." : "Historial no disponible.", function (li, fila) {
       var textos = textosCuentaDueno[fila.accion];
-      li.append(el("strong", null, textos ? textos[3] : "Acción sobre cuenta"),
+      li.append(el("strong", null, fila.accion === "respaldo_crear" ? "Respaldo de la base" : textos ? textos[3] : "Acción sobre cuenta"),
         el("p", "banco-texto", fila.correo + " · " + fechaDueno(fila.creado_en)));
     });
   }
@@ -9190,21 +9190,45 @@
       ul.append(li);
     });
   }
-  // Pide los datos del panel. Si el servidor dice que la sesión venció (401), la renueva y vuelve a intentar una vez.
-  function pedirDueno(reintento, origen, automatica) {
-    if (origen !== fuente || !panelDuenoAbierto() || (automatica && (document.hidden || !autoDueno.checked))) {
-      return Promise.resolve(null);
+  async function invocarDueno(cuerpo, fallo, reintentoMfa) {
+    var visita = visitaPendienteDueno;
+    if (!visita || !visitaDuenoActiva(visita)) throw errorDuenoCancelado();
+    var verificacion = visita.verificacion;
+    var res = await cliente.functions.invoke("nova-dueno", { body: cuerpo });
+    if (!visitaDuenoActiva(visita)) throw errorDuenoCancelado();
+    var contexto = res.error && res.error.context;
+    var estado = contexto && contexto.status;
+    var detalle = contexto && typeof contexto.json === "function" ?
+      await contexto.json().catch(function () { return null; }) : res.data;
+    if (!visitaDuenoActiva(visita)) throw errorDuenoCancelado();
+    if (estado === 401 && detalle && detalle.error === "requiere_mfa") {
+      panelDueno.classList.add("dueno-verificando");
+      if (reintentoMfa) throw new Error("No se pudo comprobar la doble verificación. Intenta otra vez.");
+      if (verificacion === visita.verificacion && !await pedirCodigoDueno(visita)) throw errorDuenoCancelado();
+      return invocarDueno(cuerpo, fallo, true);
     }
-    return cliente.functions.invoke("nova-dueno", { body: {} }).then(function (res) {
-      var estado = res.error && res.error.context && res.error.context.status;
-      if (estado === 401 && !reintento && origen === fuente && panelDuenoAbierto() &&
-          (!automatica || (!document.hidden && autoDueno.checked))) {
-        return cliente.auth.refreshSession().then(function () { return pedirDueno(true, origen, automatica); });
-      }
-      if (estado === 401 || estado === 403) { var e = new Error("sesion"); e.estado = estado; throw e; }
-      if (res.error || !res.data || typeof res.data !== "object") throw new Error("sin datos");
-      return res.data;
-    });
+    if (res.error || !res.data || typeof res.data !== "object") {
+      if (estado === 401 || estado === 403 || estado === 503) panelDueno.classList.add("dueno-verificando");
+      var error = new Error(detalle && typeof detalle.error === "string" && /\s/.test(detalle.error) ? detalle.error : fallo);
+      error.estado = estado;
+      error.reintentoMfa = reintentoMfa;
+      throw error;
+    }
+    if (visita.pintada && !retoMfaDueno) panelDueno.classList.remove("dueno-verificando");
+    return res.data;
+  }
+
+  // Si la sesión venció, se renueva y vuelve a intentar una vez.
+  async function pedirDueno(reintento, origen, automatica) {
+    if (origen !== fuente || !panelDuenoAbierto() || (automatica && (document.hidden || !autoDueno.checked))) return null;
+    try {
+      return await invocarDueno({}, "No se pudieron cargar los datos. Revisa tu conexión e intenta otra vez.");
+    } catch (error) {
+      if (error.estado !== 401 || reintento || error.reintentoMfa || origen !== fuente || !panelDuenoAbierto() ||
+          (automatica && (document.hidden || !autoDueno.checked))) throw error;
+      await cliente.auth.refreshSession();
+      return pedirDueno(true, origen, automatica);
+    }
   }
   var cargaDueno, origenCargaDueno, visitaPendienteDueno, origenPanelDueno;
   var relojDueno, actualizadoDueno = 0, proximaCargaDueno = 0;
@@ -9228,16 +9252,267 @@
     guardarLocal("nova-dueno-resumen", resumen);
     pintarModoDueno();
   }
-  function registrarVisitaDueno(personas) {
-    if (!visitaPendienteDueno || !Array.isArray(personas)) return;
-    var visita = visitaPendienteDueno;
+  function visitaDuenoActiva(visita) {
+    return !!visita && visita === visitaPendienteDueno && panelDuenoAbierto();
+  }
+
+  function errorDuenoCancelado() {
+    var error = new Error("Acción cancelada.");
+    error.cancelado = true;
+    return error;
+  }
+
+  var dialogoMfaDueno = $("dueno-mfa-dialogo");
+  var intentosMfaDueno = new Map();
+
+  async function factoresMfaDueno() {
+    var r = await cliente.auth.mfa.listFactors();
+    if (r.error || !r.data) throw new Error("No se pudo consultar la doble verificación.");
+    return Array.isArray(r.data.all) ? r.data.all : r.data.totp || [];
+  }
+
+  function cerrarCodigoDueno(verificado) {
+    var reto = retoMfaDueno;
+    if (!reto) return;
+    retoMfaDueno = null;
+    clearTimeout(reto.temporizador);
+    $("dueno-mfa-acceso-codigo").value = "";
+    if (dialogoMfaDueno.open) dialogoMfaDueno.close();
+    reto.resolver(verificado);
+  }
+
+  function cancelarCodigoDueno() {
+    cerrarCodigoDueno(false);
+    if (panelDuenoAbierto()) {
+      cerrarVisitaDueno();
+      cerrarCapa();
+      ir("inicio");
+    }
+  }
+
+  var retoMfaDueno;
+  function pintarEsperaMfaDueno(reto) {
+    clearTimeout(reto.temporizador);
+    var espera = reto.intentos.hasta - Date.now();
+    if (espera <= 0) {
+      reto.intentos.hasta = 0;
+      $("dueno-mfa-verificar").disabled = !reto.factor || Boolean(reto.intentos.enCurso);
+      return;
+    }
+    $("dueno-mfa-verificar").disabled = true;
+    mensaje("dueno-mfa-acceso-mensaje", "Espera 30 segundos antes de intentar otra vez.", true);
+    reto.temporizador = setTimeout(function () {
+      if (reto !== retoMfaDueno) return;
+      mensaje("dueno-mfa-acceso-mensaje", "");
+      pintarEsperaMfaDueno(reto);
+    }, espera);
+  }
+
+  function pedirCodigoDueno(visita) {
+    if (retoMfaDueno) return retoMfaDueno.promesa;
+    var usuario = fuente.usuarioEventos;
+    var intentos = intentosMfaDueno.get(usuario) || { fallos: 0, hasta: 0 };
+    intentosMfaDueno.set(usuario, intentos);
+    var reto = { visita: visita, intentos: intentos };
+    reto.promesa = new Promise(function (resolver) { reto.resolver = resolver; });
+    retoMfaDueno = reto;
+    $("dueno-mfa-verificar").disabled = true;
+    mensaje("dueno-mfa-acceso-mensaje", "");
+    dialogoMfaDueno.showModal();
+    factoresMfaDueno().then(function (factores) {
+      if (reto !== retoMfaDueno) return;
+      reto.factor = Dueno.factorTotpVerificado(factores);
+      if (!reto.factor) throw new Error("Sin factor");
+      pintarEsperaMfaDueno(reto);
+    }).catch(function () {
+      if (reto === retoMfaDueno) mensaje("dueno-mfa-acceso-mensaje", "No se pudo comprobar la doble verificación. Cancela e intenta otra vez.", true);
+    });
+    return reto.promesa;
+  }
+
+  $("dueno-mfa-cancelar").addEventListener("click", cancelarCodigoDueno);
+  dialogoMfaDueno.addEventListener("cancel", function (e) {
+    e.preventDefault();
+    cancelarCodigoDueno();
+  });
+  $("dueno-mfa-acceso").addEventListener("submit", async function (e) {
+    e.preventDefault();
+    var reto = retoMfaDueno, boton = $("dueno-mfa-verificar"), campo = $("dueno-mfa-acceso-codigo");
+    if (!reto || boton.disabled || !reto.factor || reto.intentos.hasta > Date.now() || reto.intentos.enCurso) return;
+    var codigo = Dueno.codigoMfaValido(campo.value);
+    if (!codigo) return mensaje("dueno-mfa-acceso-mensaje", "Escribe un código de 6 dígitos.", true);
+    reto.intentos.enCurso = boton.disabled = true;
+    try {
+      var r = await cliente.auth.mfa.challengeAndVerify({ factorId: reto.factor, code: codigo });
+      if (r.error) throw r.error;
+      reto.intentos.fallos = 0;
+      if (reto === retoMfaDueno) {
+        reto.visita.verificacion++;
+        cerrarCodigoDueno(true);
+      }
+    } catch (error) {
+      if (++reto.intentos.fallos >= 5) {
+        reto.intentos.fallos = 0;
+        reto.intentos.hasta = Date.now() + 30000;
+      }
+      if (reto === retoMfaDueno) {
+        campo.value = "";
+        campo.focus();
+        if (!reto.intentos.hasta) mensaje("dueno-mfa-acceso-mensaje", "Código incorrecto. Inténtalo otra vez.", true);
+      }
+    } finally {
+      reto.intentos.enCurso = false;
+      if (retoMfaDueno && retoMfaDueno.intentos === reto.intentos && retoMfaDueno.factor) {
+        pintarEsperaMfaDueno(retoMfaDueno);
+      }
+    }
+  });
+
+  function limpiarAltaMfaDueno() {
+    $("dueno-mfa-form").hidden = true;
+    $("dueno-mfa-qr").removeAttribute("src");
+    $("dueno-mfa-clave").textContent = "";
+    $("dueno-mfa-codigo").value = "";
+  }
+
+  async function pintarEstadoMfaDueno(visita) {
+    $("dueno-mfa-estado").textContent = "Comprobando…";
+    $("dueno-mfa-activar").hidden = true;
+    try {
+      var factores = await factoresMfaDueno();
+      if (!visitaDuenoActiva(visita)) return;
+      var activada = Boolean(Dueno.factorTotpVerificado(factores));
+      $("dueno-mfa-estado").textContent = activada ? "Activada ✅" : "No activada";
+      $("dueno-mfa-activar").hidden = activada;
+    } catch (error) {
+      if (visitaDuenoActiva(visita)) {
+        $("dueno-mfa-estado").textContent = "No se pudo consultar el estado.";
+        $("dueno-mfa-activar").hidden = false;
+      }
+    }
+  }
+
+  $("dueno-mfa-activar").addEventListener("click", async function () {
+    var visita = visitaPendienteDueno, boton = this;
+    if (!visitaDuenoActiva(visita) || visita.altaMfa || visita.activandoMfa) return;
+    visita.activandoMfa = boton.disabled = true;
+    mensaje("dueno-mfa-mensaje", "");
+    try {
+      var factores = await factoresMfaDueno();
+      if (!visitaDuenoActiva(visita)) return;
+      if (Dueno.factorTotpVerificado(factores)) return await pintarEstadoMfaDueno(visita);
+      for (var factor of factores) {
+        if (!visitaDuenoActiva(visita)) return;
+        if (!factor || factor.factor_type !== "totp" || factor.status !== "unverified" || !factor.id) continue;
+        var eliminado = await cliente.auth.mfa.unenroll({ factorId: factor.id });
+        if (eliminado.error) throw eliminado.error;
+      }
+      if (!visitaDuenoActiva(visita)) return;
+      var r = await cliente.auth.mfa.enroll({ factorType: "totp" });
+      if (r.error || !r.data || !r.data.id || !r.data.totp) throw new Error("Alta no disponible");
+      if (!visitaDuenoActiva(visita)) return;
+      var qr = r.data.totp.qr_code;
+      if (typeof qr !== "string" || !/^data:image\/svg\+xml[;,]/i.test(qr)) throw new Error("QR no disponible");
+      visita.altaMfa = r.data.id;
+      $("dueno-mfa-qr").src = qr;
+      $("dueno-mfa-clave").textContent = r.data.totp.secret;
+      $("dueno-mfa-form").hidden = false;
+      boton.hidden = true;
+      $("dueno-mfa-codigo").focus();
+    } catch (error) {
+      if (visitaDuenoActiva(visita)) mensaje("dueno-mfa-mensaje",
+        "No se pudo activar. Revisa en Supabase: Authentication → Sign In / Providers → Multi-Factor (TOTP) activado.", true);
+    } finally {
+      visita.activandoMfa = false;
+      if (visitaDuenoActiva(visita)) boton.disabled = false;
+    }
+  });
+
+  $("dueno-mfa-form").addEventListener("submit", async function (e) {
+    e.preventDefault();
+    var visita = visitaPendienteDueno, boton = $("dueno-mfa-confirmar");
+    if (!visitaDuenoActiva(visita) || !visita.altaMfa || boton.disabled) return;
+    var codigo = Dueno.codigoMfaValido($("dueno-mfa-codigo").value);
+    if (!codigo) return mensaje("dueno-mfa-mensaje", "Escribe un código de 6 dígitos.", true);
+    boton.disabled = true;
+    try {
+      var r = await cliente.auth.mfa.challengeAndVerify({ factorId: visita.altaMfa, code: codigo });
+      if (r.error) throw r.error;
+      if (!visitaDuenoActiva(visita)) return;
+      visita.altaMfa = null;
+      visita.verificacion++;
+      limpiarAltaMfaDueno();
+      mensaje("dueno-mfa-mensaje", "Doble verificación activada. Guarda tu app autenticadora: sin ella no podrás entrar al panel.");
+      await pintarEstadoMfaDueno(visita);
+    } catch (error) {
+      if (visitaDuenoActiva(visita)) mensaje("dueno-mfa-mensaje", "Código incorrecto. Inténtalo otra vez.", true);
+    } finally {
+      if (visitaDuenoActiva(visita)) boton.disabled = false;
+    }
+  });
+
+  function cerrarVisitaDueno() {
     visitaPendienteDueno = null;
-    var nuevos = Dueno.nuevosDesdeVisita(personas, visita.anterior, visita.ahora);
-    var cuadro = $("dueno-nuevas-visita");
-    cuadro.hidden = !nuevos;
-    cuadro.textContent = nuevos ? pl(nuevos, "persona nueva", "personas nuevas") +
-      " desde tu última visita (" + fechaPanel.format(new Date(visita.anterior)) + ")." : "";
-    guardarLocal(visita.clave, visita.ahora);
+    cerrarCodigoDueno(false);
+    limpiarAltaMfaDueno();
+    if (confirmacionCuenta.open) confirmacionCuenta.close();
+    panelDueno.classList.add("dueno-verificando");
+  }
+
+  function pintarRespaldoDueno(respaldo, visita) {
+    if (respaldo && (!visita.respaldo || Date.parse(respaldo.creado_en) >= Date.parse(visita.respaldo.creado_en))) {
+      visita.respaldo = respaldo;
+    }
+    $("dueno-respaldo-ultimo").textContent = Dueno.resumenRespaldo(visita.respaldo);
+  }
+
+  $("dueno-respaldo-crear").addEventListener("click", async function () {
+    var boton = this, visita = visitaPendienteDueno;
+    if (!visitaDuenoActiva(visita) || !permisosDueno.actuar || boton.disabled) return;
+    if (!confirm("¿Hacer un respaldo de la base de NOVA ahora?")) return;
+    boton.disabled = true;
+    boton.textContent = "Guardando…";
+    mensaje("dueno-respaldo-mensaje", "Guardando…");
+    try {
+      var r = await pedirAccionDueno({ accion: "respaldo_crear" });
+      if (!visitaDuenoActiva(visita)) return;
+      pintarRespaldoDueno(r.respaldo, visita);
+      mensaje("dueno-respaldo-mensaje", "Respaldo guardado");
+    } catch (error) {
+      if (visitaDuenoActiva(visita) && !error.cancelado) mensaje("dueno-respaldo-mensaje", error.message, true);
+    } finally {
+      boton.disabled = false;
+      boton.textContent = "Hacer respaldo ahora";
+    }
+  });
+
+  var horaVisitaDueno = new Intl.DateTimeFormat("es-CO", { timeStyle: "short", timeZone: "America/Bogota" });
+  var diaVisitaDueno = new Intl.DateTimeFormat("en-CA", { day: "2-digit", month: "2-digit", year: "numeric", timeZone: "America/Bogota" });
+  function fechaVisitaDueno(iso, ahora) {
+    var tiempo = Date.parse(iso);
+    if (diaVisitaDueno.format(tiempo) === diaVisitaDueno.format(ahora)) return "hoy " + horaVisitaDueno.format(tiempo);
+    if (diaVisitaDueno.format(tiempo) === diaVisitaDueno.format(ahora - 86400000)) return "ayer " + horaVisitaDueno.format(tiempo);
+    return fechaDueno(iso);
+  }
+
+  function registrarVisitaDueno(personas, visita) {
+    if (!Array.isArray(personas)) return;
+    var ahora = Date.now();
+    var registros = Dueno.personasVisibles(personas, true).map(function (p) {
+      return { correo: p.correo === "(sin correo)" ? "" : p.correo, creado: p.registro };
+    });
+    var nuevos = Dueno.nuevosDesde(registros, visita.anterior, ahora);
+    var cuadro = $("dueno-nuevos");
+    cuadro.hidden = nuevos.total === 0;
+    var periodo = Number.isFinite(Date.parse(visita.anterior)) ?
+      " desde tu última visita (" + fechaVisitaDueno(visita.anterior, ahora) + ")" : " en los últimos 7 días";
+    $("dueno-nuevos-texto").textContent = nuevos.total ?
+      "👋 " + pl(nuevos.total, "persona nueva", "personas nuevas") + periodo : "";
+    $("dueno-nuevos-lista").replaceChildren();
+    nuevos.lista.slice(0, 5).forEach(function (registro) {
+      $("dueno-nuevos-lista").append(el("li", "banco-item", registro.correo + " · " + fechaVisitaDueno(registro.creado, ahora)));
+    });
+    if (visita.clave) guardarLocal(visita.clave, new Date(ahora).toISOString());
   }
 
   function pintarActualizadoDueno() {
@@ -9250,7 +9525,8 @@
       return;
     }
     pintarActualizadoDueno();
-    if (autoDueno.checked && !cargaDueno && Date.now() >= proximaCargaDueno) cargarDueno(true);
+    if (pilaCapas[pilaCapas.length - 1] === "pantalla-dueno" && autoDueno.checked && !cargaDueno &&
+        Date.now() >= proximaCargaDueno) cargarDueno(true);
   }
   function detenerRelojDueno() {
     clearInterval(relojDueno);
@@ -9264,31 +9540,37 @@
   }
   function cargarDueno(automatica) {
     if (!panelDuenoAbierto()) return;
-    var origen = fuente;
-    if (cargaDueno) return origenCargaDueno === origen ? cargaDueno : cargaDueno.then(function () {
-      if (origen === fuente) return cargarDueno(automatica);
+    var origen = fuente, visita = visitaPendienteDueno;
+    if (cargaDueno) return origenCargaDueno === visita ? cargaDueno : cargaDueno.then(function () {
+      if (visitaDuenoActiva(visita)) return cargarDueno(automatica);
     });
-    origenCargaDueno = origen;
+    origenCargaDueno = visita;
     proximaCargaDueno = Date.now() + 60000;
     if (automatica !== true || !actualizadoDueno) mensaje("dueno-mensaje", "Cargando los datos…");
     $("dueno-recargar").disabled = true;
     cargaDueno = Promise.resolve().then(function () {
       return pedirDueno(false, origen, automatica === true);
     }).then(function (datosDueno) {
-      if (!datosDueno || origen !== fuente || !panelDuenoAbierto()) return;
+      if (!datosDueno || !visitaDuenoActiva(visita)) return;
       pintarDueno(datosDueno);
-      registrarVisitaDueno(datosDueno.personas);
+      pintarRespaldoDueno(datosDueno.respaldo && datosDueno.respaldo.ultimo, visita);
+      if (!retoMfaDueno) panelDueno.classList.remove("dueno-verificando");
+      if (!visita.pintada) {
+        registrarVisitaDueno(datosDueno.personas, visita);
+        visita.pintada = true;
+        pintarEstadoMfaDueno(visita);
+      }
       actualizadoDueno = Date.now();
       pintarActualizadoDueno();
       mensaje("dueno-mensaje", "");
     }).catch(function (e) {
-      if (origen !== fuente || !panelDuenoAbierto()) return;
-      if (e && e.estado === 401) mensaje("dueno-mensaje", "Tu sesión venció. Cierra sesión en Ajustes y vuelve a entrar con tu correo.", true);
+      if (!visitaDuenoActiva(visita) || e.cancelado) return;
+      if (e.estado === 401) mensaje("dueno-mensaje", "Tu sesión venció. Cierra sesión en Ajustes y vuelve a entrar con tu correo.", true);
       else if (e && e.estado === 403) {
         pintarPermisosDueno();
         mensaje("dueno-mensaje", "Esta cuenta no tiene acceso al panel.", true);
       }
-      else mensaje("dueno-mensaje", "No se pudieron cargar los datos. Revisa tu conexión e intenta otra vez.", true);
+      else mensaje("dueno-mensaje", e.message, true);
     }).finally(function () {
       cargaDueno = origenCargaDueno = null;
       $("dueno-recargar").disabled = false;
@@ -9303,9 +9585,23 @@
   }
   function abrirPanelDueno() {
     if (!soyDueno() || !panelDueno.hidden) return;
-    var clave = "nova-dueno-ultima-visita:" + fuente.usuarioEventos;
-    visitaPendienteDueno = { clave: clave, anterior: leerLocal(clave, null), ahora: Date.now() };
-    $("dueno-nuevas-visita").hidden = true;
+    var identidad = leerLocal("nova-identidad", {}) || {};
+    var correo = identidad.id === fuente.usuarioEventos && typeof identidad.email === "string" ? identidad.email.trim().toLowerCase() : "";
+    var clave = correo ? "nova-dueno-visita:" + correo : "";
+    var anterior = clave ? leerLocal(clave, null) : null;
+    if (!anterior) {
+      var anteriorGuardada = leerLocal("nova-dueno-ultima-visita:" + fuente.usuarioEventos, null);
+      if (typeof anteriorGuardada === "number" && Number.isFinite(new Date(anteriorGuardada).getTime())) {
+        anterior = new Date(anteriorGuardada).toISOString();
+      }
+    }
+    visitaPendienteDueno = { clave: clave, anterior: anterior, verificacion: 0 };
+    panelDueno.classList.add("dueno-verificando");
+    $("dueno-nuevos").hidden = true;
+    $("dueno-mfa-activar").disabled = false;
+    $("dueno-mfa-confirmar").disabled = false;
+    mensaje("dueno-mfa-mensaje", "");
+    mensaje("dueno-respaldo-mensaje", "");
     pintarPlantillasDueno();
     origenPanelDueno = fuente;
     abrirCapa("pantalla-dueno");
@@ -9313,6 +9609,7 @@
     sincronizarRelojDueno();
   }
   function limpiarSesionDueno() {
+    cerrarVisitaDueno();
     detenerRelojDueno();
     pintarPermisosDueno();
     mensaje("dueno-admins-mensaje", "");

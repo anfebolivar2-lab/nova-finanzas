@@ -292,7 +292,7 @@ Ideas para el panel del dueño. El panel muestra cómo se usa la app, nunca los 
 - ✅ Estado de Supabase (base de datos y funciones).
 - ✅ Estado de Vercel (la página web) y de la última publicación.
 - ✅ Tiempo de carga de la app.
-- Funciones de Supabase: llamadas, errores y tiempo de respuesta.
+- ✅ Funciones de Supabase: llamadas, errores y tiempo de respuesta (la IA, desde las apps).
 - ✅ Espacio usado en la base de datos y en el almacenamiento.
 - ✅ Fotos de recibos guardadas y su tamaño total.
 - ✅ Fuente de las tasas de cambio que está funcionando (Fawaz, TRM, respaldo).
@@ -309,7 +309,7 @@ Ideas para el panel del dueño. El panel muestra cómo se usa la app, nunca los 
 - ✅ Plantillas de mensajes.
 - ✅ Historial de avisos enviados y cuántos los vieron.
 - ✅ Programar un aviso para una fecha.
-- Notificación al dueño cuando se registra alguien nuevo.
+- ✅ Aviso en el panel de las personas nuevas desde tu última visita (sin correos).
 
 ## Seguridad y control
 
@@ -319,8 +319,8 @@ Ideas para el panel del dueño. El panel muestra cómo se usa la app, nunca los 
 - Ver inicios de sesión sospechosos (muchos intentos fallidos).
 - ✅ Cerrar la sesión de un usuario en todos sus dispositivos.
 - ✅ Varios administradores con permisos distintos (solo ver, o ver y actuar).
-- Doble verificación para entrar al panel.
-- Respaldo de la base de datos con un botón y la fecha del último.
+- ✅ Doble verificación para entrar al panel (código de una app autenticadora).
+- ✅ Respaldo de la base de datos con un botón y la fecha del último (se guarda en un espacio privado de Supabase).
 - ✅ Que borrar algo pida doble confirmación, y que siempre haya papelera.
 - ✅ Pedir PIN otra vez antes de las acciones delicadas.
 
