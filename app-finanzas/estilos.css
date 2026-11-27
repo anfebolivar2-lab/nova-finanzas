@@ -1186,9 +1186,27 @@ button.mini { padding: 6px 12px; border-radius: 999px; font-size: .8rem; }
   }
 }
 
-:root[data-acento="azul"] { --r-avatar: #175ca3; }
-:root[data-acento="morado"] { --r-avatar: #7145b4; }
-:root[data-acento="naranja"] { --r-avatar: #9a4811; }
+/* Color a elección (Ajustes): el verde de NOVA es el de siempre; estos cambian el acento de toda la app */
+:root[data-acento="azul"] { --accent: #4aa8ff; --accent-ink: #04101f; --accent-soft: rgba(74,168,255,.14); --glow: rgba(74,168,255,.35); --positivo: #4aa8ff; --r-avatar: #175ca3;
+  --hero: radial-gradient(120% 140% at 85% 15%, rgba(74,168,255,.30), transparent 55%), linear-gradient(160deg, #141a16, #0b0e0c); }
+:root[data-acento="morado"] { --accent: #b48cff; --accent-ink: #120a24; --accent-soft: rgba(180,140,255,.14); --glow: rgba(180,140,255,.35); --positivo: #b48cff; --r-avatar: #5f35b0;
+  --hero: radial-gradient(120% 140% at 85% 15%, rgba(180,140,255,.30), transparent 55%), linear-gradient(160deg, #141a16, #0b0e0c); }
+:root[data-acento="naranja"] { --accent: #ff9a3c; --accent-ink: #1f0e00; --accent-soft: rgba(255,154,60,.14); --glow: rgba(255,154,60,.35); --positivo: #ff9a3c; --r-avatar: #9a4811;
+  --hero: radial-gradient(120% 140% at 85% 15%, rgba(255,154,60,.30), transparent 55%), linear-gradient(160deg, #141a16, #0b0e0c); }
+:root[data-theme="claro"][data-acento="azul"] { --accent: #1c78d4; --accent-ink: #ffffff; --accent-soft: rgba(28,120,212,.12); --glow: rgba(28,120,212,.18); --positivo: #1c78d4; --r-acento-texto: #175ca3; --r-avatar: #175ca3;
+  --hero: radial-gradient(120% 140% at 80% 20%, #4a9be0, transparent 60%), linear-gradient(140deg, #a9d3f7, #5fa8e8); --hero-ink: #0a1f33; }
+:root[data-theme="claro"][data-acento="morado"] { --accent: #7a4fd6; --accent-ink: #ffffff; --accent-soft: rgba(122,79,214,.12); --glow: rgba(122,79,214,.18); --positivo: #7a4fd6; --r-acento-texto: #5f35b0; --r-avatar: #5f35b0;
+  --hero: radial-gradient(120% 140% at 80% 20%, #9b79e0, transparent 60%), linear-gradient(140deg, #cdbcf5, #9d7fe2); --hero-ink: #1c0d33; }
+:root[data-theme="claro"][data-acento="naranja"] { --accent: #d9731a; --accent-ink: #ffffff; --accent-soft: rgba(217,115,26,.12); --glow: rgba(217,115,26,.18); --positivo: #d9731a; --r-acento-texto: #9a4811; --r-avatar: #9a4811;
+  --hero: radial-gradient(120% 140% at 80% 20%, #e8923f, transparent 60%), linear-gradient(140deg, #f8cfa0, #ee9a4a); --hero-ink: #2b1300; }
+@media (prefers-color-scheme: light) {
+  :root[data-theme="sistema"][data-acento="azul"] { --accent: #1c78d4; --accent-ink: #ffffff; --accent-soft: rgba(28,120,212,.12); --glow: rgba(28,120,212,.18); --positivo: #1c78d4; --r-acento-texto: #175ca3; --r-avatar: #175ca3;
+    --hero: radial-gradient(120% 140% at 80% 20%, #4a9be0, transparent 60%), linear-gradient(140deg, #a9d3f7, #5fa8e8); --hero-ink: #0a1f33; }
+  :root[data-theme="sistema"][data-acento="morado"] { --accent: #7a4fd6; --accent-ink: #ffffff; --accent-soft: rgba(122,79,214,.12); --glow: rgba(122,79,214,.18); --positivo: #7a4fd6; --r-acento-texto: #5f35b0; --r-avatar: #5f35b0;
+    --hero: radial-gradient(120% 140% at 80% 20%, #9b79e0, transparent 60%), linear-gradient(140deg, #cdbcf5, #9d7fe2); --hero-ink: #1c0d33; }
+  :root[data-theme="sistema"][data-acento="naranja"] { --accent: #d9731a; --accent-ink: #ffffff; --accent-soft: rgba(217,115,26,.12); --glow: rgba(217,115,26,.18); --positivo: #d9731a; --r-acento-texto: #9a4811; --r-avatar: #9a4811;
+    --hero: radial-gradient(120% 140% at 80% 20%, #e8923f, transparent 60%), linear-gradient(140deg, #f8cfa0, #ee9a4a); --hero-ink: #2b1300; }
+}
 
 body.app-visible { background: var(--r-fondo); }
 .app { padding-bottom: calc(112px + env(safe-area-inset-bottom)); }

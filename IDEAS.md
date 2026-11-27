@@ -76,7 +76,8 @@ Lista de funciones para ir sumando poco a poco, probadas una por una.
 
 - ✅ Modo sencillo con letra grande y solo lo básico (para papás y abuelos).
 - Hablarle a NOVA sin tocar la pantalla: «Oye NOVA, gasté 5 mil en pan».
-- Temas de colores y el ícono de la app a elección.
+- ✅ Temas de colores a elección: verde (el de siempre), azul, morado y naranja, en claro y oscuro.
+- Ícono de la app a elección (necesita una APK nueva).
 - ✅ Tutorial corto la primera vez que abres cada pantalla.
 
 # 100 ideas nuevas (noviembre 2026)
