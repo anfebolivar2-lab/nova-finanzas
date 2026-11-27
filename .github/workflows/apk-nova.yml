@@ -89,6 +89,16 @@ jobs:
           sed -i '0,/<\/activity>/s#</activity>#    <intent-filter>\n                <action android:name="android.intent.action.SEND" />\n                <category android:name="android.intent.category.DEFAULT" />\n                <data android:mimeType="text/plain" />\n            </intent-filter>\n        </activity>#' android/app/src/main/AndroidManifest.xml
           grep -q 'android.intent.action.SEND' android/app/src/main/AndroidManifest.xml
           grep -q 'onNewIntent' android/app/src/main/java/co/novafinanzas/app/MainActivity.java
+          # Compartir pantallazos (Nequi, Daviplata…): NOVA también aparece en el menú Compartir de Android para imágenes
+          sed -i '0,/<\/activity>/s#</activity>#    <intent-filter>\n                <action android:name="android.intent.action.SEND" />\n                <category android:name="android.intent.category.DEFAULT" />\n                <data android:mimeType="image/*" />\n            </intent-filter>\n        </activity>#' android/app/src/main/AndroidManifest.xml
+          grep -q 'android:mimeType="image/\*"' android/app/src/main/AndroidManifest.xml
+          # Entrar con la huella o la cara: plugin propio de NOVA con la librería oficial de Android (androidx.biometric)
+          cp recursos/java/NovaHuellaPlugin.java android/app/src/main/java/co/novafinanzas/app/NovaHuellaPlugin.java
+          sed -i 's#<uses-permission android:name="android.permission.INTERNET" />#&\n    <uses-permission android:name="android.permission.USE_BIOMETRIC" />#' android/app/src/main/AndroidManifest.xml
+          grep -q USE_BIOMETRIC android/app/src/main/AndroidManifest.xml
+          sed -i '0,/^dependencies {/s//dependencies {\n    implementation "androidx.biometric:biometric:1.1.0"/' android/app/build.gradle
+          grep -q 'androidx.biometric:biometric:1.1.0' android/app/build.gradle
+          grep -q "registerPlugin(NovaHuellaPlugin.class)" android/app/src/main/java/co/novafinanzas/app/MainActivity.java
           # Atajo «Nuevo gasto»: al mantener presionado el ícono de NOVA (Android 7.1 o más nuevo) abre la pantalla de anotar un gasto
           sed -i '0,/<\/activity>/s#</activity>#    <meta-data android:name="android.app.shortcuts" android:resource="@xml/shortcuts" />\n        </activity>#' android/app/src/main/AndroidManifest.xml
           grep -q 'android.app.shortcuts' android/app/src/main/AndroidManifest.xml
@@ -136,6 +146,7 @@ jobs:
           sed -i 's#</application>#    <service android:name=".BancoListener" android:label="NOVA" android:exported="true" android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE">\n            <intent-filter>\n                <action android:name="android.service.notification.NotificationListenerService" />\n            </intent-filter>\n        </service>\n    </application>#' android/app/src/main/AndroidManifest.xml
           grep -q 'android:name=".BancoListener"' android/app/src/main/AndroidManifest.xml
           grep -q "registerPlugin(NovaBancoPlugin.class)" "$J/MainActivity.java"
+          grep -q "registerPlugin(NovaHuellaPlugin.class)" "$J/MainActivity.java"
           # La app avanzada sabe que lo es: al buscar actualizaciones baja la avanzada y muestra el permiso de notificaciones
           echo '{"versionCode": ${{ env.NOVA_VERSION }}, "versionName": "1.${{ env.NOVA_VERSION }}", "variante": "avanzada"}' > android/app/src/main/assets/public/version-app.json
           cd android
