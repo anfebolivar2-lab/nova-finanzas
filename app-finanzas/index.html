@@ -60,6 +60,11 @@
     #splash, #splash::before, #splash svg { animation: none; transition: none; }
   }
 </style>
+<script>
+  try {
+    if (JSON.parse(localStorage.getItem("nova-modo-sencillo")) === true) document.documentElement.classList.add("sencillo");
+  } catch (e) { /* El dispositivo puede bloquear el almacenamiento. */ }
+</script>
 <link rel="stylesheet" href="estilos.css">
 <link rel="icon" type="image/png" href="iconos/favicon.png">
 <link rel="apple-touch-icon" href="iconos/apple-touch-icon.png">
@@ -385,6 +390,20 @@
         <div id="grafico-semana-acciones"></div>
       </article>
 
+      <template id="no-gastar-formulario">
+        <form class="formulario">
+          <label for="no-gastar-categoria">¿En qué quieres NO gastar?</label>
+          <select id="no-gastar-categoria" required></select>
+          <label for="no-gastar-dias">¿Cuántos días?</label>
+          <select id="no-gastar-dias">
+            <option value="3">3 días</option>
+            <option value="7">7 días</option>
+            <option value="14">14 días</option>
+            <option value="30">30 días</option>
+          </select>
+          <button type="submit" id="no-gastar-empezar" class="primario">Empezar reto</button>
+        </form>
+      </template>
       <div id="widgets-inicio" class="widgets"></div>
 
       <div class="inf-barra"><span>Descargar informe</span><span class="inf-iconos"><button type="button" class="inf-ico" data-informe="pdf" data-ctx="inicio" aria-label="Descargar informe en PDF"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 2h8l5 5v13a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2z" fill="#e5483d"/><path d="M14 2v5h5" fill="#f2a29c"/><text x="12" y="17" text-anchor="middle" font-size="6.2" font-weight="800" fill="#fff" font-family="Arial,sans-serif">PDF</text></svg></button><button type="button" class="inf-ico" data-informe="excel" data-ctx="inicio" aria-label="Descargar informe en Excel"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 2h8l5 5v13a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2z" fill="#1f9d55"/><path d="M14 2v5h5" fill="#8fd1ac"/><text x="12" y="17" text-anchor="middle" font-size="6.2" font-weight="800" fill="#fff" font-family="Arial,sans-serif">XLS</text></svg></button></span></div>
@@ -701,7 +720,7 @@
       <div class="menu">
         <button type="button" id="btn-invitar" data-ir="ajustes-invitar" hidden><span class="menu-icono">↗</span><span><strong>Invita a un amigo</strong></span></button>
         <button type="button" id="btn-sugerencia"><span class="menu-icono" aria-hidden="true">💬</span><strong>Enviar una sugerencia</strong></button>
-        <a class="menu-fila" href="ayuda.html" target="_blank" rel="noopener"><span class="menu-icono" aria-hidden="true">❔</span><span>Ayuda y preguntas frecuentes</span></a>
+        <a class="menu-fila" href="ayuda.html" target="_blank" rel="noopener"><span class="menu-icono" aria-hidden="true">❔</span><span><strong>Ayuda y preguntas frecuentes</strong><small>Modo sencillo: letra grande y solo lo básico</small></span></a>
         <a class="menu-fila" href="inicio.html" target="_blank" rel="noopener"><span class="menu-icono" aria-hidden="true">✦</span><span>Sobre NOVA</span></a>
         <a class="menu-fila" href="privacidad.html" target="_blank" rel="noopener"><span class="menu-icono" aria-hidden="true">🛡</span><span>Política de privacidad</span></a>
       </div>
@@ -801,6 +820,7 @@
         <label class="menu-fila sub"><span class="menu-icono">⏰</span><span><strong>Hora del aviso</strong></span><select id="rec-noche-hora" aria-label="Hora del aviso"><option value="19">7 p. m.</option><option value="20">8 p. m.</option><option value="21">9 p. m.</option><option value="22">10 p. m.</option><option value="23">11 p. m.</option></select></label>
         <label class="menu-fila"><span class="menu-icono">⚡</span><span><strong>Teclas rápidas en la notificación</strong><small>Una notificación con botones para anotar tus registros comunes de un toque</small></span><input type="checkbox" id="rec-rapido" class="interruptor"></label>
         <label class="menu-fila"><span class="menu-icono">💾</span><span><strong>Respaldo semanal</strong><small>Cada domingo a las 6 p. m. un aviso para guardar tu copia en Drive</small></span><input type="checkbox" id="rec-respaldo" class="interruptor"></label>
+        <label class="menu-fila" for="modo-sencillo"><span class="menu-icono" aria-hidden="true">Aa</span><span><strong>Modo sencillo</strong><small>Letra más grande y solo lo básico: balance, anotar un gasto y tus movimientos. Lo apagas aquí cuando quieras.</small></span><input type="checkbox" id="modo-sencillo" class="interruptor" role="switch"></label>
         <label class="menu-fila" for="aviso-gasto-alto"><span class="menu-icono" aria-hidden="true">🔔</span><span><strong>Avisarme si el gasto del día es muy alto</strong><small>Te avisamos en silencio cuando hoy llevas el doble de tu día normal. Solo funciona en la app instalada.</small></span><input type="checkbox" id="aviso-gasto-alto" class="interruptor" role="switch"></label>
         <label class="menu-fila"><span class="menu-icono">🎁</span><span><strong>Prima y aguinaldo</strong><small>Un aviso en junio y diciembre para apartar plata</small></span><input type="checkbox" id="rec-prima" class="interruptor"></label>
         <label class="menu-fila"><span class="menu-icono">🔔</span><span><strong>Antes de un pago programado</strong><small>Un aviso el día anterior</small></span><input type="checkbox" id="rec-programados" class="interruptor"></label>

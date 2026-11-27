@@ -86,6 +86,10 @@
   function gastoEnMonedaBase(m, moneda) {
     if (!m || m.tipo !== "gasto" || m.borrado || m.estado === "borrado" || m.transferencia ||
         (Array.isArray(m.etiquetas) && m.etiquetas.indexOf("deuda") !== -1)) return false;
+    return monedaDeGastoValida(m, moneda);
+  }
+
+  function monedaDeGastoValida(m, moneda) {
     // Los gastos convertidos ya guardan en monto el valor en la moneda del espacio.
     return !m.moneda || m.moneda === moneda || (Number(m.tasa) > 0 && Number(m.monto_original) > 0);
   }
@@ -140,6 +144,58 @@
     var veces = Math.round(total / promedio * 10) / 10;
     var factor = opciones.factor == null ? 2 : opciones.factor;
     return veces >= factor ? { total: total, promedio: promedio, veces: veces } : null;
+  }
+
+  function moverDiaLocal(dia, dias) {
+    var fecha = new Date(dia + "T12:00:00");
+    fecha.setDate(fecha.getDate() + dias);
+    return Analisis.claveDia(fecha);
+  }
+
+  function gastosDeCategoria(movimientos, categoriaId, desde, hasta, moneda) {
+    var gastos = [];
+    (movimientos || []).forEach(function (m) {
+      if (!m || m.tipo !== "gasto" || m.categoria_id !== categoriaId || m.borrado ||
+          m.estado === "borrado" || m.transferencia || !m.fecha ||
+          !monedaDeGastoValida(m, moneda)) return;
+      var dia = Analisis.fechaAnotada(m.fecha), monto = Number(m.monto);
+      if (dia >= desde && dia < hasta && Number.isFinite(monto) && monto > 0) {
+        gastos.push({ dia: dia, monto: monto });
+      }
+    });
+    return gastos;
+  }
+
+  function estadoRetoNoGastar(reto, movimientos, hoy, moneda) {
+    var dia = Analisis.fechaAnotada(hoy);
+    var fin = moverDiaLocal(reto.desde, reto.dias);
+    var rotoEl = null;
+    if (dia >= reto.desde) {
+      gastosDeCategoria(movimientos, reto.categoria_id, reto.desde, fin, moneda || "COP").forEach(function (g) {
+        if (!rotoEl || g.dia < rotoEl) rotoEl = g.dia;
+      });
+    }
+    var estado = rotoEl ? "roto" : dia >= fin ? "cumplido" : "activo";
+    var limite = rotoEl || (dia < fin ? dia : fin);
+    var diasLimpios = 0;
+    while (diasLimpios < reto.dias && moverDiaLocal(reto.desde, diasLimpios) < limite) diasLimpios++;
+    var promedio = Number.isFinite(reto.promedioDia) && reto.promedioDia > 0 ? reto.promedioDia : 0;
+    return { estado: estado, diasTotal: reto.dias, diasLimpios: diasLimpios,
+      diasRestantes: estado === "activo" ? reto.dias - diasLimpios : 0,
+      rotoEl: rotoEl, ahorrado: diasLimpios * promedio };
+  }
+
+  function promedioDiarioCategoria(movimientos, categoriaId, desdeIso, dias, moneda) {
+    if (dias === undefined) dias = 30;
+    if (!Number.isInteger(dias) || dias <= 0) return 0;
+    var gastos = gastosDeCategoria(movimientos, categoriaId, moverDiaLocal(desdeIso, -dias), desdeIso, moneda || "COP");
+    return Math.round(gastos.reduce(function (suma, g) { return suma + g.monto; }, 0) / dias);
+  }
+
+  function widgetsVisiblesSencillo(ids) {
+    // Los cuatro bloques básicos están en el HTML de Inicio.
+    var basicos = ["saldo-total", "tarjeta-seguro", "form-rapido", "lista-inicio"];
+    return ids.filter(function (id) { return basicos.indexOf(id) >= 0; });
   }
 
   function cuotasVsIngresos(movimientos, categorias, ahora, opciones) {
@@ -211,6 +267,8 @@
   var api = { simular: simular, actualizarNotas: actualizarNotas, enNoMolestar: enNoMolestar, horaAviso: horaAviso,
     referenciaAvisos: referenciaAvisos, gastoAltoDelDia: gastoAltoDelDia, cuotasVsIngresos: cuotasVsIngresos, fechaDeMeta: fechaDeMeta,
     alcanzaDeseo: alcanzaDeseo, gastosHormigaTop: gastosHormigaTop, repartirGasto: repartirGasto,
+    estadoRetoNoGastar: estadoRetoNoGastar, promedioDiarioCategoria: promedioDiarioCategoria,
+    widgetsVisiblesSencillo: widgetsVisiblesSencillo,
     repartoSugerido: repartoSugerido, categoriaSugeridaPorComercio: categoriaSugeridaPorComercio };
   if (typeof module === "object" && module.exports) module.exports = api;
   else raiz.NovaHerramientas = api;
