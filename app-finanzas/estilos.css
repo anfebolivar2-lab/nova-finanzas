@@ -1109,6 +1109,9 @@ button.mini { padding: 6px 12px; border-radius: 999px; font-size: .8rem; }
 .nota-nova-texto { white-space: pre-wrap; overflow-wrap: anywhere; }
 
 /* Controles del panel del dueño */
+#pantalla-dueno.dueno-verificando > :not(.sub-cabecera, #dueno-mensaje, #dueno-mfa-dialogo, #dueno-recargar) { display: none; }
+#dueno-mfa-clave { overflow-wrap: anywhere; }
+#dueno-mfa-qr { max-width: 100%; object-fit: contain; }
 #pantalla-dueno.dueno-resumen > :not(.dueno-en-resumen) { display: none; }
 .dueno-controles { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
 .dueno-controles select { width: auto; }

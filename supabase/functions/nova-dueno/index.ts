@@ -1,4 +1,4 @@
-// nova-dueno v12: panel del dueño de NOVA. Cuenta cuántas personas se registraron, cuántas la usan, cuántas veces se
+// nova-dueno v13: panel del dueño de NOVA. Cuenta cuántas personas se registraron, cuántas la usan, cuántas veces se
 // descargó la APK y qué funciones usan. Responde a dueños y administradores autorizados.
 // Por privacidad NO devuelve montos ni movimientos de nadie: solo cuántos hay y cuándo se usó la app.
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
@@ -82,8 +82,12 @@ async function usuarios(): Promise<Usuario[]> {
 // Lee solo las columnas pedidas, de a 1.000 filas (el máximo de Supabase por consulta).
 async function filas(tabla: string, columnas: string): Promise<Record<string, unknown>[]> {
   const todas: Record<string, unknown>[] = [];
-  for (let desde = 0; desde < 200_000; desde += 1000) {
-    const r = await fetch(`${URL_SB}/rest/v1/${tabla}?select=${columnas}`, { headers: { ...adm, Range: `${desde}-${desde + 999}`, "Range-Unit": "items" } });
+  for (let desde = 0; columnas === "*" || desde < 200_000; desde += 1000) {
+    const url = `${URL_SB}/rest/v1/${tabla}?select=${columnas}`;
+    const r = columnas === "*"
+      ? await fetch(`${url}&limit=1000&offset=${desde}`, { headers: adm })
+      : await fetch(url, { headers: { ...adm, Range: `${desde}-${desde + 999}`, "Range-Unit": "items" } });
+    if (columnas === "*" && r.status === 416 && desde > 0 && r.headers.get("Content-Range") === `*/${desde}`) break;
     if (!r.ok) throw new Error(tabla + " " + r.status);
     const lote = await r.json();
     todas.push(...lote);
@@ -157,6 +161,32 @@ async function rolPanel(id: string): Promise<RolPanel | null> {
   return rol === "ver" || rol === "actuar" ? rol : null;
 }
 
+async function exigeMfa(userId: string): Promise<boolean> {
+  const r = await fetch(`${URL_SB}/auth/v1/admin/users/${encodeURIComponent(userId)}`, {
+    headers: adm, signal: AbortSignal.timeout(6000),
+  });
+  if (!r.ok) throw new Error("No se pudo consultar el usuario de Auth.");
+  const usuario = await r.json();
+  if (!usuario || usuario.id !== userId || (usuario.factors != null && !Array.isArray(usuario.factors))) {
+    throw new Error("Respuesta de Auth inesperada.");
+  }
+  return (usuario.factors ?? []).some((factor: { factor_type?: string; status?: string } | null) =>
+    factor?.factor_type === "totp" && factor.status === "verified");
+}
+
+function aalDelToken(authorization: string): "aal1" | "aal2" {
+  try {
+    const partes = /^Bearer ([^ .]+)\.([A-Za-z0-9_-]+)\.([^ .]+)$/i.exec(authorization);
+    if (!partes) return "aal1";
+    const base64 = partes[2].replace(/-/g, "+").replace(/_/g, "/");
+    const bytes = Uint8Array.from(atob(base64), (letra) => letra.charCodeAt(0));
+    const payload = JSON.parse(new TextDecoder().decode(bytes));
+    return payload?.aal === "aal2" ? "aal2" : "aal1";
+  } catch {
+    return "aal1";
+  }
+}
+
 async function auditarAccion(dueno: string, accion: string, id: string) {
   return await rest("fin_dueno_acciones", {
     method: "POST",
@@ -164,6 +194,61 @@ async function auditarAccion(dueno: string, accion: string, id: string) {
     signal: AbortSignal.timeout(6000),
     body: JSON.stringify({ dueno_id: dueno, accion, objetivo_id: id }),
   }).then((r) => r.ok).catch(() => false);
+}
+
+const TABLAS_RESPALDO = [
+  "fin_cuentas", "fin_categorias", "fin_movimientos", "fin_metas", "fin_perfiles", "fin_frecuentes",
+  "fin_codigos", "fin_programados", "fin_limites", "fin_conversaciones", "fin_documentos", "fin_deudas",
+  "fin_abonos", "fin_grupos", "fin_gastos_grupo", "fin_aportes_grupo", "fin_historial", "fin_espacios",
+  "fin_sugerencias", "fin_errores", "fin_avisos", "fin_config", "fin_dueno_accesos", "fin_dueno_acciones",
+  "fin_eventos", "fin_encuestas", "fin_respuestas", "fin_avisos_vistos", "fin_admins", "fin_descargas_dia",
+];
+
+async function crearRespaldo(dueno: string): Promise<Response> {
+  const creado = new Date().toISOString();
+  const cabecera = `{"version":1,"creado":${JSON.stringify(creado)},"tablas":{`;
+  const partes: string[] = [];
+  const conteos: Record<string, number> = {};
+  const codificador = new TextEncoder();
+  let bytes = codificador.encode(cabecera).length + 2;
+  for (const tabla of TABLAS_RESPALDO) {
+    const datos = await filas(tabla, "*").catch(() => null);
+    conteos[tabla] = datos ? datos.length : -1;
+    if (!datos) continue;
+    const parte = `${JSON.stringify(tabla)}:${JSON.stringify(datos)}`;
+    bytes += codificador.encode(parte).length + Number(partes.length > 0);
+    if (bytes > 40_000_000) return responder(413, { error: "El respaldo es demasiado grande para guardarlo aquí." });
+    partes.push(parte);
+  }
+  const ruta = "nova-" + creado.slice(0, 19).replace("T", "-").replace(/:/g, "") + ".json";
+  const subida = await fetch(`${URL_SB}/storage/v1/object/respaldos/${ruta}`, {
+    method: "POST",
+    headers: { ...adm, "Content-Type": "application/json" },
+    body: cabecera + partes.join(",") + "}}",
+  }).catch(() => null);
+  if (!subida?.ok) return responder(502, { error: "No se pudo guardar el archivo de respaldo. Intenta otra vez." });
+  const guardado = await rest("fin_respaldos?select=creado_en,bytes,filas", {
+    method: "POST", headers: { Prefer: "return=representation" },
+    body: JSON.stringify({ ruta, bytes, filas: conteos, creado_por: dueno }),
+  }).catch(() => null);
+  if (!guardado?.ok) return responder(502, { error: "Se guardó el archivo, pero no se pudo registrar el respaldo." });
+  const [{ creado_en }] = await guardado.json();
+  // Quién lo hizo y cuándo queda en fin_respaldos (fin_dueno_acciones solo admite acciones sobre cuentas).
+  return responder(200, { ok: true, respaldo: { creado_en, bytes, filas: conteos } });
+}
+
+async function estadoRespaldo() {
+  const [ultimo, total] = await Promise.all([
+    rest("fin_respaldos?select=creado_en,bytes,filas&order=creado_en.desc,id.desc&limit=1", {
+      signal: AbortSignal.timeout(6000),
+    }).then(async (r) => {
+      if (!r.ok) throw new Error("Último respaldo no disponible.");
+      const [fila] = await r.json();
+      return fila ?? null;
+    }),
+    conteoExacto("fin_respaldos?select=id&limit=1").catch(() => null),
+  ]);
+  return { ultimo, total };
 }
 
 async function gestionarAdmin(accion: string, cuerpo: Record<string, unknown>, dueno: string) {
@@ -259,6 +344,7 @@ async function actuarSobreCuenta(accion: string, objetivo: unknown, dueno: strin
 }
 
 async function accionDueno(accion: string, cuerpo: Record<string, unknown>, dueno: string): Promise<Response | null> {
+  if (accion === "respaldo_crear") return crearRespaldo(dueno);
   if (ACCIONES_CUENTA.includes(accion)) return actuarSobreCuenta(accion, cuerpo.id, dueno);
   if (accion === "encuesta_crear") {
     const pregunta = typeof cuerpo.pregunta === "string" ? cuerpo.pregunta.trim() : "";
@@ -512,6 +598,7 @@ async function encuestasPanel() {
 // Datos extra del panel. Cada bloque falla por separado: si algo no responde, el panel sigue con lo demás.
 async function extrasPanel(correoDe: Record<string, string>, ahora: number) {
   const desde30 = new Date(ahora - 30 * DIA).toISOString();
+  const respaldo = estadoRespaldo().catch(() => ({ ultimo: null, total: 0 }));
   const extra: Record<string, unknown> = {};
   try {
     const conv = await filas("fin_conversaciones", "actualizado_en");
@@ -545,6 +632,7 @@ async function extrasPanel(correoDe: Record<string, string>, ahora: number) {
     const lista: Record<string, unknown>[] = r.ok ? await r.json() : [];
     extra.accesos = lista.map((a) => ({ correo: correoDe[String(a.user_id)] || "(sin correo)", creado_en: a.creado_en }));
   } catch (_e) { extra.accesos = []; }
+  extra.respaldo = await respaldo;
   return extra;
 }
 
@@ -650,7 +738,8 @@ async function saludPanel(correoDe: Record<string, string>) {
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: CORS });
   if (req.method !== "POST") return responder(405, { error: "Usa POST" });
-  const yo = await fetch(`${URL_SB}/auth/v1/user`, { headers: { Authorization: req.headers.get("Authorization") || "", apikey: ANON } });
+  const authorization = req.headers.get("Authorization") || "";
+  const yo = await fetch(`${URL_SB}/auth/v1/user`, { headers: { Authorization: authorization, apikey: ANON } });
   if (!yo.ok) return responder(401, { error: "sin_sesion" });
   const quien = await yo.json();
   let miRol: RolPanel | null;
@@ -661,6 +750,13 @@ Deno.serve(async (req) => {
     return responder(502, { error: "No se pudieron consultar los permisos." });
   }
   if (!miRol) return responder(403, { error: "solo_dueno" });
+  try {
+    if (await exigeMfa(quien.id) && aalDelToken(authorization) !== "aal2") {
+      return responder(401, { error: "requiere_mfa" });
+    }
+  } catch {
+    return responder(503, { error: "No se pudo comprobar la doble verificación. Intenta otra vez." });
+  }
 
   const json = await req.json().catch(() => ({}));
   const cuerpo = (json && typeof json === "object" ? json : {}) as Record<string, unknown>;
