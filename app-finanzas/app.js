@@ -3349,12 +3349,245 @@
     art.append(caja);
   }
 
+  function calculadoraIndependiente(art) {
+    var C = window.NovaCalculadoras;
+    if (!C) return;
+    calculadora(art, "🧑‍💼 Independiente: aportes y retención", [
+      { id: "cc-ingreso", etq: "¿Cuánto cobras al mes?", plata: true, ph: "4 millones" },
+      { id: "cc-costos", etq: "Costos del mes (opcional)", plata: true, opcional: true },
+      { id: "cc-retencion", etq: "Retención en la fuente (%)", valor: 10, omitirVacio: true },
+      { id: "cc-ibc", etq: "Base de aportes (%)", valor: 40, omitirVacio: true }
+    ], function (v) {
+      var r = C.independiente(v["cc-ingreso"], {
+        costos: v["cc-costos"], retencionPct: v["cc-retencion"], ibcPct: v["cc-ibc"]
+      });
+      if (!r) return null;
+      function cop(valor) { return dineroEn(valor, "COP"); }
+      return "Aportes ≈ " + cop(r.aportes) + " (salud " + cop(r.salud) + ", pensión " + cop(r.pension) +
+        ") · Retención " + cop(r.retencion) + " · Te quedan " + cop(r.neto) + ".";
+    }, {
+      aviso: "Es un cálculo aproximado. Confirma tu base de cotización y la retención con tu contador, la PILA o la DIAN.",
+      avisoSiempre: true
+    });
+  }
+
+  function cuentaDeCobro(art) {
+    var cuenta = window.NovaCuentaCobro;
+    if (!cuenta) return;
+    var caja = el("div", "calc");
+    var formulario = el("form", "formulario");
+    var clave = "nova_cuenta_cobro";
+    var guardados = leerLocal(clave, {}) || {};
+    var campos = [
+      { clave: "quienCobra", id: "cc-nombre", etiqueta: "Tu nombre", guardar: true },
+      { clave: "docQuienCobra", id: "cc-documento", etiqueta: "Tu cédula o NIT (opcional)", guardar: true },
+      { clave: "cliente", id: "cc-cliente", etiqueta: "Cliente" },
+      { clave: "docCliente", id: "cc-doc-cliente", etiqueta: "Cédula o NIT del cliente (opcional)" },
+      { clave: "concepto", id: "cc-concepto", etiqueta: "Concepto", ejemplo: "Diseño de logo" },
+      { clave: "valor", id: "cc-valor", etiqueta: "Valor", plata: true, ejemplo: "400 mil" },
+      { clave: "numero", id: "cc-numero", etiqueta: "Número de la cuenta de cobro (opcional)" },
+      { clave: "ciudad", id: "cc-ciudad", etiqueta: "Ciudad", guardar: true },
+      { clave: "pago", id: "cc-pago", etiqueta: "Cómo te pagan (opcional)", guardar: true },
+      { clave: "contacto", id: "cc-contacto", etiqueta: "Teléfono o correo (opcional)", guardar: true }
+    ];
+    campos.forEach(function (campo) {
+      var par = campoCalc(campo.etiqueta, campo.id, campo.ejemplo || "", campo.plata);
+      campo.entrada = par[1];
+      if (!campo.plata) campo.entrada.removeAttribute("inputmode");
+      if (campo.plata && ocultos) campo.entrada.type = "password";
+      if (campo.guardar && typeof guardados[campo.clave] === "string") campo.entrada.value = guardados[campo.clave];
+      formulario.append(par[0], campo.entrada);
+    });
+    var boton = el("button", "primario", "Crear PDF");
+    boton.type = "submit";
+    var estado = el("p", "mensaje");
+    estado.setAttribute("role", "status");
+    formulario.append(boton, estado);
+    caja.append(el("strong", null, "🧾 Cuenta de cobro en PDF"), formulario);
+    art.append(caja);
+
+    formulario.addEventListener("submit", function (evento) {
+      evento.preventDefault();
+      if (boton.disabled) return;
+      var datos = {}, perfil = {};
+      campos.forEach(function (campo) {
+        var valor = campo.entrada.value.trim();
+        datos[campo.clave] = campo.plata ? (/^[$\s]*[-−]/.test(valor) ? NaN : leerValor(valor)) : valor;
+        if (campo.guardar) perfil[campo.clave] = valor;
+      });
+      var error = cuenta.validar(datos);
+      estado.classList.toggle("error", !!error);
+      estado.textContent = error;
+      if (error) return;
+      guardarLocal(clave, perfil);
+      boton.disabled = true;
+      estado.textContent = "Preparando tu PDF…";
+      cuenta.crear(datos).then(function (pdf) {
+        descargar(pdf.nombre, pdf.bytes, pdf.tipo);
+        estado.textContent = "Tu PDF está listo.";
+      }).catch(function () {
+        estado.classList.add("error");
+        estado.textContent = "No pude crear el PDF. Inténtalo otra vez.";
+      }).then(function () { boton.disabled = false; });
+    });
+  }
+
+  function mesadaHijos(art) {
+    var mesada = window.NovaMesada;
+    if (!mesada) return;
+    var clave = "nova_mesada";
+    var estado = mesada.normalizar(leerLocal(clave, null));
+    var caja = el("div", "calc");
+    var aviso = estadoMensaje();
+    art.append(caja);
+    pintarMesada();
+
+    function estadoMensaje() {
+      var mensaje = el("p", "mensaje error");
+      mensaje.setAttribute("role", "status");
+      return mensaje;
+    }
+
+    function guardar(nuevo, mensaje) {
+      if (!nuevo) {
+        mensaje.textContent = "No se pudo hacer el cambio.";
+        return;
+      }
+      if (!guardarLocal(clave, nuevo)) {
+        mensaje.textContent = "No se pudo guardar el cambio en este teléfono.";
+        return;
+      }
+      estado = nuevo;
+      pintarMesada();
+    }
+
+    function campo(etiqueta, id, plata, maximo) {
+      var par = campoCalc(etiqueta, id, "", plata);
+      if (!plata) par[1].removeAttribute("inputmode");
+      if (plata && ocultos) par[1].type = "password";
+      if (maximo) par[1].maxLength = maximo;
+      return par;
+    }
+
+    function valor(entrada) {
+      return /^[$\s]*[-−]/.test(entrada.value) ? NaN : leerValor(entrada.value);
+    }
+
+    function formulario(contenedor, campos, accion, enviar) {
+      var form = el("form", "formulario");
+      var boton = el("button", "primario", accion);
+      boton.type = "submit";
+      var mensaje = estadoMensaje();
+      campos.forEach(function (par) { form.append(par[0], par[1]); });
+      form.append(boton, mensaje);
+      form.addEventListener("submit", function (evento) {
+        evento.preventDefault();
+        enviar(mensaje);
+      });
+      contenedor.append(form);
+    }
+
+    function pintarHijo(hijo, ahora) {
+      var seccion = el("section", "calc");
+      var r = mesada.resumen(hijo, ahora);
+      seccion.append(el("strong", null, hijo.nombre),
+        el("p", "nota", "Mesada: " + dinero(r.mesada) + " por " + hijo.cada));
+      if (!ocultos) {
+        var barra = barraSimple(r.porcentaje);
+        barra.firstChild.classList.toggle("excedido", r.pasado);
+        seccion.append(barra);
+      }
+      var disponible = ocultos || !r.pasado ? "Le quedan " : "Se pasó ";
+      seccion.append(el("p", "nota", "Ha gastado " + dinero(r.gastado) + " de " + dinero(r.mesada) + ". " +
+        disponible + dinero(Math.abs(r.queda)) + "."));
+      if (r.enQue.length) {
+        var notas = el("ul");
+        r.enQue.forEach(function (grupo) { notas.append(el("li", null, grupo.nota + ": " + dinero(grupo.total))); });
+        seccion.append(el("strong", null, "En qué se le va:"), notas);
+      }
+
+      var nota = campo("¿En qué lo gastó?", "me-nota-" + hijo.id, false, 40);
+      var monto = campo("Valor", "me-valor-" + hijo.id, true);
+      formulario(seccion, [nota, monto], "Anotar gasto", function (mensaje) {
+        var gastado = valor(monto[1]);
+        var nuevo = mesada.agregarGasto(estado, hijo.id, gastado, nota[1].value, mesada.claveDia(new Date()));
+        if (!nuevo && !(gastado > 0 && Number.isFinite(gastado))) {
+          mensaje.textContent = "Escribe cuánto gastó.";
+        } else if (!nuevo && !nota[1].value.trim()) {
+          mensaje.textContent = "Escribe en qué lo gastó.";
+        } else guardar(nuevo, mensaje);
+      });
+
+      var recientes = mesada.gastosPeriodo(hijo, ahora).sort(function (a, b) {
+        if (a.fecha === b.fecha) return b.id - a.id;
+        return a.fecha < b.fecha ? 1 : -1;
+      }).slice(0, 5);
+      if (recientes.length) {
+        var lista = el("ul", "consejos");
+        recientes.forEach(function (gasto) {
+          var fila = el("li", "consejo");
+          var detalle = el("div");
+          var quitar = botonHabito("Quitar", function () {
+            if (confirm("¿Quitar el gasto «" + gasto.nota + "»?")) guardar(mesada.quitarGasto(estado, hijo.id, gasto.id), aviso);
+          });
+          quitar.setAttribute("aria-label", "Quitar el gasto " + gasto.nota + " de " + hijo.nombre);
+          detalle.append(el("strong", null, gasto.nota),
+            el("small", null, fechaCorta.format(new Date(gasto.fecha + "T00:00:00")) + " · " + dinero(gasto.monto)));
+          fila.append(detalle, quitar);
+          lista.append(fila);
+        });
+        seccion.append(el("strong", null, "Últimos gastos del periodo"), lista);
+      }
+      seccion.append(botonHabito("Quitar a " + hijo.nombre, function () {
+        if (confirm("¿Quitar a «" + hijo.nombre + "» y todos sus gastos?")) guardar(mesada.quitarHijo(estado, hijo.id), aviso);
+      }));
+      caja.append(seccion);
+    }
+
+    function pintarMesada() {
+      var ahora = new Date();
+      aviso.textContent = "";
+      caja.replaceChildren(el("strong", null, "👧 Mesada para hijos"),
+        el("p", "nota", "Estos datos se guardan solo en este teléfono."));
+      if (!estado.hijos.length) caja.append(el("p", "nota", "Aún no hay hijos. Agrega a quien le das mesada."));
+      estado.hijos.forEach(function (hijo) { pintarHijo(hijo, ahora); });
+
+      var nombre = campo("Nombre", "me-nombre", false, 30);
+      var monto = campo("Mesada", "me-mesada", true);
+      var etiqueta = el("label", null, "Cada");
+      var cada = el("select");
+      cada.id = "me-cada";
+      etiqueta.htmlFor = cada.id;
+      ["semana", "quincena", "mes"].forEach(function (periodo) {
+        var opcion = el("option", null, periodo);
+        opcion.value = periodo;
+        cada.append(opcion);
+      });
+      caja.append(el("strong", null, "Agregar hijo"));
+      formulario(caja, [nombre, monto, [etiqueta, cada]], "Agregar", function (mensaje) {
+        var cantidad = valor(monto[1]);
+        var nuevo = mesada.agregarHijo(estado, nombre[1].value, cantidad, cada.value);
+        if (!nuevo && !nombre[1].value.trim()) {
+          mensaje.textContent = "Escribe el nombre.";
+        } else if (!nuevo && !(cantidad > 0 && Number.isFinite(cantidad))) {
+          mensaje.textContent = "Escribe una mesada mayor que cero.";
+        } else if (!nuevo && estado.hijos.length >= 10) {
+          mensaje.textContent = "Puedes agregar hasta 10 hijos.";
+        } else guardar(nuevo, mensaje);
+      });
+      caja.append(aviso);
+    }
+  }
+
   function wMasCalculadoras(art) {
     titulo(art, "Más calculadoras");
     calculadorasTrabajoYAhorro(art);
     calculadorasDeCredito(art);
     var N = NovaConsejos;
     calculadoraIva(art);
+    calculadoraIndependiente(art);
+    cuentaDeCobro(art);
+    mesadaHijos(art);
     calculadora(art, "🍽️ Dividir la cuenta con propina", [{ id: "pr-total", etq: "Total de la cuenta", ph: "200 mil", plata: true }, { id: "pr-personas", etq: "¿Cuántas personas?", ph: "4" }, { id: "pr-pct", etq: "Propina (%)", ph: "10" }], function (v) {
       var r = N.dividirCuenta(v["pr-total"], v["pr-personas"], v["pr-pct"]);
       return r ? "Propina " + dinero(r.propina) + " · Total " + dinero(r.total) + " · Cada uno " + dinero(r.porPersona) : null;
