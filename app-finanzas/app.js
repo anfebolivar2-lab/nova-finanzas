@@ -813,10 +813,17 @@
     if (!P || !fuente || fuente.demo) return;
     var protegido = ocultos || !!leerPin(), saldo = saldoTotal(), b = presupuestoActual(), seguro = b.limite > 0 ? A.seguroParaGastar(b.limite, b.gastado, b.rango) : null;
     var linea = protegido ? "Valores protegidos" : (seguro && seguro.porDia > 0 ? "Hoy puedes gastar " + pesos.format(Math.round(seguro.porDia)) : "Toca para anotar un gasto");
-    var valor = JSON.stringify({ saldo: protegido ? "$ ••••" : (saldo < 0 ? "-" : "") + pesos.format(Math.abs(saldo)), linea: linea });
+    var botones = datos.frecuentes.map(function (f) {
+      var registro = Parser.interpretar(f.texto);
+      if (!registro.ok || registro.tipo !== "gasto" || !/^[A-Za-z0-9_-]{1,20}$/.test(String(f.id))) return null;
+      return { id: String(f.id), nombre: Array.from(registro.descripcion).slice(0, 14).join("") };
+    }).filter(function (boton) { return boton && boton.nombre; }).slice(0, 3);
+    var valor = JSON.stringify({ saldo: protegido ? "$ ••••" : (saldo < 0 ? "-" : "") + pesos.format(Math.abs(saldo)), linea: linea, botones: botones });
     if (valor === ultimoWidget) return;
     ultimoWidget = valor;
-    P.set({ key: "nova-widget", value: valor }).catch(function () { /* sin widget no pasa nada */ });
+    P.set({ key: "nova-widget", value: valor }).catch(function () {
+      if (ultimoWidget === valor) ultimoWidget = "";
+    });
   }
   function pintarInicio() {
     var ciclo = cicloEfectivo(), rango = rangoInicio();
@@ -5979,7 +5986,7 @@
       expr: m ? textoMonto((o.repetir ? monedaRepetida : usaMontoOriginal) ? num(m.monto_original) : num(m.monto)) : (o.expr || ""),
       categoriaId: categoriaId != null && (!o.repetir || categoria(categoriaId)) ? categoriaId : null,
       documentoId: o.documentoId || null,
-      etiquetas: o.movimiento || o.duplicar ? (m.etiquetas || []).slice() : [],
+      etiquetas: (o.movimiento || o.duplicar ? m.etiquetas || [] : o.etiquetas || []).slice(),
       moneda: m && m.moneda && (!o.repetir || monedaRepetida) ? m.moneda : monedaBase(),
       tasa: m && m.tasa ? Number(m.tasa) : null,
       tasaAuto: null, tasaFecha: "", tasaEditada: !!(m && m.tasa)
@@ -7499,15 +7506,16 @@
     if (window.Capacitor.Plugins.App.getLaunchUrl) window.Capacitor.Plugins.App.getLaunchUrl().then(function (r) { if (r && esEnlaceBanco(r.url)) abrirBanco(); }).catch(function () { /* se abrió normal */ });
   }
   var gastoPendiente = false, inicioListoParaGasto = false, cerrandoCapasParaGasto = false;
-  var ultimoEnlaceGasto = "", horaUltimoEnlaceGasto = 0;
-  function pedirNuevoGasto() {
+  var ultimoEnlaceGasto = "", horaUltimoEnlaceGasto = 0, frecuentePendiente = null;
+  function pedirNuevoGasto(id) {
     gastoPendiente = true;
+    frecuentePendiente = id;
     abrirGastoPendiente();
   }
   function abrirGastoPendiente() {
     try {
       if (!gastoPendiente || cerrandoCapasParaGasto) return;
-      if (fuente && fuente.demo) { gastoPendiente = false; return; }
+      if (fuente && fuente.demo) { gastoPendiente = false; frecuentePendiente = null; return; }
       if (!inicioListoParaGasto || !fuente || !$("pantalla-auth").hidden || $("pantalla-app").hidden) return;
       revisarInactividad();
       if (!$("bloqueo").hidden) return;
@@ -7522,7 +7530,14 @@
       gastoPendiente = false;
       $("tutorial").hidden = true;
       $("novedades").hidden = true;
-      abrirRegistro({ tipo: "gasto" });
+      var id = frecuentePendiente;
+      frecuentePendiente = null;
+      var frecuente = id && datos.frecuentes.find(function (f) { return String(f.id) === id; });
+      var r = frecuente && Parser.interpretar(frecuente.texto);
+      if (r && r.ok) {
+        var cat = datos.categorias.find(function (c) { return c.tipo === r.tipo && c.nombre === r.categoria; });
+        abrirRegistro({ tipo: r.tipo, expr: textoMonto(r.monto), desc: r.descripcion, categoriaId: cat && cat.id, etiquetas: r.etiquetas });
+      } else abrirRegistro({ tipo: "gasto" });
     } catch (e) { /* el atajo es opcional */ }
   }
   function recibirEnlaceGasto(ev) {
@@ -7533,17 +7548,123 @@
       if (url === ultimoEnlaceGasto && ahora - horaUltimoEnlaceGasto < 2000) return;
       ultimoEnlaceGasto = url;
       horaUltimoEnlaceGasto = ahora;
-      pedirNuevoGasto();
+      var extraerFrecuente = window.NovaEnlaces.frecuenteDeEnlace;
+      pedirNuevoGasto(extraerFrecuente ? extraerFrecuente(url) : null);
     } catch (e) { /* el atajo es opcional */ }
   }
   try {
     var appAtajos = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.App;
     if (appAtajos) {
       Promise.resolve(appAtajos.addListener("appUrlOpen", recibirEnlaceGasto)).catch(function () {});
+      Promise.resolve(appAtajos.addListener("resume", revisarPantallazo)).catch(function () {});
       if (appAtajos.getLaunchUrl) Promise.resolve(appAtajos.getLaunchUrl()).then(recibirEnlaceGasto).catch(function () {});
     }
   } catch (e) { /* el puente nativo puede no estar disponible */ }
-  document.addEventListener("visibilitychange", function () { if (!document.hidden && fuente && !fuente.demo) revisarBanco(); });
+  document.addEventListener("visibilitychange", function () {
+    if (!document.hidden && fuente && !fuente.demo) {
+      revisarBanco();
+      revisarPantallazo();
+    }
+  });
+
+  var archivoCompartido = "compartido.jpg";
+  var fsCompartido = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.Filesystem;
+  var leyendoCompartido = false, fotoCompartida = null, cerrandoCapasParaFoto = false;
+  var volverARevisarPantallazo = false;
+  window.addEventListener("novaPantallazoCompartido", function () {
+    if (leyendoCompartido || fotoCompartida) volverARevisarPantallazo = true;
+    revisarPantallazo();
+  });
+  function listoParaPantallazo() {
+    if (document.hidden || !inicioListoParaGasto || !fuente || fuente.demo ||
+        !$("pantalla-auth").hidden || $("pantalla-app").hidden) return false;
+    revisarInactividad();
+    return $("bloqueo").hidden;
+  }
+  function revisarPantallazo() {
+    if (!plugPref || !fsCompartido || !listoParaPantallazo()) return;
+    if (fotoCompartida && fotoCompartida.fuente !== fuente) fotoCompartida = null;
+    if (fotoCompartida) return procesarPantallazo();
+    if (leyendoCompartido) return;
+    var origen = fuente;
+    var ruta = { path: archivoCompartido, directory: "CACHE" };
+    leyendoCompartido = true;
+    Promise.resolve().then(function () {
+      return plugPref.get({ key: "nova-compartido-abrir" });
+    }).then(function (marca) {
+      if (!marca || marca.value !== "si" || origen !== fuente || !listoParaPantallazo()) return;
+      fotoCompartida = { fuente: origen };
+      return plugPref.remove({ key: "nova-compartido-abrir" }).then(function () {
+        return plugPref.get({ key: "nova-compartido" });
+      }).then(function (meta) {
+        var datosFoto = JSON.parse((meta && meta.value) || "{}");
+        if (datosFoto.archivo !== archivoCompartido) return;
+        return fsCompartido.readFile(ruta).then(function (foto) {
+          var binario = atob(foto.data);
+          var bytes = Uint8Array.from(binario, function (c) { return c.charCodeAt(0); });
+          if (fuente === origen && fotoCompartida) fotoCompartida.archivo = new Blob([bytes], { type: "image/jpeg" });
+        }).finally(function () {
+          return plugPref.get({ key: "nova-compartido" }).then(function (actual) {
+            if (actual && actual.value === meta.value) return fsCompartido.deleteFile(ruta);
+            volverARevisarPantallazo = true;
+          }).catch(function () { /* El archivo pudo desaparecer del caché. */ });
+        });
+      });
+    }).catch(function () { /* Si el archivo no se pudo leer, se abre el registro manual. */ })
+      .finally(function () {
+        leyendoCompartido = false;
+        if (fotoCompartida) procesarPantallazo();
+        else revisarSiguientePantallazo();
+      });
+  }
+  function revisarSiguientePantallazo() {
+    if (!volverARevisarPantallazo) return;
+    volverARevisarPantallazo = false;
+    revisarPantallazo();
+  }
+  function procesarPantallazo() {
+    if (leyendoCompartido || cerrandoCapasParaFoto || !fotoCompartida || !listoParaPantallazo()) return;
+    var foto = fotoCompartida;
+    if (foto.fuente !== fuente) { fotoCompartida = null; return; }
+    if (foto.archivo && !foto.resultado) {
+      leyendoCompartido = true;
+      interpretarFoto(foto.archivo, function () {}, function () {
+        return foto.fuente === fuente && listoParaPantallazo();
+      }).then(function (resultado) {
+        if (resultado) foto.resultado = resultado;
+      }).catch(function () { foto.resultado = {}; }).finally(function () {
+        if (foto.resultado || foto.fuente !== fuente) foto.archivo = null;
+        leyendoCompartido = false;
+        revisarPantallazo();
+      });
+      return;
+    }
+    if (pilaCapas.length) {
+      cerrandoCapasParaFoto = true;
+      cerrarYLuego(function () {
+        cerrandoCapasParaFoto = false;
+        procesarPantallazo();
+      });
+      return;
+    }
+    fotoCompartida = null;
+    $("tutorial").hidden = true;
+    $("novedades").hidden = true;
+    var resultado = foto.resultado;
+    if (!resultado || !resultado.r || !(resultado.r.monto > 0)) {
+      abrirRegistro({ tipo: "gasto" });
+      mensaje("reg-mensaje", "No pude leer el valor del pantallazo. Escríbelo tú.", true);
+      revisarSiguientePantallazo();
+      return;
+    }
+    ir("inicio");
+    resultado.r.via = "foto";
+    $("entrada-rapida").value = resultado.texto;
+    mostrarPrevia(resultado.r);
+    mensaje("rapido-mensaje", "Leí tu pantallazo. Revisa y guarda.");
+    $("vista-previa").scrollIntoView({ block: "nearest" });
+    revisarSiguientePantallazo();
+  }
 
   // ---------- Panel del dueño ----------
   // Solo la cuenta del dueño ve el botón; el servidor (función nova-dueno) también lo revisa antes de mostrar algo.
@@ -10980,12 +11101,24 @@
   }
 
   // Devuelve { r (registro interpretado) | null, texto para la entrada, comercio, aviso }.
-  function interpretarFoto(archivo, avisar) {
+  function interpretarFoto(archivo, avisar, puedeLeerPantallazo) {
     return prepararFoto(archivo, 1800, "grayscale(1) contrast(1.4)").then(function (foto) {
+      if (puedeLeerPantallazo && !puedeLeerPantallazo()) return null;
       if (!iaDisponible()) return conTesseract(foto);
       avisar("✦ La IA está leyendo el recibo…");
       var jpeg = foto.toDataURL("image/jpeg", 0.85).split(",")[1];
-      return preguntarIA({ imagen: jpeg, mime: "image/jpeg" }).then(function (r) {
+      var entrada = { imagen: jpeg, mime: "image/jpeg" };
+      if (puedeLeerPantallazo) {
+        entrada.texto = "Pantallazo compartido. Lee el valor de la operación, no el saldo ni la referencia. " +
+          "Si se ve Nequi o Daviplata y el nombre del destino, usa el formato «Nequi: Nombre» o «Daviplata: Nombre». " +
+          "Si falta el nombre o la billetera, usa «Pantallazo compartido».";
+      }
+      return preguntarIA(entrada).then(function (r) {
+        if (puedeLeerPantallazo) {
+          var texto = r.descripcion.replace(/^(Nequi|Daviplata):\s*(?:para\s+)?/i, "$1\nPara: ") + "\nValor $" + r.monto;
+          var lectura = window.NovaRecibo.leerPantallazoBilletera(texto);
+          return resultadoPantallazo(r.monto, r.tipo, lectura, r);
+        }
         return { r: r, texto: numeroCO.format(r.monto) + " " + r.descripcion, aviso: "✦ Leído con IA." };
       }, function () { return conTesseract(foto); });
     });
@@ -10993,7 +11126,14 @@
       avisar("Preparando el lector de recibos… la primera vez tarda unos segundos.");
       lectorAviso = avisar;
       return cargarLector().then(function (l) { return l.recognize(foto); }).then(function (salida) {
-        var rec = window.NovaRecibo.leerRecibo(salida.data.text);
+        var recibo = window.NovaRecibo, textoLeido = salida.data.text;
+        if (puedeLeerPantallazo) {
+          var lectura = recibo.leerPantallazoBilletera(textoLeido);
+          if (lectura) return resultadoPantallazo(lectura.monto, lectura.tipo, lectura, null);
+          var general = recibo.leerMontoGeneralPantallazo(textoLeido);
+          return general.ok ? resultadoPantallazo(general.monto, "gasto", null, null) : { r: null };
+        }
+        var rec = recibo.leerRecibo(textoLeido);
         if (!rec.ok) return { r: null, texto: rec.comercio ? rec.comercio + " " : "", error: rec.error };
         var texto = numeroCO.format(rec.monto) + " " + (rec.comercio || "Compra");
         var r = Parser.interpretar(texto);
@@ -11002,6 +11142,21 @@
         return { r: r, texto: texto, aviso: "Leído del recibo." };
       });
     }
+  }
+
+  function resultadoPantallazo(monto, tipo, lectura, sugerenciaIA) {
+    var descripcion = lectura && lectura.billetera && lectura.destino
+      ? lectura.billetera + ": " + lectura.destino : "Pantallazo compartido";
+    var ingreso = tipo === "ingreso";
+    var r = {
+      tipo: tipo, monto: monto, descripcion: descripcion, etiquetas: [],
+      categoria: (sugerenciaIA && sugerenciaIA.categoria) || (ingreso ? "Otros ingresos" : "Otros gastos"),
+      icono: (sugerenciaIA && sugerenciaIA.icono) || (ingreso ? "ingreso" : "otro"),
+      fecha: lectura && lectura.fecha ? new Date(lectura.fecha + "T12:00:00").toISOString() :
+        (sugerenciaIA && sugerenciaIA.fecha) || new Date().toISOString(),
+      ia: !!sugerenciaIA
+    };
+    return { r: r, texto: (ingreso ? "Ingreso " : "") + numeroCO.format(monto) + " " + descripcion };
   }
 
   $("btn-foto").addEventListener("click", function () { $("foto-recibo").click(); });
@@ -11664,6 +11819,7 @@
       cargarTasas();
       ultimaActividad = Date.now();
       if (!fuente.demo) bloquearSiHayPin();
+      revisarHuella();
       revisarAvisoRetoNoGastar();
       revisarInactividad();
       var abrirPanelDirecto = panelAlEntrar && soyDueno();
@@ -11678,6 +11834,7 @@
       if (conductor()) asegurarCategoriasConductor().then(pintar).catch(function () { /* se intentará la próxima vez */ });
       inicioListoParaGasto = true;
       abrirGastoPendiente();
+      revisarPantallazo();
       return procesarProgramados();
     }).catch(function (e) {
       mostrar("auth");
@@ -11863,16 +12020,113 @@
       return Array.prototype.map.call(new Uint8Array(b), function (x) { return ("0" + x.toString(16)).slice(-2); }).join("");
     });
   }
-  function pintarEstadoPin() { $("ajuste-bloqueo").hidden = !leerPin(); $("pin2-estado").textContent = leerPin2() ? "Activado: ese PIN abre NOVA con los valores ocultos" : "Un segundo PIN que abre NOVA con los valores ocultos"; $("pin-estado").textContent = leerPin() ? "Activado: se pide al abrir NOVA" : "Pide un PIN cada vez que abres NOVA"; }
+  var plugHuella = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.NovaHuella;
+  var huellaDisponible = false, consultaHuella = null, verificandoHuella = false;
+  var bloqueoHuella = null;
+  var HUELLA_PIN_CLAVE = "nova-huella-pin";
+  function puedeOfrecerHuella() {
+    return !!plugHuella && typeof NovaHerramientas.puedeOfrecerHuella === "function" &&
+      NovaHerramientas.puedeOfrecerHuella({ puente: plugHuella, disponible: huellaDisponible, pinActivo: !!leerPin() });
+  }
+  function huellaActiva() {
+    var referencia = leerLocal(HUELLA_PIN_CLAVE, null);
+    return !!(fuente && !fuente.demo && leerPin() && referencia &&
+      leerLocal(claveComodidad("huella"), null) === referencia);
+  }
+  function pintarHuella() {
+    var activo = huellaActiva();
+    $("ajuste-huella-fila").hidden = !huellaDisponible || !fuente || fuente.demo;
+    $("ajuste-huella").disabled = !puedeOfrecerHuella() || verificandoHuella;
+    $("ajuste-huella").checked = activo;
+    $("ajuste-huella-pin").hidden = !!leerPin();
+    $("bloqueo-huella").hidden = !(bloqueoHuella && activo && puedeOfrecerHuella());
+    $("bloqueo-huella").disabled = verificandoHuella;
+  }
+  function revisarHuella() {
+    pintarHuella();
+    if (!plugHuella) return;
+    if (!consultaHuella) {
+      consultaHuella = Promise.resolve().then(function () {
+        return plugHuella.disponible();
+      }).then(function (r) {
+        huellaDisponible = !!(r && r.disponible === true);
+      }).catch(function () {
+        huellaDisponible = false;
+      }).finally(function () {
+        consultaHuella = null;
+        pintarHuella();
+        if (bloqueoHuella && !bloqueoHuella.intentado && !document.hidden &&
+            !$("bloqueo-huella").hidden && !verificandoHuella) desbloquearConHuella();
+      });
+    }
+  }
+  function verificarHuella(titulo, subtitulo) {
+    verificandoHuella = true;
+    pintarHuella();
+    return Promise.resolve().then(function () {
+      return plugHuella.verificar({ titulo: titulo, subtitulo: subtitulo });
+    }).then(function (r) { return !!(r && r.ok === true); })
+      .catch(function () { return false; })
+      .finally(function () {
+        verificandoHuella = false;
+        pintarHuella();
+      });
+  }
+  function desbloquearConHuella() {
+    var intento = bloqueoHuella;
+    if (!intento || verificandoHuella || !huellaActiva() || !puedeOfrecerHuella()) return;
+    intento.intentado = true;
+    verificarHuella("Abre NOVA", "Usa tu huella o tu cara.").then(function (ok) {
+      if (ok && bloqueoHuella === intento && pinModo === "abrir" && fuente === intento.fuente && huellaActiva()) {
+        terminarDesbloqueo();
+      }
+    });
+  }
+  $("bloqueo-huella").addEventListener("click", desbloquearConHuella);
+  $("ajuste-huella").addEventListener("change", function () {
+    var origen = fuente, pin = leerPin(), activar = this.checked;
+    pintarHuella();
+    if (!origen || origen.demo || !puedeOfrecerHuella() || verificandoHuella) return;
+    var clave = claveComodidad("huella");
+    if (!activar) {
+      if (guardarLocal(clave, null)) registrarEvento("ajuste", "huella_off");
+      pintarHuella();
+      return;
+    }
+    verificarHuella("Activa la huella o la cara", "Confirma para abrir NOVA con tu huella o tu cara.").then(function (ok) {
+      if (ok && fuente === origen && leerPin() === pin) {
+        var referencia = leerLocal(HUELLA_PIN_CLAVE, null) || idLocal();
+        if (guardarLocal(HUELLA_PIN_CLAVE, referencia) && guardarLocal(clave, referencia)) {
+          registrarEvento("ajuste", "huella_on");
+        }
+        pintarHuella();
+      }
+    });
+  });
+  document.addEventListener("visibilitychange", function () { if (!document.hidden) revisarHuella(); });
+
+  function quitarHuellaConPin() {
+    var activa = huellaActiva();
+    guardarLocal(HUELLA_PIN_CLAVE, null);
+    if (activa) {
+      guardarLocal(claveComodidad("huella"), null);
+      registrarEvento("ajuste", "huella_off");
+    }
+  }
+
+  function pintarEstadoPin() { revisarHuella(); $("ajuste-bloqueo").hidden = !leerPin(); $("pin2-estado").textContent = leerPin2() ? "Activado: ese PIN abre NOVA con los valores ocultos" : "Un segundo PIN que abre NOVA con los valores ocultos"; $("pin-estado").textContent = leerPin() ? "Activado: se pide al abrir NOVA" : "Pide un PIN cada vez que abres NOVA"; }
   function abrirBloqueo(modo) {
     pinModo = modo; pinPrimero = "";
+    bloqueoHuella = modo === "abrir" ? { fuente: fuente, intentado: false } : null;
     if (modo === "abrir") {
       contenidoBloqueado.forEach(function (c) { c.inert = true; });
     }
     var t = { crear: "Crea un PIN de 4 a 6 números", repetir: "Repite el PIN", abrir: "Escribe tu PIN", quitar: "Escribe tu PIN para quitarlo", crear2: "Crea tu PIN discreto (distinto al principal)", repetir2: "Repite el PIN discreto" };
     $("bloqueo-titulo").textContent = t[modo]; $("bloqueo-pin").value = ""; mensaje("bloqueo-mensaje", "");
     $("bloqueo-cancelar").hidden = modo === "abrir"; $("bloqueo-olvide").hidden = modo === "crear";
-    $("bloqueo").hidden = false; setTimeout(function () { $("bloqueo-pin").focus(); }, 50);
+    $("bloqueo").hidden = false;
+    revisarHuella();
+    setTimeout(function () { if (!$("bloqueo").hidden) $("bloqueo-pin").focus(); }, 50);
   }
   function cerrarBloqueo() {
     var desbloqueo = pinModo === "abrir";
@@ -11880,9 +12134,17 @@
       contenidoBloqueado.forEach(function (c) { c.inert = false; });
     }
     $("bloqueo").hidden = true; $("bloqueo-pin").value = ""; pinModo = null; pinPrimero = "";
+    bloqueoHuella = null;
+    pintarHuella();
     ultimaActividad = Date.now();
     revisarInactividad();
     if (desbloqueo) revisarAvisoRetoNoGastar();
+  }
+  function terminarDesbloqueo(discreto) {
+    cerrarBloqueo();
+    if (discreto && fuente) pintar();
+    abrirGastoPendiente();
+    revisarPantallazo();
   }
   function confirmarPin() {
     var pin = $("bloqueo-pin").value.replace(/\D/g, "");
@@ -11906,14 +12168,17 @@
     hashPin(pin).then(function (hp) {
       if (pinModo !== modo) return;
       if (pinModo === "abrir" && hp !== leerPin() && leerPin2() && hp === leerPin2()) {
-        ocultos = true; guardarLocal("nova-ocultos", true); pintarOjo(); cerrarBloqueo(); if (fuente) pintar();
-        abrirGastoPendiente();
+        ocultos = true; guardarLocal("nova-ocultos", true); pintarOjo();
+        terminarDesbloqueo(true);
         return;
       }
       if (hp !== leerPin()) { $("bloqueo-pin").value = ""; return mensaje("bloqueo-mensaje", "PIN incorrecto.", true); }
-      if (pinModo === "quitar") { try { localStorage.removeItem(PIN_CLAVE); localStorage.removeItem(PIN2_CLAVE); } catch (e) { /* nada */ } pintarEstadoPin(); toast("PIN quitado"); }
-      cerrarBloqueo();
-      abrirGastoPendiente();
+      if (pinModo === "quitar") {
+        quitarHuellaConPin();
+        try { localStorage.removeItem(PIN_CLAVE); localStorage.removeItem(PIN2_CLAVE); } catch (e) { /* nada */ }
+        pintarEstadoPin(); toast("PIN quitado");
+      }
+      terminarDesbloqueo();
     });
   }
   function bloquearSiHayPin() { if (leerPin() && fuente) abrirBloqueo("abrir"); }
@@ -11922,6 +12187,7 @@
   $("bloqueo-cancelar").addEventListener("click", cerrarBloqueo);
   $("bloqueo-olvide").addEventListener("click", function () {
     if (!confirm("Para quitar el PIN tienes que cerrar sesión y volver a entrar con tu correo. Tus datos no se borran. ¿Seguimos?")) return;
+    quitarHuellaConPin();
     try { localStorage.removeItem(PIN_CLAVE); } catch (e) { /* nada */ }
     cerrarBloqueo(); pintarEstadoPin(); $("btn-salir").click();
   });
@@ -12396,6 +12662,8 @@
       if (vieja.limpiar) vieja.limpiar();
       try { var PW = enApp && window.Capacitor.Plugins && window.Capacitor.Plugins.Preferences; if (PW) { ultimoWidget = ""; PW.remove({ key: "nova-widget" }); } } catch (e) { /* nada */ }
       fuente = null; datos = datosVacios();
+      fotoCompartida = null;
+      pintarHuella();
       avisosNube = []; erroresEnviados = [];
       encuestaInicio = null;
       pintarEncuestaInicio();

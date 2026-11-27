@@ -264,7 +264,11 @@
     return sugerida;
   }
 
-  var api = { simular: simular, actualizarNotas: actualizarNotas, enNoMolestar: enNoMolestar, horaAviso: horaAviso,
+  function puedeOfrecerHuella(opciones) {
+    return !!(opciones && opciones.puente && opciones.disponible === true && opciones.pinActivo === true);
+  }
+
+  var api = { puedeOfrecerHuella: puedeOfrecerHuella, simular: simular, actualizarNotas: actualizarNotas, enNoMolestar: enNoMolestar, horaAviso: horaAviso,
     referenciaAvisos: referenciaAvisos, gastoAltoDelDia: gastoAltoDelDia, cuotasVsIngresos: cuotasVsIngresos, fechaDeMeta: fechaDeMeta,
     alcanzaDeseo: alcanzaDeseo, gastosHormigaTop: gastosHormigaTop, repartirGasto: repartirGasto,
     estadoRetoNoGastar: estadoRetoNoGastar, promedioDiarioCategoria: promedioDiarioCategoria,

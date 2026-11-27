@@ -28,7 +28,7 @@ Lista de funciones para ir sumando poco a poco, probadas una por una.
 
 - ⭐ Leer facturas electrónicas (correo de la DIAN) y anotarlas solas, preguntando antes.
 - ✅ Escanear el código QR de la factura para sacar el valor y el comercio. (el valor, el número y la fecha)
-- Widget con botones: anotar un gasto común desde la pantalla de inicio del celular.
+- ✅ Widget con botones: anotar un gasto común desde la pantalla de inicio del celular.
 - Anotar por WhatsApp o Telegram: le escribes a NOVA «almuerzo 20 mil» y queda anotado.
 - ✅ Categoría sugerida por el comercio: «RAPPI» siempre a Comida, «UBER» a Transporte.
 - ✅ Dividir un gasto en varias categorías (mercado con aseo y comida).
@@ -68,7 +68,7 @@ Lista de funciones para ir sumando poco a poco, probadas una por una.
 ## Seguridad y respaldo
 
 - Respaldo automático a Google Drive cada semana (sin tener que tocar nada).
-- Entrar con la huella o la cara.
+- ✅ Entrar con la huella o la cara (se suma al PIN).
 - ✅ Modo viaje: ocultar valores en pantalla cuando estás en la calle. (ojo para ocultar montos)
 - ✅ Exportar todo a Excel con un dashboard listo para imprimir. (exportar a Excel y PDF)
 
@@ -95,7 +95,7 @@ Lista de ideas propuestas para revisar; ninguna está hecha todavía.
 - ✅ Foto del recibo como adjunto opcional en cualquier gasto.
 - ✅ Autocompletar la descripción con lo que ya escribiste antes.
 - ✅ Atajo en la pantalla de inicio de Android: "Nuevo gasto". (mantener presionado el ícono)
-- Leer el valor de un pantallazo de Nequi o Daviplata compartido con NOVA.
+- ✅ Leer el valor de un pantallazo de Nequi o Daviplata compartido con NOVA.
 - ✅ Duplicar un movimiento y cambiarle solo la fecha.
 - ✅ Gastos en efectivo con un "monedero" aparte que se descuenta solo. (cuenta «Efectivo» + pasar dinero)
 

@@ -820,6 +820,7 @@
         <label class="menu-fila sub"><span class="menu-icono">⏰</span><span><strong>Hora del aviso</strong></span><select id="rec-noche-hora" aria-label="Hora del aviso"><option value="19">7 p. m.</option><option value="20">8 p. m.</option><option value="21">9 p. m.</option><option value="22">10 p. m.</option><option value="23">11 p. m.</option></select></label>
         <label class="menu-fila"><span class="menu-icono">⚡</span><span><strong>Teclas rápidas en la notificación</strong><small>Una notificación con botones para anotar tus registros comunes de un toque</small></span><input type="checkbox" id="rec-rapido" class="interruptor"></label>
         <label class="menu-fila"><span class="menu-icono">💾</span><span><strong>Respaldo semanal</strong><small>Cada domingo a las 6 p. m. un aviso para guardar tu copia en Drive</small></span><input type="checkbox" id="rec-respaldo" class="interruptor"></label>
+        <label class="menu-fila" for="ajuste-huella" id="ajuste-huella-fila" hidden><span class="menu-icono" aria-hidden="true">🔒</span><span><strong>Entrar con huella o cara</strong><small id="ajuste-huella-ayuda">Usa la huella o la cara del celular para abrir NOVA. El PIN sigue sirviendo si falla.</small><small id="ajuste-huella-pin" hidden>Primero activa el PIN de la app.</small></span><input type="checkbox" id="ajuste-huella" class="interruptor" role="switch" aria-describedby="ajuste-huella-ayuda ajuste-huella-pin" disabled></label>
         <label class="menu-fila" for="modo-sencillo"><span class="menu-icono" aria-hidden="true">Aa</span><span><strong>Modo sencillo</strong><small>Letra más grande y solo lo básico: balance, anotar un gasto y tus movimientos. Lo apagas aquí cuando quieras.</small></span><input type="checkbox" id="modo-sencillo" class="interruptor" role="switch"></label>
         <label class="menu-fila" for="aviso-gasto-alto"><span class="menu-icono" aria-hidden="true">🔔</span><span><strong>Avisarme si el gasto del día es muy alto</strong><small>Te avisamos en silencio cuando hoy llevas el doble de tu día normal. Solo funciona en la app instalada.</small></span><input type="checkbox" id="aviso-gasto-alto" class="interruptor" role="switch"></label>
         <label class="menu-fila"><span class="menu-icono">🎁</span><span><strong>Prima y aguinaldo</strong><small>Un aviso en junio y diciembre para apartar plata</small></span><input type="checkbox" id="rec-prima" class="interruptor"></label>
@@ -2042,6 +2043,7 @@
     <input id="bloqueo-pin" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="6" autocomplete="off" aria-label="PIN">
     <p class="mensaje" id="bloqueo-mensaje" role="alert"></p>
     <button type="button" class="primario" id="bloqueo-ok">Continuar</button>
+    <button type="button" class="enlace" id="bloqueo-huella" hidden>Usar huella</button>
     <button type="button" class="enlace" id="bloqueo-cancelar" hidden>Cancelar</button>
     <button type="button" class="enlace" id="bloqueo-olvide" hidden>Olvidé mi PIN</button>
   </div>

@@ -19,3 +19,24 @@ test("rechaza otros enlaces, destinos parecidos y entradas inválidas", () => {
     assert.equal(esEnlaceNuevoGasto(url), false, String(url));
   }
 });
+
+test("lee un único id seguro del atajo de gasto", () => {
+  const { frecuenteDeEnlace } = require("./enlaces.js");
+  for (const [url, id] of [
+    [enlace + "?f=12", "12"],
+    ["CO.NovaFinanzas.APP://nuevo-gasto/?origen=widget&f=a_B-1&otro=2#registro", "a_B-1"],
+    [enlace + "?f=abcdefghijklmnopqrst", "abcdefghijklmnopqrst"],
+    [enlace, null],
+    [enlace + "?otro=12", null],
+    [enlace + "?f=", null],
+    [enlace + "?f=12&f=13", null],
+    [enlace + "?f=abcdefghijklmnopqrstu", null],
+    [enlace + "?f=%25", null],
+    [enlace + "?f=a+b", null],
+    [enlace + "#?f=12", null],
+    ["https://ejemplo.test/?f=12", null],
+    ["", null],
+    [null, null]
+  ]) assert.equal(frecuenteDeEnlace(url), id, String(url));
+  assert.equal(esEnlaceNuevoGasto(enlace + "?f=12"), true);
+});

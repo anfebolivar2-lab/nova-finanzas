@@ -64,7 +64,85 @@
     return { ok: true, monto: total, comercio: comercio };
   }
 
-  var api = { leerRecibo: leerRecibo, montos: montos };
+  function fechaPantallazo(texto) {
+    var m = texto.match(/\b(\d{4})[-/](\d{1,2})[-/](\d{1,2})\b/);
+    if (!m) {
+      var local = texto.match(/\b(\d{1,2})[/.-](\d{1,2})[/.-](\d{4})\b/);
+      if (!local) return null;
+      m = [local[0], local[3], local[2], local[1]];
+    }
+    var fecha = new Date(Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3])));
+    if (fecha.getUTCFullYear() !== Number(m[1]) || fecha.getUTCMonth() + 1 !== Number(m[2]) ||
+        fecha.getUTCDate() !== Number(m[3])) return null;
+    return fecha.toISOString().slice(0, 10);
+  }
+
+  // Aproximación para comprobantes de billeteras. El valor explícito tiene prioridad sobre otras cifras.
+  function leerPantallazoBilletera(texto) {
+    texto = String(texto || "").replace(/\r/g, "").replace(/[^\S\n]+/g, " ");
+    var normal = texto.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+    var esIngreso = /\b(recibiste|te enviaron|te llego)\b/;
+    var esGasto = /\b(enviaste|pagaste|retiraste|transferiste|pago exitoso)\b/;
+    var billetera = /\bne\s*qu[i1l]\b/.test(normal) ? "Nequi" :
+      /\bdav[i1l]\s*p[l1i]ata\b/.test(normal) ? "Daviplata" : null;
+    var tipo = esIngreso.test(normal) ? "ingreso" : "gasto";
+    if (!billetera && !esIngreso.test(normal) && !esGasto.test(normal) &&
+        !/\b(?:listo|transaccion exitosa)\b/.test(normal)) return null;
+
+    var cifra = /^(?:[ \t]*[:=]?[ \t]*(?:\n[ \t]*)?)(?:[$Ss][ \t]*)?([\dOoIl]+(?:[., ]+[\dOoIl]+)*)(?![\w.,]|[/-]\d)/;
+    var monto = null;
+    var etiquetas = /\b(?:enviaste|pagaste|retiraste|transferiste|recibiste|te enviaron|te llego|valor(?: (?:enviado|recibido|total|pagado))?|monto|total)\b/g;
+    var marca;
+    while ((marca = etiquetas.exec(normal)) !== null && monto === null) {
+      var linea = normal.slice(normal.lastIndexOf("\n", marca.index - 1) + 1, marca.index);
+      if (/\b(?:referencia|saldo|disponible|comision|costo)\b/.test(linea)) continue;
+      monto = montoPantallazo(texto.slice(etiquetas.lastIndex), cifra);
+    }
+    if (monto === null) {
+      var moneda = /(?:\$|\bS(?=[ \t]*\d))/gi;
+      while ((marca = moneda.exec(texto)) !== null && monto === null) {
+        var antes = normal.slice(normal.lastIndexOf("\n", marca.index - 1) + 1, marca.index);
+        if (/\b(?:saldo|disponible|comision|costo|referencia)\b/.test(antes)) continue;
+        monto = montoPantallazo(texto.slice(moneda.lastIndex), cifra);
+      }
+    }
+    if (monto === null) return null;
+
+    var destino = "";
+    var para = /(?:\b(?:a|para)[ \t]+|^\s*(?:a|para):\s*)([\p{L}]+(?: [\p{L}]+)*)(?=$|\n|[,.!;]|[ \t]+\$)/gimu;
+    while ((marca = para.exec(texto)) !== null) {
+      var candidato = marca[1];
+      var prefijo = normal.slice(normal.lastIndexOf("\n", marca.index - 1) + 1, marca.index);
+      var nombre = candidato.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+      if (candidato.length <= 40 && !/\b(?:cuenta|celular|numero|bolsillo|tienda|las|traves|pagar|enviar|nequi|daviplata)\b/.test(nombre) &&
+          (esGasto.test(prefijo) || esIngreso.test(prefijo) || /\d/.test(prefijo) || !prefijo.trim())) {
+        destino = candidato;
+        break;
+      }
+    }
+    return { monto: monto, tipo: tipo, billetera: billetera, destino: destino, fecha: fechaPantallazo(texto) };
+  }
+
+  function montoPantallazo(texto, patron) {
+    var m = texto.match(patron);
+    if (!m) return null;
+    var cifra = m[1].replace(/[Oo]/g, "0").replace(/[Il]/g, "1").replace(/\s*([.,])\s*/g, "$1");
+    if (!/^\d+(?:[.,]\d{2})?$|^\d{1,3}(?:[., ]\d{3})+(?:[.,]\d{2})?$/.test(cifra)) return null;
+    var monto = Number(cifra.replace(/[.,]\d{2}$/, "").replace(/[., ]/g, ""));
+    return Number.isSafeInteger(monto) && monto > 0 ? monto : null;
+  }
+
+  // El lector general de recibos puede confundir teléfonos y referencias con valores.
+  function leerMontoGeneralPantallazo(texto) {
+    var lineas = String(texto || "").split(/\r?\n/).filter(function (linea) {
+      var limpia = linea.normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
+      return !/\b(?:fecha|hora|referencia|comprobante|celular|telefono|saldo|disponible|comision|costo|documento|identificacion|numero|codigo|id de transaccion)\b/i.test(limpia) &&
+        !/^(?:\+?57[ -]?)?3\d{9}$/.test(limpia);
+    });
+    return leerRecibo(lineas.join("\n"));
+  }
+
+  var api = { leerRecibo: leerRecibo, montos: montos, leerPantallazoBilletera: leerPantallazoBilletera, leerMontoGeneralPantallazo: leerMontoGeneralPantallazo };
   if (typeof module === "object" && module.exports) module.exports = api;
   else raiz.NovaRecibo = api;
 })(typeof window !== "undefined" ? window : this);

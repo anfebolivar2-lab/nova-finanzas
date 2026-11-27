@@ -73,3 +73,42 @@ test("foto sin texto", () => {
 test("lectura de cifras", () => {
   assert.deepStrictEqual(montos("30.000 30,000 1.250.000 $5000 45.000,00 cant 2"), [30000, 30000, 1250000, 5000, 45000]);
 });
+
+const { leerPantallazoBilletera, leerMontoGeneralPantallazo } = require("./recibo.js");
+
+test("lee comprobantes plausibles de Nequi y Daviplata", () => {
+  const casos = [
+    ["Nequi\n¡Listo!\nEnviaste $20.000 a Ana Pérez\nFecha 29/10/2026", 20000, "gasto", "Nequi", "Ana Pérez", "2026-10-29"],
+    ["NEQUI\nPAGASTE $ 1.250.000 PARA María José.", 1250000, "gasto", "Nequi", "María José", null],
+    ["DaviPlata\nTransacción exitosa\nValor $1,250,000.00\nPara: Juan Díaz", 1250000, "gasto", "Daviplata", "Juan Díaz", null],
+    ["NEQU1\nRECIBISTE S 20 000\nFecha: 2026-11-27", 20000, "ingreso", "Nequi", "", "2026-11-27"],
+    ["DaviP1ata\nPago exitoso\nValor: S 3O . OOO,00", 30000, "gasto", "Daviplata", "", null],
+    ["Nequi\nTe enviaron\n$45.000,00\nReferencia 12345678", 45000, "ingreso", "Nequi", "", null],
+    ["DaviPlata\nTe llegó $ 25,000\nFecha: 31/02/2026", 25000, "ingreso", "Daviplata", "", null],
+    ["NEQUI\nRetiraste $50.000\nSaldo disponible $120.000", 50000, "gasto", "Nequi", "", null],
+    ["Daviplata\nTransferiste $30000 a 3201234567", 30000, "gasto", "Daviplata", "", null],
+    ["Transacción exitosa\nValor $7.500", 7500, "gasto", null, "", null],
+    ["¡LISTO!\nEnviaste 20 000 a Óscar Peña", 20000, "gasto", null, "Óscar Peña", null],
+    ["Nequi\nEnviaste a Luisa García $10.000", 10000, "gasto", "Nequi", "Luisa García", null],
+    ["Nequi\nEnviaste $10.000 a cuenta de ahorros", 10000, "gasto", "Nequi", "", null]
+  ];
+  for (const [texto, monto, tipo, billetera, destino, fecha] of casos) {
+    assert.deepStrictEqual(leerPantallazoBilletera(texto), { monto, tipo, billetera, destino, fecha }, texto);
+  }
+});
+
+test("usa el monto general cuando corresponde y descarta identificadores", () => {
+  const general = "Café Azul\nTOTAL $ 24.000";
+  assert.strictEqual(leerPantallazoBilletera(general), null);
+  assert.strictEqual(leerMontoGeneralPantallazo(general).monto, 24000);
+  for (const texto of [
+    "Nequi\n¡Listo!\nReferencia 1234567\nCelular 3201234567\nFecha 29/10/2026",
+    "Daviplata\nPago exitoso\nSaldo disponible $80.000",
+    "Nequi\n¡Listo!\n3201234567",
+    "Ruido sin valor",
+    ""
+  ]) {
+    assert.strictEqual(leerPantallazoBilletera(texto), null, texto);
+    assert.strictEqual(leerMontoGeneralPantallazo(texto).ok, false, texto);
+  }
+});
