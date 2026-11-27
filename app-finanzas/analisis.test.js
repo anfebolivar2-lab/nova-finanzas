@@ -2,6 +2,19 @@ const test = require("node:test");
 const assert = require("node:assert");
 const A = require("./analisis.js");
 
+test("la meta por hora divide la meta diaria y redondea al peso", function () {
+  assert.strictEqual(A.metaPorHora(150000, 7), 21429);
+  assert.strictEqual(A.metaPorHora(150000, 7.5), 20000);
+});
+
+test("la meta por hora requiere una meta y horas positivas", function () {
+  assert.strictEqual(A.metaPorHora(null, 8), null);
+  assert.strictEqual(A.metaPorHora(150000), null);
+  assert.strictEqual(A.metaPorHora(0, 8), null);
+  assert.strictEqual(A.metaPorHora(150000, -1), null);
+  assert.strictEqual(A.metaPorHora(150000, "abc"), null);
+});
+
 const HOY = new Date(2026, 9, 29, 15, 0); // jueves 29 de octubre de 2026
 const m = (dia, mes, tipo, monto, extra) => Object.assign({ fecha: new Date(2026, mes, dia, 12).toISOString(), tipo, monto }, extra);
 

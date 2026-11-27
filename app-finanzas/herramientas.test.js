@@ -2,7 +2,40 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const { simular, actualizarNotas, enNoMolestar, horaAviso, referenciaAvisos, gastoAltoDelDia,
   fechaDeMeta, alcanzaDeseo, gastosHormigaTop, repartirGasto, repartoSugerido,
-  categoriaSugeridaPorComercio } = require("./herramientas");
+  categoriaSugeridaPorComercio, cuotasVsIngresos } = require("./herramientas");
+
+var ahoraCuotas = new Date(2026, 10, 26, 12);
+var categoriasCuotas = [{ id: 1, nombre: "Deudas" }, { id: 2, nombre: "Mercado" }];
+var ingresoCuotas = { tipo: "ingreso", monto: 100000, fecha: "2026-11-01" };
+var abonoCuotas = { tipo: "gasto", monto: 30000, categoria_id: 1, fecha: "2026-11-15", etiquetas: ["deuda"] };
+
+test("las cuotas sin ingresos no tienen porcentaje ni aviso", function () {
+  assert.deepEqual(cuotasVsIngresos([abonoCuotas], categoriasCuotas, ahoraCuotas),
+    { ingresos: 0, cuotas: 30000, porcentaje: null, supera: false });
+});
+
+test("las cuotas justo en el 30 % no superan el umbral", function () {
+  assert.deepEqual(cuotasVsIngresos([ingresoCuotas, abonoCuotas], categoriasCuotas, ahoraCuotas),
+    { ingresos: 100000, cuotas: 30000, porcentaje: 30, supera: false });
+});
+
+test("las cuotas por encima del 30 % generan aviso y el umbral se puede cambiar", function () {
+  var movimientos = [ingresoCuotas, Object.assign({}, abonoCuotas, { monto: 40000 })];
+  assert.deepEqual(cuotasVsIngresos(movimientos, categoriasCuotas, ahoraCuotas),
+    { ingresos: 100000, cuotas: 40000, porcentaje: 40, supera: true });
+  assert.equal(cuotasVsIngresos(movimientos, categoriasCuotas, ahoraCuotas, { umbral: 0.40 }).supera, false);
+});
+
+test("las cuotas ignoran otras categorías, otros meses y transferencias", function () {
+  var movimientos = [ingresoCuotas, abonoCuotas,
+    Object.assign({}, abonoCuotas, { categoria_id: 2 }),
+    Object.assign({}, abonoCuotas, { fecha: "2026-10-31" }),
+    Object.assign({}, ingresoCuotas, { fecha: "2026-12-01" }),
+    Object.assign({}, abonoCuotas, { transferencia: true }),
+    Object.assign({}, ingresoCuotas, { transferencia: true })];
+  assert.deepEqual(cuotasVsIngresos(movimientos, categoriasCuotas, ahoraCuotas),
+    { ingresos: 100000, cuotas: 30000, porcentaje: 30, supera: false });
+});
 
 test("valida la suma del reparto y devuelve lo que falta o sobra", () => {
   assert.deepEqual(repartirGasto(100, [40, 60]), { ok: true, resto: 0, partes: [40, 60] });
