@@ -1438,3 +1438,32 @@ dialog.tarjeta { color: var(--r-texto); }
 /* Categoría sugerida por el comercio: pastilla en una sola línea */
 #reg-sugerida { display: inline-flex; flex-direction: row; align-items: center; gap: 8px; width: auto; height: auto; min-height: 44px; padding: 6px 16px; border-radius: 999px; font-weight: 700; white-space: nowrap; }
 #reg-sugerida[hidden] { display: none; }
+
+/* Reto de no gastar */
+#no-gastar :is(button, select) { min-height: 44px; }
+#no-gastar strong > span { display: inline-flex; vertical-align: middle; }
+#no-gastar .formulario { gap: 6px; }
+
+/* Modo sencillo */
+html.sencillo { font-size: 125%; }
+html.sencillo[data-letra="muy-grande"] { font-size: 135%; }
+html.sencillo :is(p, label, small, .nota, .etiqueta, button, input, select, textarea) { font-size: max(18px, .9rem); }
+html.sencillo :is(button, .menu-fila, input:not([type="checkbox"], [type="radio"], [type="range"], [type="color"]), select, textarea) {
+  min-height: 52px;
+}
+html.sencillo .app { --r-nav-alto: 66px; overflow-wrap: anywhere; }
+html.sencillo .rapido-fila input { min-width: 0; }
+html.sencillo :is(.mov-cuerpo, .mov-menu.icono-btn, .periodo-inicio summary) { min-height: 52px; }
+html.sencillo .mov-menu.icono-btn { min-width: 44px; }
+html.sencillo .nav-inferior { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+html.sencillo .nav-inferior [data-ir="buscar"] { grid-column: 3; }
+html.sencillo #btn-mas {
+  right: calc(50% + (env(safe-area-inset-right) - env(safe-area-inset-left)) / 2);
+  transform: translateX(50%);
+  bottom: calc(var(--r-nav-margen) + 7px + env(safe-area-inset-bottom));
+  width: 52px; height: 52px; padding: 0;
+}
+html.sencillo .nav-inferior :is([data-ir="planes"], [data-ir="ia"], [data-ir="analisis"]),
+html.sencillo [data-vista="inicio"] > :not(.saldo, #tarjeta-seguro, #form-rapido, .inicio-movimientos, #lista-inicio, #widgets-inicio),
+html.sencillo #form-rapido :is([data-abrir="hoja-mas"], #sugerencias-hora),
+html.sencillo #hoja-mas .opcion-ia { display: none; }
