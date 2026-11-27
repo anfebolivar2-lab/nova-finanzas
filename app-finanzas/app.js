@@ -132,10 +132,10 @@
     '<path d="M50 52c6-2 10 2 8 8-1 3-6 4-9 1z" fill="#1f9d55"/><rect x="53" y="44" width="5" height="11" rx="2.5" fill="#1f9d55" transform="rotate(-18 55 50)"/>' +
     '<path d="M24 70l-3 4h8zM40 70l3 4h-8z" fill="#f3b23c"/></svg>';
   // Tarjeta de arriba: titulo, detalle y valor opcionales.
-  function toast(titulo, detalle, valor, accion, movimientoGuardado) {
+  function toast(titulo, detalle, valor, accion, movimientoGuardado, sinVibrar) {
     var espera = deshacerHasta - Date.now();
     if (espera > 0 && !(accion && accion.duracion)) {
-      setTimeout(function () { toast(titulo, detalle, valor, accion, movimientoGuardado); }, espera);
+      setTimeout(function () { toast(titulo, detalle, valor, accion, movimientoGuardado, sinVibrar); }, espera);
       return;
     }
     var t = $("toast"), estado = $("toast-estado"), error = $("toast-error");
@@ -174,7 +174,7 @@
       var anuncio = falla || /^No se pudieron/.test(titulo) ? error : estado;
       anuncio.textContent = [titulo, detalle, !ocultos && valor, accion && accion.texto].filter(Boolean).join(". ");
     }
-    try { if (!falla && navigator.vibrate) navigator.vibrate(25); } catch (e) { /* sin vibración */ }
+    try { if (!falla && !sinVibrar && navigator.vibrate) navigator.vibrate(25); } catch (e) { /* sin vibración */ }
     var dur = barra.style.animationDuration; barra.style.animation = "none"; void barra.offsetWidth; barra.style.animation = ""; barra.style.animationDuration = dur;
     clearTimeout(toastTimer);
     toastTimer = setTimeout(ocultarToast, duracion);
@@ -1772,6 +1772,7 @@
     { id: "fondo-emergencia", nombre: "Fondo de emergencia" },
     { id: "servicios-por-mes", nombre: "Servicios públicos mes a mes" },
     { id: "consejo-dia", nombre: "Consejo financiero del día", inicio: true },
+    { id: "no-gastar", nombre: "Reto de no gastar", inicio: true },
     { id: "hormiga-mes", nombre: "Tus gastos hormiga del mes", inicio: true },
     { id: "pruebas-gratis", nombre: "Pruebas gratis por terminar", inicio: true },
     { id: "aviso-pago", nombre: "Aviso del día de pago", inicio: true },
@@ -1808,8 +1809,15 @@
 
   function pintarWidgets(cont, inicio, movs, ciclo, ref, rango) {
     cont.replaceChildren();
-    if (inicio) pintarSugerenciasHora();
-    configWidgets().forEach(function (w) {
+    var lista = configWidgets();
+    if (inicio) {
+      if (document.documentElement.classList.contains("sencillo")) {
+        var visibles = NovaHerramientas.widgetsVisiblesSencillo(lista.map(function (w) { return w.id; }));
+        lista = lista.filter(function (w) { return visibles.indexOf(w.id) >= 0; });
+      }
+      pintarSugerenciasHora();
+    }
+    lista.forEach(function (w) {
       if (w.id === "sugerencias-hora" || !w.visible || (inicio && !WIDGETS.find(function (x) { return x.id === w.id; }).inicio)) return;
       var art = crearWidget(w.id, movs, ciclo, ref, rango, inicio);
       if (art.childNodes.length) cont.append(art);
@@ -1839,6 +1847,7 @@
       "calculadoras-inversion": wCalculadorasInversion,
       "fondo-emergencia": wFondoEmergencia, "servicios-por-mes": wServiciosPorMes, "consejo-dia": wConsejoDia, "pruebas-gratis": wPruebasGratis,
       "hormiga-mes": inicio ? wHormigaMes : null,
+      "no-gastar": inicio ? wNoGastar : null,
       "aviso-pago": inicio ? wAvisoPago : null, "calificar-compra": inicio ? wCalificarCompra : null,
       "resumen-compras": wResumenCompras, "sugerencias-ahorro": wSugerenciasAhorro
     }[id];
@@ -1870,7 +1879,8 @@
   function pintarSugerenciasHora() {
     var cont = $("sugerencias-hora");
     cont.replaceChildren();
-    if (!configWidgets().some(function (w) { return w.id === "sugerencias-hora" && w.visible; })) return;
+    if (document.documentElement.classList.contains("sencillo") ||
+        !configWidgets().some(function (w) { return w.id === "sugerencias-hora" && w.visible; })) return;
     var widget = crearWidget("sugerencias-hora");
     if (widget.childNodes.length) cont.append(widget);
   }
@@ -2041,6 +2051,119 @@
       total += g.total;
     });
     art.append(lista, el("p", "nota", "Sumados son " + dinero(total) + ": pequeño por pedazo, grande al final del mes."));
+  }
+
+  function leerRetoNoGastar() {
+    return (fuente.demo ? fuente.retoNoGastar : leerLocal(claveComodidad("reto-no-gastar"), null)) ||
+      { actual: null, historial: [] };
+  }
+
+  function guardarRetoNoGastar(estado) {
+    if (fuente.demo) { fuente.retoNoGastar = estado; return true; }
+    if (guardarLocal(claveComodidad("reto-no-gastar"), estado)) return true;
+    toast("No se pudo guardar el reto en este teléfono.");
+    return false;
+  }
+
+  function resultadoRetoNoGastar(reto) {
+    return NovaHerramientas.estadoRetoNoGastar(reto, filasDeTodosLosEspacios("movimientos"), new Date(), reto.moneda);
+  }
+
+  function revisarAvisoRetoNoGastar() {
+    if (!fuente || $("pantalla-app").hidden || !$("bloqueo").hidden) return;
+    var guardado = leerRetoNoGastar(), reto = guardado.actual;
+    if (!reto || reto.avisado || resultadoRetoNoGastar(reto).estado !== "roto") return;
+    var actual = Object.assign({}, reto, { avisado: true });
+    if (guardarRetoNoGastar({ actual: actual, historial: guardado.historial })) {
+      toast("Se rompió tu reto de no gastar. ¡Puedes empezar otro!", null, null, null, false, true);
+    }
+  }
+
+  document.addEventListener("visibilitychange", function () {
+    if (!document.hidden) revisarAvisoRetoNoGastar();
+  });
+
+  function wNoGastar(art) {
+    var guardado = leerRetoNoGastar(), reto = guardado.actual;
+    art.id = "no-gastar";
+    titulo(art, "Reto de no gastar");
+    var cumplidos = guardado.historial.filter(function (r) { return r.estado === "cumplido"; }).length;
+    function refrescar(selector) {
+      pintarWidgets($("widgets-inicio"), true);
+      var foco = document.querySelector(selector);
+      if (foco) foco.focus({ preventScroll: true });
+    }
+    if (!reto) {
+      var form = $("no-gastar-formulario").content.firstElementChild.cloneNode(true);
+      var selector = form.querySelector("#no-gastar-categoria");
+      var duracion = form.querySelector("#no-gastar-dias");
+      var categorias = datos.categorias.filter(function (c) { return c.tipo === "gasto"; });
+      categorias.forEach(function (c) {
+        var opcion = el("option", null, etiquetaCategoria(c));
+        opcion.value = c.id;
+        selector.append(opcion);
+      });
+      form.querySelector("#no-gastar-empezar").disabled = !categorias.length;
+      form.addEventListener("submit", function (e) {
+        e.preventDefault();
+        var categoria = categorias.find(function (c) { return String(c.id) === selector.value; });
+        var dias = Number(duracion.value), vigente = leerRetoNoGastar();
+        if (!categoria || vigente.actual || [3, 7, 14, 30].indexOf(dias) < 0) return;
+        var ahora = new Date(), moneda = monedaBase(), desde = A.claveDia(ahora);
+        // Si hoy ya gastó en esa categoría, el reto empieza mañana (si no, nacería roto).
+        var prueba = { categoria_id: categoria.id, desde: desde, dias: 1, moneda: moneda, promedioDia: 0 };
+        var yaGasto = NovaHerramientas.estadoRetoNoGastar(prueba, filasDeTodosLosEspacios("movimientos"), ahora, moneda).estado === "roto";
+        if (yaGasto) desde = A.claveDia(new Date(ahora.getFullYear(), ahora.getMonth(), ahora.getDate() + 1));
+        var actual = { id: String(Date.now()), categoria_id: categoria.id, nombre: categoria.nombre,
+          icono: iconoCategoria(categoria), desde: desde, dias: dias, moneda: moneda,
+          promedioDia: NovaHerramientas.promedioDiarioCategoria(filasDeTodosLosEspacios("movimientos"), categoria.id, desde, 30, moneda) };
+        if (!guardarRetoNoGastar({ actual: actual, historial: vigente.historial })) return;
+        toast(yaGasto ? "Hoy ya gastaste en " + categoria.nombre + ": tu reto empieza mañana." : "Reto empezado. NOVA cuenta los días por ti.");
+        refrescar("#no-gastar button");
+      });
+      art.append(form);
+      if (!categorias.length) art.append(el("p", "nota", "Agrega una categoría de gasto para empezar."));
+    } else {
+      var resultado = resultadoRetoNoGastar(reto);
+      var ahorro = "Llevas " + dineroEn(resultado.ahorrado, reto.moneda || "COP") + " sin gastar";
+      if (resultado.estado === "activo") {
+        var icono = pintarIcono(el("span"), { icono: reto.icono });
+        icono.setAttribute("aria-hidden", "true");
+        var nombre = el("strong");
+        nombre.append("Sin ", icono, " " + reto.nombre);
+        var dia = reto.desde > A.claveDia(new Date()) ? "Empieza mañana · " + resultado.diasTotal + " días" : "Día " + (resultado.diasLimpios + 1) + " de " + resultado.diasTotal;
+        var barra = el("div", "barra"), avance = el("span");
+        barra.setAttribute("role", "progressbar");
+        barra.setAttribute("aria-label", "Días completos del reto");
+        barra.setAttribute("aria-valuemin", "0");
+        barra.setAttribute("aria-valuemax", resultado.diasTotal);
+        barra.setAttribute("aria-valuenow", resultado.diasLimpios);
+        avance.style.width = (100 * resultado.diasLimpios / resultado.diasTotal) + "%";
+        barra.append(avance);
+        art.append(nombre, barra, el("p", "nota", dia));
+        if (resultado.ahorrado > 0) art.append(el("p", "nota", ahorro));
+      } else if (resultado.estado === "roto") {
+        art.append(el("p", null, "Se rompió el " + fechaCorta.format(parteFechaLocal(resultado.rotoEl)) +
+          ": anotaste un gasto en " + reto.nombre + ". Sin pena: empieza otro cuando quieras."));
+      } else {
+        cumplidos++;
+        art.append(el("strong", null, "¡Lo lograste! " + resultado.diasTotal + " días sin " + reto.nombre),
+          el("p", "nota", ahorro), el("span", "chip", "🏅"));
+      }
+      art.append(botonHabito(resultado.estado === "activo" ? "Dejar el reto" : "Empezar otro", function () {
+        var vigente = leerRetoNoGastar();
+        if (!vigente.actual || vigente.actual.id !== reto.id) return;
+        var final = resultadoRetoNoGastar(vigente.actual);
+        if (final.estado === "activo" && !confirm("¿Dejar el reto de no gastar?")) return;
+        var historial = vigente.historial;
+        if (final.estado !== "activo") {
+          historial = historial.concat({ id: reto.id, nombre: reto.nombre, icono: reto.icono, dias: reto.dias,
+            estado: final.estado, ahorrado: final.ahorrado, desde: reto.desde }).slice(-20);
+        }
+        if (guardarRetoNoGastar({ actual: null, historial: historial })) refrescar("#no-gastar-categoria");
+      }));
+    }
+    if (cumplidos > 0) art.append(el("p", "nota", "Retos cumplidos: " + cumplidos));
   }
 
   function wPromedioDia(art) {
@@ -3822,7 +3945,13 @@
       var li = el("li", "fila-widget");
       var lab = el("label", "casilla");
       var chk = el("input"); chk.type = "checkbox"; chk.checked = w.visible;
-      chk.addEventListener("change", function () { if (w.visible && !chk.checked) registrarEvento("recuadro", "oculto_" + info.id); w.visible = chk.checked; guardarWidgets(lista); pintarAnalisis(); pintarWidgets($("widgets-inicio"), true); });
+      chk.addEventListener("change", function () {
+        if (w.id !== "no-gastar" && w.visible && !chk.checked) registrarEvento("recuadro", "oculto_" + info.id);
+        w.visible = chk.checked;
+        guardarWidgets(lista);
+        pintarAnalisis();
+        pintarWidgets($("widgets-inicio"), true);
+      });
       lab.append(chk, document.createTextNode(info.nombre));
       if (w.id === "sugerencias-hora") {
         li.append(lab);
@@ -5938,7 +6067,9 @@
   // ---------- Navegación ----------
   var PRINCIPALES = ["inicio", "planes", "ia", "analisis", "buscar", "ajustes"];
   var TITULOS_CABECERA = { planes: "Planes", ia: "NOVA IA", analisis: "Análisis", buscar: "Buscar", ajustes: "Más" };
+  var PESTANAS_OCULTAS_SENCILLO = ["planes", "ia", "analisis"];
   function ir(vista) {
+    if (document.documentElement.classList.contains("sencillo") && PESTANAS_OCULTAS_SENCILLO.indexOf(vista) >= 0) vista = "inicio";
     if (vista === "ajustes-invitar" && (!fuente || fuente.demo)) vista = "ajustes";
     document.querySelectorAll(".vista").forEach(function (v) { v.hidden = v.dataset.vista !== vista; });
     $("pantalla-app").classList.toggle("en-inicio", vista === "inicio");
@@ -5964,6 +6095,18 @@
   }
   // La entrada rápida conserva todo el ancho mientras se escribe.
   var enVista = "inicio", rapidoVisible = false;
+  var modoSencillo = $("modo-sencillo");
+  modoSencillo.checked = leerLocal("nova-modo-sencillo", false) === true;
+  document.documentElement.classList.toggle("sencillo", modoSencillo.checked);
+  modoSencillo.addEventListener("change", function () {
+    if (!guardarLocal("nova-modo-sencillo", modoSencillo.checked)) {
+      modoSencillo.checked = document.documentElement.classList.contains("sencillo");
+      return toast("No se pudo guardar el modo sencillo en este teléfono.");
+    }
+    document.documentElement.classList.toggle("sencillo", modoSencillo.checked);
+    if (modoSencillo.checked && PESTANAS_OCULTAS_SENCILLO.indexOf(enVista) >= 0) ir("inicio");
+    if (fuente) pintarWidgets($("widgets-inicio"), true);
+  });
   function actualizarFab() {
     var escribiendo = enVista === "inicio" && rapidoVisible && document.activeElement === $("entrada-rapida");
     $("btn-mas").classList.toggle("oculto", ["inicio", "analisis", "buscar", "planes"].indexOf(enVista) < 0 || escribiendo);
@@ -11430,7 +11573,7 @@
     reiniciarConfigNube();
     espacioId = leerLocal(claveEspacio(), null);
     fuente = Esp.envolver(nuevaFuente, { activo: function () { return espacioId; }, alPerder: function () { espacioId = null; guardarLocal(claveEspacio(), null); } });
-    if (fuente.demo) { fuente.iconosCategoria = {}; fuente.retosSemanales = []; fuente.papelera = []; }
+    if (fuente.demo) { fuente.iconosCategoria = {}; fuente.retosSemanales = []; fuente.retoNoGastar = { actual: null, historial: [] }; fuente.papelera = []; }
     reiniciarChat();
     desfaseInicio = 0; desfaseAnalisis = 0;
     $("aviso-demo").hidden = !fuente.demo;
@@ -11457,6 +11600,7 @@
       cargarTasas();
       ultimaActividad = Date.now();
       if (!fuente.demo) bloquearSiHayPin();
+      revisarAvisoRetoNoGastar();
       revisarInactividad();
       var abrirPanelDirecto = panelAlEntrar && soyDueno();
       pintarEstadoPapelera();
@@ -11667,12 +11811,14 @@
     $("bloqueo").hidden = false; setTimeout(function () { $("bloqueo-pin").focus(); }, 50);
   }
   function cerrarBloqueo() {
-    if (pinModo === "abrir") {
+    var desbloqueo = pinModo === "abrir";
+    if (desbloqueo) {
       contenidoBloqueado.forEach(function (c) { c.inert = false; });
     }
     $("bloqueo").hidden = true; $("bloqueo-pin").value = ""; pinModo = null; pinPrimero = "";
     ultimaActividad = Date.now();
     revisarInactividad();
+    if (desbloqueo) revisarAvisoRetoNoGastar();
   }
   function confirmarPin() {
     var pin = $("bloqueo-pin").value.replace(/\D/g, "");

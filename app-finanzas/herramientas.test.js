@@ -2,7 +2,8 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const { simular, actualizarNotas, enNoMolestar, horaAviso, referenciaAvisos, gastoAltoDelDia,
   fechaDeMeta, alcanzaDeseo, gastosHormigaTop, repartirGasto, repartoSugerido,
-  categoriaSugeridaPorComercio, cuotasVsIngresos } = require("./herramientas");
+  categoriaSugeridaPorComercio, cuotasVsIngresos, estadoRetoNoGastar, promedioDiarioCategoria,
+  widgetsVisiblesSencillo } = require("./herramientas");
 
 var ahoraCuotas = new Date(2026, 10, 26, 12);
 var categoriasCuotas = [{ id: 1, nombre: "Deudas" }, { id: 2, nombre: "Mercado" }];
@@ -225,4 +226,75 @@ test("a medianoche cambia el total local y vuelve a permitir un aviso", () => {
   assert.equal(gastoAltoDelDia([...historial, ayer], fecha(20, 23, 59), opciones), null);
   assert.equal(gastoAltoDelDia([...historial, ayer], fecha(21, 0), opciones), null);
   assert.deepEqual(gastoAltoDelDia([...historial, ayer, hoy], fecha(21, 0), opciones), { total: 60000, promedio: 30000, veces: 2 });
+});
+
+const retoSinGasto = {
+  id: "reto-1", categoria_id: 1, nombre: "Ropa", icono: "👕", desde: "2026-12-30", dias: 3, promedioDia: 2000
+};
+function gastoDelReto(fecha, extras) {
+  return Object.assign({ tipo: "gasto", categoria_id: 1, monto: 30000, fecha: fecha }, extras);
+}
+
+test("el reto está activo al empezar y solo cuenta días completos", function () {
+  assert.deepEqual(estadoRetoNoGastar(retoSinGasto, [], "2026-12-30"),
+    { estado: "activo", diasTotal: 3, diasLimpios: 0, diasRestantes: 3, rotoEl: null, ahorrado: 0 });
+  assert.deepEqual(estadoRetoNoGastar(retoSinGasto, [], new Date(2027, 0, 1, 23, 59)),
+    { estado: "activo", diasTotal: 3, diasLimpios: 2, diasRestantes: 1, rotoEl: null, ahorrado: 4000 });
+});
+
+test("si hoy cae antes del comienzo, el reto sigue activo con cero días limpios", function () {
+  assert.deepEqual(estadoRetoNoGastar(retoSinGasto, [gastoDelReto("2026-12-30")], "2026-12-29"),
+    { estado: "activo", diasTotal: 3, diasLimpios: 0, diasRestantes: 3, rotoEl: null, ahorrado: 0 });
+});
+
+test("el reto roto usa el primer gasto por fecha aunque los movimientos estén desordenados", function () {
+  assert.deepEqual(estadoRetoNoGastar(retoSinGasto, [gastoDelReto("2026-12-30")], "2026-12-30"),
+    { estado: "roto", diasTotal: 3, diasLimpios: 0, diasRestantes: 0, rotoEl: "2026-12-30", ahorrado: 0 });
+  assert.deepEqual(estadoRetoNoGastar(retoSinGasto, [gastoDelReto("2027-01-01"), gastoDelReto("2026-12-31")], "2027-01-03"),
+    { estado: "roto", diasTotal: 3, diasLimpios: 1, diasRestantes: 0, rotoEl: "2026-12-31", ahorrado: 2000 });
+});
+
+test("el reto se cumple tras el último día y solo considera gastos válidos del intervalo", function () {
+  const movimientos = [
+    gastoDelReto("2026-12-29"), gastoDelReto("2027-01-02"),
+    gastoDelReto("2026-12-30", { categoria_id: 2 }),
+    gastoDelReto("2026-12-30", { tipo: "ingreso" }),
+    gastoDelReto("2026-12-30", { transferencia: true }),
+    gastoDelReto("2026-12-31", { borrado: true }),
+    gastoDelReto("2027-01-01", { estado: "borrado" }),
+    gastoDelReto("2027-01-01", { moneda: "USD" })
+  ];
+  assert.deepEqual(estadoRetoNoGastar(retoSinGasto, movimientos, "2027-01-02"),
+    { estado: "cumplido", diasTotal: 3, diasLimpios: 3, diasRestantes: 0, rotoEl: null, ahorrado: 6000 });
+  movimientos.push(gastoDelReto(new Date(2027, 0, 1, 23, 59), { moneda: "USD", tasa: 4000, monto_original: 7.5 }));
+  assert.equal(estadoRetoNoGastar(retoSinGasto, movimientos, "2027-01-02").rotoEl, "2027-01-01");
+  assert.equal(estadoRetoNoGastar(Object.assign({}, retoSinGasto, { promedioDia: NaN }), [], "2027-01-03").ahorrado, 0);
+});
+
+test("el promedio de la categoría incluye los días sin gastos y excluye el día de inicio", function () {
+  const movimientos = [
+    gastoDelReto("2026-11-29"), gastoDelReto("2026-11-30"),
+    gastoDelReto("2026-12-29", { monto: 10010, moneda: "USD", tasa: 4000, monto_original: 2.5025 }),
+    gastoDelReto("2026-12-29", { estado: "borrado" }),
+    gastoDelReto("2026-12-29", { transferencia: true }),
+    gastoDelReto("2026-12-29", { moneda: "USD" }),
+    gastoDelReto("2026-12-29", { categoria_id: 2 }),
+    gastoDelReto("2026-12-30")
+  ];
+  assert.equal(promedioDiarioCategoria(movimientos, 1, "2026-12-30"), 1334);
+  assert.equal(promedioDiarioCategoria(movimientos, 1, "2026-12-30", 3), 3337);
+  assert.equal(promedioDiarioCategoria([], 1, "2026-12-30"), 0);
+});
+
+test("modo sencillo conserva el orden de los recuadros básicos sin modificar la lista", function () {
+  const ids = Object.freeze(["lista-inicio", "desconocido", "form-rapido", "tarjeta-seguro", "no-gastar", "saldo-total"]);
+  assert.deepEqual(widgetsVisiblesSencillo([]), []);
+  assert.deepEqual(widgetsVisiblesSencillo(ids), ["lista-inicio", "form-rapido", "tarjeta-seguro", "saldo-total"]);
+  assert.deepEqual(ids, ["lista-inicio", "desconocido", "form-rapido", "tarjeta-seguro", "no-gastar", "saldo-total"]);
+});
+
+test("el reto mantiene los días del calendario al cambiar la hora local", function () {
+  const reto = Object.assign({}, retoSinGasto, { desde: "2027-03-13" });
+  assert.equal(estadoRetoNoGastar(reto, [], new Date(2027, 2, 15, 0, 1)).diasLimpios, 2);
+  assert.equal(estadoRetoNoGastar(reto, [], new Date(2027, 2, 16, 0, 1)).estado, "cumplido");
 });
