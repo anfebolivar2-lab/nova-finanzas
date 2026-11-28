@@ -264,13 +264,37 @@
     return sugerida;
   }
 
+  function limpiarNombreComparacion(nombre) {
+    if (typeof nombre !== "string") return "";
+    return nombre.replace(/["'«»‘’“”`]/g, "").replace(/[^\p{L}\p{M}\p{N}.+&/-]+/gu, " ")
+      .trim().slice(0, 80).trim()
+      // Evita que un nombre active la detección de consultas sobre datos personales.
+      .replace(/\b(mi|mis)\s+(saldo|gastos?|ingresos?|cuentas?|metas?|presupuesto|movimientos?|deudas?|pagos?|ahorros?|finanzas)|cu[aá]nto (he |llevo )?gast[eé]|en qu[eé] (he )?gast[eé]|cu[aá]nto me (queda|sobra)/gi,
+        function (frase) { return frase.replace(/ /g, "-"); });
+  }
+
+  function preguntaComparacion(producto, tope, tiendas) {
+    producto = limpiarNombreComparacion(producto);
+    if ((producto.match(/\p{L}/gu) || []).length < 3) return null;
+    var nombres = Array.isArray(tiendas) ? tiendas.map(limpiarNombreComparacion).filter(Boolean) : [];
+    if (!nombres.length) nombres = ["Alkosto", "Éxito", "Falabella", "MercadoLibre", "Homecenter"];
+    var pregunta = "Busca precios actuales en Colombia, en pesos colombianos, para este producto: " + producto +
+      ". Compara el mismo producto o el modelo equivalente más vendido en estas tiendas: " + nombres.join(", ") + ".";
+    if (Number.isFinite(tope) && tope > 0 && tope < 10000000000) {
+      pregunta += " Tengo pensado gastar hasta $" + tope.toLocaleString("es-CO", { maximumFractionDigits: 20 }) + " (pesos colombianos).";
+    }
+    return pregunta + " Haz una tabla con tienda, precio, si incluye envío, si ofrece cuotas sin interés y enlace. " +
+      "Indica la opción más barata y la de mejor relación precio-calidad. " +
+      "Avisa si los precios parecen desactualizados o si no los pudiste confirmar. No inventes datos y cita las fuentes.";
+  }
+
   function puedeOfrecerHuella(opciones) {
     return !!(opciones && opciones.puente && opciones.disponible === true && opciones.pinActivo === true);
   }
 
   var api = { puedeOfrecerHuella: puedeOfrecerHuella, simular: simular, actualizarNotas: actualizarNotas, enNoMolestar: enNoMolestar, horaAviso: horaAviso,
     referenciaAvisos: referenciaAvisos, gastoAltoDelDia: gastoAltoDelDia, cuotasVsIngresos: cuotasVsIngresos, fechaDeMeta: fechaDeMeta,
-    alcanzaDeseo: alcanzaDeseo, gastosHormigaTop: gastosHormigaTop, repartirGasto: repartirGasto,
+    alcanzaDeseo: alcanzaDeseo, preguntaComparacion: preguntaComparacion, gastosHormigaTop: gastosHormigaTop, repartirGasto: repartirGasto,
     estadoRetoNoGastar: estadoRetoNoGastar, promedioDiarioCategoria: promedioDiarioCategoria,
     widgetsVisiblesSencillo: widgetsVisiblesSencillo,
     repartoSugerido: repartoSugerido, categoriaSugeridaPorComercio: categoriaSugeridaPorComercio };
