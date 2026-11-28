@@ -78,6 +78,7 @@ Lista de funciones para ir sumando poco a poco, probadas una por una.
 - Hablarle a NOVA sin tocar la pantalla: «Oye NOVA, gasté 5 mil en pan».
 - ✅ Temas de colores a elección: verde (el de siempre), azul, morado y naranja, en claro y oscuro.
 - Ícono de la app a elección (necesita una APK nueva).
+- ✅ La APK se baja sola con wifi y se instala con un toque («Actualizar ahora»).
 - ✅ Tutorial corto la primera vez que abres cada pantalla.
 
 # 100 ideas nuevas (noviembre 2026)

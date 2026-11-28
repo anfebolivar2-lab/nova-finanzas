@@ -99,6 +99,14 @@ jobs:
           sed -i '0,/^dependencies {/s//dependencies {\n    implementation "androidx.biometric:biometric:1.1.0"/' android/app/build.gradle
           grep -q 'androidx.biometric:biometric:1.1.0' android/app/build.gradle
           grep -q "registerPlugin(NovaHuellaPlugin.class)" android/app/src/main/java/co/novafinanzas/app/MainActivity.java
+          # Actualización de la APK con un toque: NOVA baja la versión nueva con wifi y la instala desde la app (PackageInstaller).
+          # Android solo deja instalar si la persona permite una vez «instalar apps de esta fuente»; la firma debe coincidir.
+          cp recursos/java/NovaActualizadorPlugin.java android/app/src/main/java/co/novafinanzas/app/NovaActualizadorPlugin.java
+          sed -i 's#<uses-permission android:name="android.permission.INTERNET" />#&\n    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />\n    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />\n    <uses-permission android:name="android.permission.UPDATE_PACKAGES_WITHOUT_USER_ACTION" />#' android/app/src/main/AndroidManifest.xml
+          grep -q REQUEST_INSTALL_PACKAGES android/app/src/main/AndroidManifest.xml
+          grep -q ACCESS_NETWORK_STATE android/app/src/main/AndroidManifest.xml
+          grep -q UPDATE_PACKAGES_WITHOUT_USER_ACTION android/app/src/main/AndroidManifest.xml
+          grep -q "registerPlugin(NovaActualizadorPlugin.class)" android/app/src/main/java/co/novafinanzas/app/MainActivity.java
           # Atajo «Nuevo gasto»: al mantener presionado el ícono de NOVA (Android 7.1 o más nuevo) abre la pantalla de anotar un gasto
           sed -i '0,/<\/activity>/s#</activity>#    <meta-data android:name="android.app.shortcuts" android:resource="@xml/shortcuts" />\n        </activity>#' android/app/src/main/AndroidManifest.xml
           grep -q 'android.app.shortcuts' android/app/src/main/AndroidManifest.xml
@@ -147,6 +155,7 @@ jobs:
           grep -q 'android:name=".BancoListener"' android/app/src/main/AndroidManifest.xml
           grep -q "registerPlugin(NovaBancoPlugin.class)" "$J/MainActivity.java"
           grep -q "registerPlugin(NovaHuellaPlugin.class)" "$J/MainActivity.java"
+          grep -q "registerPlugin(NovaActualizadorPlugin.class)" "$J/MainActivity.java"
           # La app avanzada sabe que lo es: al buscar actualizaciones baja la avanzada y muestra el permiso de notificaciones
           echo '{"versionCode": ${{ env.NOVA_VERSION }}, "versionName": "1.${{ env.NOVA_VERSION }}", "variante": "avanzada"}' > android/app/src/main/assets/public/version-app.json
           cd android

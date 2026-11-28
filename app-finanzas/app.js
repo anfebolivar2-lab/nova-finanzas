@@ -5922,6 +5922,7 @@
     if (vista === "ajustes-tasas") abrirTasas();
     if (vista === "ajustes-invitar") pintarInvitacion();
     window.scrollTo(0, 0);
+    reanudarDescargaApk();
   }
   // La entrada rápida conserva todo el ancho mientras se escribe.
   var enVista = "inicio", rapidoVisible = false;
@@ -11562,6 +11563,159 @@
   // version-app.json lo escribe el flujo al armar la APK; la versión publicada se pide con el
   // HTTP del celular (CapacitorHttp), que no depende de los permisos entre sitios del navegador.
   var versionLocal = null;
+  var Actualizacion = window.NovaActualizacion;
+  var apkActual = null, apkOcupada = null, apkConsulta = 0, apkIntentadas = new Set();
+  var puenteApk = enApp && window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.NovaActualizador;
+  var apkEscuchas;
+
+  function planApkActual(apk) {
+    var estado = apk.estado || {};
+    return Actualizacion.planApk({
+      hayNueva: true,
+      puente: !!apk.estado,
+      falloAntes: apk.fallo,
+      versionNueva: apk.version,
+      descargada: estado.descargada,
+      puedeInstalar: estado.puedeInstalar,
+      red: estado.red,
+      ahorroDatos: estado.ahorroDatos,
+      descargando: apkOcupada === apk && apk.operacion === "descargar"
+    });
+  }
+
+  function pintarEstadoApk() {
+    if (!puenteApk || !Actualizacion) return;
+    var apk = apkActual;
+    var plan = apk && planApkActual(apk);
+    var estado = apk ? "hay una versión nueva" : "al día";
+    if (apk) {
+      var texto = apk.respaldo;
+      if (apkOcupada === apk && apk.operacion === "descargar") {
+        estado = "bajando";
+        texto = "Bajando la versión " + apk.nombre + "…" + (apk.porcentaje === null ? "" : " " + apk.porcentaje + " %");
+      } else if (apkOcupada === apk && apk.operacion === "instalar") {
+        estado = "instalando";
+        texto = "Preparando la instalación de la versión " + apk.nombre + "…";
+      } else if (plan.accion === "instalar" || plan.accion === "permiso") {
+        estado = "lista para instalar";
+        texto = "La versión " + apk.nombre + " está lista. " + (apk.explicarPermiso ? plan.texto : "Toca «Actualizar ahora».");
+      } else if (plan.accion === "descargar") {
+        texto = "Toca para bajar la versión " + apk.nombre + ".";
+      } else if (plan.accion === "esperar-wifi") {
+        texto = plan.texto;
+      }
+      var aviso = $("aviso-version-texto");
+      if (aviso.textContent !== texto) aviso.textContent = texto;
+    }
+    [$("apk-app-estado"), $("actualizar-apk-estado")].forEach(function (etiqueta) {
+      etiqueta.textContent = "Actualización: " + estado;
+      etiqueta.hidden = false;
+    });
+  }
+
+  function apkPuedeActuar() {
+    return !document.hidden && !(fuente && fuente.demo) &&
+      (!$("pantalla-auth").hidden || inicioListoParaGasto) && recargaSegura(true);
+  }
+
+  function intentarDescargaApk() {
+    var apk = apkActual;
+    if (!apk || !apk.estado || apkOcupada || apkIntentadas.has(apk.version) ||
+        planApkActual(apk).accion !== "descargar" || !apkPuedeActuar()) return;
+    actuarApk(apk, "descargar");
+  }
+
+  function reanudarDescargaApk() {
+    var apk = apkActual;
+    if (!apk || !apk.estado || apk.fallo || apkOcupada || apkIntentadas.has(apk.version) ||
+        apk.estado.descargada === apk.version || !apkPuedeActuar()) return;
+    revisarEstadoApk();
+  }
+
+  async function actuarApk(apk, accion) {
+    if (apkOcupada || !apkPuedeActuar()) return;
+    apkConsulta++;
+    apkOcupada = apk;
+    apk.operacion = accion;
+    apk.porcentaje = null;
+    apk.explicarPermiso = accion === "permiso";
+    if (accion === "descargar") apkIntentadas.add(apk.version);
+    pintarEstadoApk();
+    try {
+      if (accion === "permiso") {
+        await puenteApk.pedirPermiso();
+      } else if (accion === "instalar") {
+        var instalacion = await puenteApk.instalar({ versionCode: apk.version });
+        if (!instalacion || !instalacion.iniciado) throw new Error();
+        return;
+      } else {
+        var resultado = await puenteApk.descargar({ url: apk.url, versionCode: apk.version });
+        if (!resultado || !resultado.listo || resultado.versionCode !== apk.version) throw new Error();
+        apk.estado.descargada = resultado.versionCode;
+      }
+    } catch (e) {
+      apk.fallo = true;
+    }
+    if (apkOcupada === apk) apkOcupada = null;
+    pintarEstadoApk();
+    if (apkActual !== apk || accion === "permiso") revisarEstadoApk();
+  }
+
+  async function revisarEstadoApk() {
+    var apk = apkActual;
+    if (!puenteApk || !Actualizacion || !apk || apk.fallo || apkOcupada) return;
+    var consulta = ++apkConsulta;
+    try {
+      if (!await apkEscuchas) throw new Error();
+      if (consulta !== apkConsulta || apk !== apkActual) return;
+      var estado = await puenteApk.estado();
+      if (consulta !== apkConsulta || apk !== apkActual) return;
+      if (!estado) throw new Error();
+      apk.estado = estado;
+      if (estado.puedeInstalar) apk.explicarPermiso = false;
+    } catch (e) {
+      if (consulta !== apkConsulta || apk !== apkActual) return;
+      apk.fallo = true;
+    }
+    pintarEstadoApk();
+    intentarDescargaApk();
+  }
+
+  if (puenteApk && Actualizacion) {
+    apkEscuchas = Promise.resolve().then(function () {
+      return Promise.all([
+        puenteApk.addListener("progreso", function (progreso) {
+          if (!apkOcupada || apkOcupada.operacion !== "descargar" ||
+              !progreso || !(progreso.total > 0) || !(progreso.descargado >= 0)) return;
+          apkOcupada.porcentaje = Math.min(100, Math.floor(progreso.descargado / progreso.total * 100));
+          pintarEstadoApk();
+        }),
+        puenteApk.addListener("instalacion", function (evento) {
+          if (!evento || evento.estado !== "fallo" || !apkOcupada || apkOcupada.operacion !== "instalar") return;
+          var apk = apkOcupada;
+          apk.fallo = true;
+          apkOcupada = null;
+          pintarEstadoApk();
+          if (apkActual !== apk) revisarEstadoApk();
+        })
+      ]).then(function () { return true; });
+    }).catch(function () { return false; });
+    $("apk-app-ayuda").hidden = false;
+    $("aviso-version").addEventListener("click", function (evento) {
+      if (!apkActual) return;
+      var plan = planApkActual(apkActual);
+      if (plan.accion === "enlace") return;
+      evento.preventDefault();
+      if (!apkPuedeActuar() || apkOcupada) return;
+      actuarApk(apkActual, plan.accion === "esperar-wifi" ? "descargar" : plan.accion);
+    });
+    window.addEventListener("online", revisarEstadoApk);
+    if (navigator.connection && navigator.connection.addEventListener) {
+      navigator.connection.addEventListener("change", revisarEstadoApk);
+    }
+    window.addEventListener("popstate", reanudarDescargaApk);
+    document.addEventListener("focusout", function () { setTimeout(reanudarDescargaApk, 0); });
+  }
   function leerVersionPublicada(http, url) {
     return http.get({ url: url + (url.indexOf("?") < 0 ? "?" : "&") + "t=" + Date.now(), responseType: "json" }).then(function (res) {
       var d = typeof res.data === "string" ? JSON.parse(res.data) : res.data;
@@ -11585,7 +11739,17 @@
         var aviso = $("aviso-version");
         if (hayNueva) {
           aviso.href = enlaceDescarga(mejor.apk); aviso.target = "_blank";
-          $("aviso-version-texto").textContent = "Versión " + mejor.d.versionName + " (tienes la " + local.versionName + "). Toca para descargarla y, al abrir el archivo, toca Actualizar.";
+          var respaldo = "Versión " + mejor.d.versionName + " (tienes la " + local.versionName + "). Toca para descargarla y, al abrir el archivo, toca Actualizar.";
+          if (puenteApk && Actualizacion) {
+            var version = Number(mejor.d.versionCode);
+            if (!apkActual || apkActual.version !== version) {
+              apkActual = { version: version, nombre: mejor.d.versionName, url: mejor.apk, respaldo: respaldo };
+            } else {
+              apkActual.url = mejor.apk;
+            }
+          } else {
+            $("aviso-version-texto").textContent = respaldo;
+          }
           [$("btn-apk"), $("perfil-apk")].forEach(function (a) { a.href = enlaceDescarga(mejor.apk); });
         }
         [$("btn-apk"), $("perfil-apk")].forEach(function (a) {
@@ -11594,12 +11758,14 @@
           a.classList.toggle("hay-nueva", hayNueva);
         });
         aviso.hidden = !hayNueva;
+        if (!hayNueva) apkActual = null;
+        pintarEstadoApk();
+        revisarEstadoApk();
         return { local: local, remota: mejor.d, hayNueva: hayNueva, enlace: mejor.apk };
       });
     }).catch(function () { return null; /* sin conexión o APK armada sin número de versión */ });
   }
   // Actualización automática.
-  var Actualizacion = window.NovaActualizacion;
   var otaMetaCache = "nova-ota-meta", otaMetaUrl = "/__ota-meta__", otaMalosUrl = "/__ota-malos__";
   var otaRevision = "nova-ota-revision", revisandoWeb = false, recargarAlVolver = false;
   var vigilarVersionWeb = Actualizacion && !enApp && location.hostname !== "localhost";
@@ -11730,10 +11896,10 @@
     return enLinea() && !(fuente && fuente.demo);
   }
 
-  function recargaSegura() {
+  function recargaSegura(paraApk) {
     var appVisible = !$("pantalla-app").hidden;
     var borrador = appVisible && (
-      ["inicio", "analisis", "buscar"].indexOf(enVista) < 0 ||
+      (["inicio", "analisis", "buscar"].indexOf(enVista) < 0 && !(paraApk && enVista === "ajustes")) ||
       !!$("entrada-rapida").value || !$("vista-previa").hidden
     );
     if (!$("pantalla-auth").hidden) {
@@ -11745,7 +11911,7 @@
       capas: pilaCapas.length,
       bloqueada: !$("bloqueo").hidden,
       escribiendo: !!document.activeElement && document.activeElement.matches("input, textarea"),
-      borrador: borrador || (enApp && !appVisible)
+      borrador: borrador || (enApp && !appVisible && !paraApk)
     });
   }
 
@@ -11807,7 +11973,10 @@
         if (aplicada) return;
         if (!r) toast("No se pudo revisar", "Revisa tu conexión e intenta otra vez");
         else if (r.error) toast("No se pudo revisar", "No pude leer la versión publicada");
-        else if (r.hayNueva) toast("¡Hay una versión nueva!", "Versión " + r.remota.versionName, null, { texto: "Descargar", fn: function () { window.open(r.enlace, "_blank"); } });
+        else if (r.hayNueva) {
+          if (puenteApk && Actualizacion) toast("¡Hay una versión nueva!", "Versión " + r.remota.versionName);
+          else toast("¡Hay una versión nueva!", "Versión " + r.remota.versionName, null, { texto: "Descargar", fn: function () { window.open(r.enlace, "_blank"); } });
+        }
         else toast("Ya tienes la última versión", "Versión " + r.local.versionName);
       });
     }).finally(function () { boton.disabled = false; });
@@ -11819,7 +11988,12 @@
   }
   if (enApp) {
     buscarActualizacion();
-    document.addEventListener("visibilitychange", function () { if (!document.hidden) buscarActualizacion(); });
+    document.addEventListener("visibilitychange", function () {
+      if (!document.hidden) {
+        revisarEstadoApk();
+        buscarActualizacion();
+      }
+    });
     setInterval(function () { if (!document.hidden) buscarActualizacion(); }, 30 * 60 * 1000);   // y cada media hora si la app queda abierta
   }
 
@@ -11899,6 +12073,7 @@
       inicioListoParaGasto = true;
       abrirGastoPendiente();
       revisarPantallazo();
+      reanudarDescargaApk();
       return procesarProgramados();
     }).catch(function (e) {
       mostrar("auth");
@@ -12203,6 +12378,7 @@
     ultimaActividad = Date.now();
     revisarInactividad();
     if (desbloqueo) revisarAvisoRetoNoGastar();
+    setTimeout(reanudarDescargaApk, 0);
   }
   function terminarDesbloqueo(discreto) {
     cerrarBloqueo();

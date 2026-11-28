@@ -31,6 +31,7 @@ public class MainActivity extends BridgeActivity {
         registerPlugin(NovaBancoPlugin.class);
         try {
             registerPlugin(NovaHuellaPlugin.class);
+            registerPlugin(NovaActualizadorPlugin.class);
         } catch (Exception | LinkageError e) {
             // El PIN sigue disponible si el puente falla.
         }
