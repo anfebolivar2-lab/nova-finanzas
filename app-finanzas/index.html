@@ -97,9 +97,9 @@
 
 <!-- Inicio de sesión -->
 <!-- Solo dentro de la app instalada: avisa cuando hay una APK más nueva -->
-<a id="aviso-version" class="boton-apk aviso-version" hidden>
+<a id="aviso-version" class="boton-apk aviso-version" rel="noopener" hidden>
   <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M7 10l5 5 5-5M5 21h14"/></svg>
-  <span><strong>Hay una versión nueva de NOVA</strong><small id="aviso-version-texto">Toca para descargarla. Al abrir el archivo, toca Actualizar.</small></span>
+  <span><strong>Hay una versión nueva de NOVA</strong><small id="aviso-version-texto" role="status">Toca para descargarla. Al abrir el archivo, toca Actualizar.</small></span>
 </a>
 
 <section id="pantalla-auth" class="auth" hidden>
@@ -188,6 +188,8 @@
   <p class="nota centro respaldo">¿No se descarga? <a class="apk-respaldo" href="#" target="_blank" rel="noopener">Prueba este otro enlace</a>.</p>
   <div id="apk-app" class="apk-app" hidden>
     <p class="nota centro" id="apk-app-version"></p>
+    <p class="nota centro" id="apk-app-estado" hidden></p>
+    <p class="nota centro" id="apk-app-ayuda" hidden>NOVA baja sola las actualizaciones con wifi. Cuando haya una lista, toca «Actualizar ahora».</p>
     <button type="button" id="apk-app-buscar" class="boton-apk-boton">🔄 Buscar actualización de NOVA</button>
   </div>
   <button type="button" id="btn-demo" class="enlace">Ver la demostración sin cuenta</button>
@@ -752,7 +754,7 @@
         <input type="file" id="archivo-respaldo" aria-label="Seleccionar archivo de respaldo" accept=".json,application/json" hidden>
         <button type="button" id="btn-importar"><span class="menu-icono">📥</span><span><strong>Importar desde Excel o CSV</strong><small>Columnas: fecha, descripcion, monto (y tipo, categoria si quieres)</small></span></button>
         <input type="file" id="archivo-csv" aria-label="Seleccionar archivo CSV" accept=".csv,text/csv,text/plain" hidden>
-        <button type="button" id="btn-actualizar" hidden><span class="menu-icono">🔄</span><span><strong>Buscar actualización</strong><small id="actualizar-estado">Mira si hay una versión nueva de NOVA</small></span></button>
+        <button type="button" id="btn-actualizar" hidden><span class="menu-icono">🔄</span><span><strong>Buscar actualización</strong><small id="actualizar-estado">Mira si hay una versión nueva de NOVA</small><small id="actualizar-apk-estado" hidden></small></span></button>
         <button type="button" id="btn-pruebas"><span class="menu-icono">🧪</span><span><strong>Probar las funciones nuevas</strong><small>Prueba con un toque la foto, la IA, el widget y las teclas rápidas en tu celular</small></span></button>
         <button type="button" id="btn-historial"><span class="menu-icono">🕘</span><span><strong>Historial de cambios</strong><small>Qué creaste, editaste o borraste y cuándo</small></span></button>
         <button type="button" id="btn-papelera"><span class="menu-icono">🗑️</span><span><strong>Papelera</strong><small id="papelera-estado">Recupera lo que borraste en los últimos 30 días</small></span></button>

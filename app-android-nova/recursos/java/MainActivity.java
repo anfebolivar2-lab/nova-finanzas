@@ -30,6 +30,7 @@ public class MainActivity extends BridgeActivity {
     public void onCreate(Bundle savedInstanceState) {
         try {
             registerPlugin(NovaHuellaPlugin.class);
+            registerPlugin(NovaActualizadorPlugin.class);
         } catch (Exception | LinkageError e) {
             // El PIN sigue disponible si el puente falla.
         }

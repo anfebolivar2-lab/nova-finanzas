@@ -1,7 +1,7 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const {
-  tocaRevisarOta, versionWeb, cambioVersionWeb, puedeRecargar, permiteRecargaWeb
+  tocaRevisarOta, versionWeb, cambioVersionWeb, puedeRecargar, permiteRecargaWeb, planApk
 } = require("./actualizacion.js");
 
 test("la revisión OTA periódica respeta cinco minutos y la forzada pasa de inmediato", function () {
@@ -38,4 +38,32 @@ test("la web solo puede recargarse automáticamente al volver tras treinta minut
   assert.equal(permiteRecargaWeb(1800001, null), false);
   assert.equal(permiteRecargaWeb(1800000, 1), false);
   assert.equal(permiteRecargaWeb(1800001, 1), true);
+});
+
+test("el plan de APK conserva el enlace para APK antiguas y después de un fallo", function () {
+  assert.deepEqual(planApk(undefined), { accion: "nada", texto: "" });
+  assert.equal(planApk({ hayNueva: false, puente: true, descargada: 10, versionNueva: 10 }).accion, "nada");
+  assert.equal(planApk({ hayNueva: true }).accion, "enlace");
+  assert.equal(planApk({ hayNueva: true, puente: true, falloAntes: true }).accion, "enlace");
+});
+
+test("el plan de APK baja en wifi sin ahorro y espera en las demás condiciones", function () {
+  const estado = { hayNueva: true, puente: true, versionNueva: 12, descargada: 11, red: "wifi" };
+  assert.equal(planApk(estado).accion, "descargar");
+  assert.equal(planApk({ ...estado, descargada: 13 }).accion, "descargar");
+  assert.equal(planApk({ ...estado, ahorroDatos: true }).accion, "esperar-wifi");
+  assert.equal(planApk({ ...estado, descargando: true }).accion, "esperar-wifi");
+  assert.deepEqual(planApk({ ...estado, red: "datos" }), {
+    accion: "esperar-wifi",
+    texto: "Hay una versión nueva. Se bajará sola con wifi o toca para bajarla ahora."
+  });
+  assert.equal(planApk({ ...estado, red: "ninguna" }).accion, "esperar-wifi");
+});
+
+test("solo la versión exacta bajada se puede instalar y Android puede pedir permiso", function () {
+  const estado = { hayNueva: true, puente: true, versionNueva: 12, descargada: 12, red: "ninguna" };
+  assert.equal(planApk(estado).accion, "permiso");
+  assert.equal(planApk({ ...estado, puedeInstalar: true }).accion, "instalar");
+  assert.equal(planApk({ ...estado, descargada: "12", puedeInstalar: true }).accion, "esperar-wifi");
+  assert.equal(planApk({ hayNueva: true, puente: true, puedeInstalar: true }).accion, "esperar-wifi");
 });
