@@ -1428,6 +1428,7 @@
     pintarRegistroPatrimonio();
     pintarCompras();
     pintarDeseos();
+    pintarComparacionesRecientes();
     pintarFechaMeta();
     pintarSuscripciones();
     var ul = $("lista-limites");
@@ -1641,12 +1642,14 @@
       var borrar = botonHabito("Quitar", function () {
         if (confirm("¿Quitar «" + d.nombre + "» de la lista?")) quitar("Deseo quitado");
       });
+      var comparar = botonHabito("Comparar precios", function () { llenarComparacion(d.nombre, d.precio); });
+      comparar.setAttribute("aria-label", "Comparar precios · " + d.nombre);
       [meta, comprada, borrar].forEach(function (boton) {
         boton.disabled = estadoDeseoAMeta.get(d.id) === "creando" ||
           (boton === meta && (ocultos || estadoDeseoAMeta.has(d.id)));
         boton.setAttribute("aria-label", boton.textContent + " · " + d.nombre);
       });
-      acciones.append(meta, comprada, borrar);
+      acciones.append(meta, comprada, borrar, comparar);
       li.append(acciones);
       ul.append(li);
     });
@@ -1665,6 +1668,59 @@
     e.target.reset();
     mensaje("deseo-mensaje", "Deseo agregado.");
     pintarDeseos();
+  });
+
+  function claveComparaciones() { return claveComodidad("comparaciones:" + (espacioId || "principal")); }
+
+  function leerComparacionesRecientes() {
+    if (!fuente || fuente.demo) return [];
+    var recientes = leerLocal(claveComparaciones(), []);
+    return Array.isArray(recientes) ? recientes.filter(function (nombre) {
+      return typeof nombre === "string" && nombre.trim();
+    }).slice(0, 5) : [];
+  }
+
+  function llenarComparacion(nombre, tope) {
+    var producto = $("comparar-producto");
+    producto.value = nombre.slice(0, 80);
+    $("comparar-tope").value = Number.isFinite(tope) && tope > 0 ? miles(Math.round(tope)) : "";
+    mensaje("comparar-mensaje", "");
+    $("comparar-form").scrollIntoView({ block: "center" });
+    producto.focus({ preventScroll: true });
+  }
+
+  function pintarComparacionesRecientes() {
+    var contenedor = $("comparar-recientes");
+    contenedor.replaceChildren();
+    leerComparacionesRecientes().forEach(function (nombre) {
+      var boton = botonHabito("Reciente: " + nombre, function () { llenarComparacion(nombre); });
+      boton.classList.add("chip");
+      contenedor.append(boton);
+    });
+  }
+
+  $("comparar-form").addEventListener("submit", function (e) {
+    e.preventDefault();
+    var producto = $("comparar-producto").value.trim();
+    var topeEscrito = $("comparar-tope").value;
+    var tope = /^[$\s]*[-−]/.test(topeEscrito) ? null : leerValor(topeEscrito);
+    var pregunta = NovaHerramientas.preguntaComparacion(producto, tope);
+    if (!pregunta) return mensaje("comparar-mensaje", "Escribe qué quieres comprar (por ejemplo: televisor de 55 pulgadas).", true);
+    if (!enLinea()) return mensaje("comparar-mensaje", "Sin internet: la IA necesita conexión.", true);
+    if ((!fuente || !fuente.demo) && !iaDisponible()) {
+      return mensaje("comparar-mensaje", "La IA no está disponible ahora mismo.", true);
+    }
+    mensaje("comparar-mensaje", "");
+    if (fuente && !fuente.demo) {
+      var recientes = leerComparacionesRecientes().filter(function (nombre) {
+        return nombre.toLowerCase() !== producto.toLowerCase();
+      });
+      recientes.unshift(producto);
+      guardarLocal(claveComparaciones(), recientes.slice(0, 5));
+      pintarComparacionesRecientes();
+    }
+    abrirChat(null, { soloPregunta: true });
+    preguntarNova(pregunta);
   });
 
   // Pantalla de límite.
@@ -10687,8 +10743,9 @@
       sug.append(b);
     });
   }
-  function abrirChat(conv) {
+  function abrirChat(conv, opciones) {
     chatActual = conv ? { id: conv.id, titulo: conv.titulo, mensajes: (conv.mensajes || []).slice() } : { id: null, titulo: "", mensajes: [] };
+    chatActual.soloPregunta = !!(opciones && opciones.soloPregunta);
     limpiarFotoChat();
     mensaje("chat-mensaje", "");
     $("chat-pregunta").value = "";
@@ -10705,6 +10762,7 @@
   // Guarda en orden: así una pregunta rápida tras otra no crea dos conversaciones.
   function guardarConversacion() {
     var chat = chatActual;
+    if (chat.soloPregunta) return Promise.resolve();
     chat.guardando = (chat.guardando || Promise.resolve()).catch(function () { /* el intento anterior ya avisó */ }).then(function () { return guardarConversacionYa(chat); });
     return chat.guardando;
   }
@@ -10767,22 +10825,28 @@
     // Si todavía hay una pregunta esperando, se cancela: así nunca se queda trabado.
     if (chatControl) { try { chatControl.abort(); } catch (e) { /* ya terminó */ } }
     var mio = ++chatToken, control = chatControl = new AbortController();
-    var chat = chatActual, uso = usoActivoEventos(), inicioRespuesta;
+    var chat = chatActual, soloEsta = !!chat.soloPregunta, inicioRespuesta;
+    chat.soloPregunta = false; // solo la primera pregunta (la comparación) va sin tus datos; lo que sigue es un chat normal
+    var uso = soloEsta ? null : usoActivoEventos();
     $("chat-bienvenida").hidden = true;
     mensaje("chat-mensaje", "");
     $("chat").querySelectorAll("li.pensando").forEach(function (x) { x.remove(); });
     burbuja("yo", textoVisible, imagen);
     $("chat-pregunta").value = "";
     var espera = burbuja("nova pensando", "✦ Pensando…");
-    var historial = soloCifras ? [] : chat.mensajes.slice(-6);
-    // La pregunta se guarda de una vez: aunque la IA falle o tarde, queda en tu historial.
+    var historial = soloCifras || soloEsta ? [] : chat.mensajes.slice(-6);
+    // Las conversaciones guardadas conservan la pregunta aunque la IA falle o tarde.
     chat.mensajes.push({ rol: "usuario", texto: (imagen ? "📷 " : "") + textoVisible });
     var guardada = guardarConversacion().catch(function () { mensaje("chat-mensaje", "La pregunta no se pudo guardar en tu historial, pero puedes seguir chateando.", true); });
     return Promise.resolve().then(function () {
       if ((soloCifras && ocultos) || (opciones.vigente && !opciones.vigente())) return "";
       registrarEventoDe(uso, "ia", imagen ? "pregunta_foto" : opciones.porVoz ? "pregunta_voz" : "pregunta_texto");
       if (uso) registrarEventoDe(uso, "ia", "tema_" + Eventos.temaPregunta(pregunta));
-      var cuerpo = { pregunta: pregunta, historial: historial, contexto: soloCifras ? { hoy: hoyLocal() } : contextoFinanzas(), imagen: imagen, mime: opciones.mime };
+      var cuerpo = { pregunta: pregunta, imagen: imagen, mime: opciones.mime };
+      if (!soloEsta) {
+        cuerpo.historial = historial;
+        cuerpo.contexto = soloCifras ? { hoy: hoyLocal() } : contextoFinanzas();
+      }
       return preguntarEnFlujo(cuerpo, function (texto) {
         if (mio !== chatToken) return;
         pintarTextoIA(espera, texto);
@@ -10798,7 +10862,7 @@
       if (marcasIA(respuesta).fuentes.length) registrarEventoDe(uso, "ia", "busqueda_web");
       pintarTextoIA(espera, respuesta);
       espera.classList.remove("pensando");
-      var tar = imagen || soloCifras ? null : tarjetaIA(pregunta, respuesta);
+      var tar = imagen || soloCifras || soloEsta ? null : tarjetaIA(pregunta, respuesta);
       if (tar) { espera.after(tar); tar.scrollIntoView({ block: "nearest" }); }
       chat.mensajes.push({ rol: "nova", texto: respuesta });
       if (chat === chatActual) actualizarBotonNota();

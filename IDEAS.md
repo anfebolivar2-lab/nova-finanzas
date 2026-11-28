@@ -20,7 +20,7 @@ Lista de funciones para ir sumando poco a poco, probadas una por una.
 - ✅ Reto de no gastar: elige días o una semana sin gastos en algo (domicilios, ropa) y NOVA lleva la cuenta.
 - ✅ Metas con fecha automática: dices cuánto puedes guardar al mes y NOVA calcula cuándo llegas.
 - ✅ Alcancía por redondeo con meta: lo que sobra de redondear va directo a una meta. (tarjeta «Alcancía»)
-- Comparar precios de una compra grande en varias tiendas (con la IA que busca en internet).
+- ✅ Comparar precios de una compra grande en varias tiendas (con la IA que busca en internet).
 - ✅ Lista de deseos: cosas que quieres comprar, con precio y «¿me alcanza?» para cada una.
 - ✅ Aviso de «gasto hormiga del mes»: tus 3 gastos pequeños que más suman.
 

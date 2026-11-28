@@ -3,7 +3,7 @@ const assert = require("node:assert/strict");
 const { simular, actualizarNotas, enNoMolestar, horaAviso, referenciaAvisos, gastoAltoDelDia,
   fechaDeMeta, alcanzaDeseo, gastosHormigaTop, repartirGasto, repartoSugerido,
   categoriaSugeridaPorComercio, cuotasVsIngresos, estadoRetoNoGastar, promedioDiarioCategoria,
-  widgetsVisiblesSencillo } = require("./herramientas");
+  widgetsVisiblesSencillo, preguntaComparacion } = require("./herramientas");
 
 var ahoraCuotas = new Date(2026, 10, 26, 12);
 var categoriasCuotas = [{ id: 1, nombre: "Deudas" }, { id: 2, nombre: "Mercado" }];
@@ -308,4 +308,58 @@ test("la huella requiere puente disponible y PIN activo", () => {
   assert.equal(puedeOfrecerHuella({ puente: null, disponible: true, pinActivo: true }), false);
   assert.equal(puedeOfrecerHuella({ puente, disponible: "true", pinActivo: true }), false);
   assert.equal(puedeOfrecerHuella(null), false);
+});
+
+// Mismas expresiones que usa la función nova-ia.
+const NECESITA_WEB = /precio|cu[aá]nto (cuesta|vale|valen|cuestan|sale|est[aá])|me alcanza|alcanza para|comprar|compro|cotiz|iphone|samsung|xiaomi|motorola|celular|port[aá]til|computador|televisor|tv |carro|moto |playstation|xbox|nintendo|noticia|hoy|actual|[uú]ltim|nuevo|nueva|lanzamiento|sali[oó]|clima|lluvia|d[oó]lar|euro|tasa|inflaci[oó]n|salario m[ií]nimo|uvt|resultado|partido|gan[oó]|elecci|202[5-9]/i;
+const SOLO_MIS_DATOS = /\b(mi|mis)\s+(saldo|gastos?|ingresos?|cuentas?|metas?|presupuesto|movimientos?|deudas?|pagos?|ahorros?|finanzas)|cu[aá]nto (he |llevo )?gast[eé]|en qu[eé] (he )?gast[eé]|cu[aá]nto me (queda|sobra)/i;
+
+test("la comparación pide precios actuales, una tabla y fuentes en las cinco tiendas", function () {
+  var pregunta = preguntaComparacion("nevera de 300 litros");
+  assert.match(pregunta, /precios actuales en Colombia, en pesos colombianos/);
+  assert.match(pregunta, /nevera de 300 litros/);
+  assert.match(pregunta, /Alkosto, Éxito, Falabella, MercadoLibre, Homecenter/);
+  assert.match(pregunta, /mismo producto o el modelo equivalente más vendido/);
+  assert.match(pregunta, /tabla con tienda, precio, si incluye envío, si ofrece cuotas sin interés y enlace/);
+  assert.match(pregunta, /opción más barata y la de mejor relación precio-calidad/);
+  assert.match(pregunta, /desactualizados o si no los pudiste confirmar/);
+  assert.match(pregunta, /No inventes datos y cita las fuentes/);
+  assert.doesNotMatch(pregunta, /Tengo pensado gastar/);
+});
+
+test("la comparación limpia el producto, exige tres letras y lo recorta a 80 caracteres", function () {
+  var pregunta = preguntaComparacion('  “Nevera”\n\t <{}[]> [300]   litros  ');
+  assert.match(pregunta, /producto: Nevera 300 litros\./);
+  assert.doesNotMatch(pregunta, /[\n\t"“”<>{}\[\]]| {2}/);
+  ["", "  ", null, "<>", "TV 55", "1234", 123].forEach(function (producto) {
+    assert.equal(preguntaComparacion(producto), null);
+  });
+  assert.ok(preguntaComparacion("TV á"));
+  assert.match(preguntaComparacion("a".repeat(81) + " FINAL"), /producto: a{80}\./);
+});
+
+test("la comparación incluye el tope solo cuando es un número positivo dentro del rango", function () {
+  assert.match(preguntaComparacion("nevera", 1500000), /Tengo pensado gastar hasta \$1\.500\.000 \(pesos colombianos\)/);
+  assert.match(preguntaComparacion("nevera", 1500000.5), /\$1\.500\.000,5 /);
+  [null, undefined, 0, -2, "1500000", NaN, Infinity, 10000000000, 20000000000].forEach(function (tope) {
+    assert.doesNotMatch(preguntaComparacion("nevera", tope), /Tengo pensado gastar/);
+  });
+});
+
+test("la comparación usa las tiendas personalizadas limpias y recupera las de siempre si faltan", function () {
+  var pregunta = preguntaComparacion("nevera", null, [' <“Ktronix”>\n', "Casa   [Bogotá]", null, ""]);
+  assert.match(pregunta, /estas tiendas: Ktronix, Casa Bogotá\./);
+  assert.doesNotMatch(pregunta, /Alkosto/);
+  assert.equal(preguntaComparacion("nevera", null, ["<>{}"]), preguntaComparacion("nevera"));
+});
+
+test("la comparación activa la búsqueda web sin activar la detección de datos personales", function () {
+  [
+    preguntaComparacion("nevera", 1500000),
+    preguntaComparacion("Mi presupuesto", null, ["Mis cuentas", "Cuánto me sobra"]),
+    preguntaComparacion("Cuánto gasté", null, ["En qué he gasté", "Mi saldo"])
+  ].forEach(function (pregunta) {
+    assert.match(pregunta, NECESITA_WEB);
+    assert.doesNotMatch(pregunta, SOLO_MIS_DATOS);
+  });
 });

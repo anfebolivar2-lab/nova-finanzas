@@ -502,6 +502,19 @@
         <p id="deseo-mensaje" class="mensaje" role="status"></p>
         <ul id="lista-deseos" class="lista-banco"></ul>
       </article>
+      <article class="tarjeta">
+        <h2 class="titulo-tarjeta">Comparar precios</h2>
+        <form id="comparar-form" class="formulario">
+          <label for="comparar-producto">¿Qué vas a comprar?</label>
+          <input id="comparar-producto" type="text" maxlength="80" placeholder="Ej: nevera de 300 litros">
+          <label for="comparar-tope">¿Hasta cuánto piensas gastar? (opcional)</label>
+          <input id="comparar-tope" class="monto-entrada" inputmode="numeric">
+          <button id="comparar-buscar" type="submit" class="primario">Buscar precios con la IA</button>
+          <p id="comparar-mensaje" class="mensaje" role="status"></p>
+        </form>
+        <p class="nota">La IA busca precios en internet y los compara. Los precios cambian: confírmalos en la tienda antes de pagar.</p>
+        <div id="comparar-recientes" class="habito-acciones"></div>
+      </article>
     </section>
 
     <!-- ANÁLISIS -->
