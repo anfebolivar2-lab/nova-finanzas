@@ -298,3 +298,14 @@ test("el reto mantiene los días del calendario al cambiar la hora local", funct
   assert.equal(estadoRetoNoGastar(reto, [], new Date(2027, 2, 15, 0, 1)).diasLimpios, 2);
   assert.equal(estadoRetoNoGastar(reto, [], new Date(2027, 2, 16, 0, 1)).estado, "cumplido");
 });
+
+test("la huella requiere puente disponible y PIN activo", () => {
+  const { puedeOfrecerHuella } = require("./herramientas.js");
+  const puente = {};
+  assert.equal(puedeOfrecerHuella({ puente, disponible: true, pinActivo: true }), true);
+  assert.equal(puedeOfrecerHuella({ puente, disponible: true, pinActivo: false }), false);
+  assert.equal(puedeOfrecerHuella({ puente, disponible: false, pinActivo: true }), false);
+  assert.equal(puedeOfrecerHuella({ puente: null, disponible: true, pinActivo: true }), false);
+  assert.equal(puedeOfrecerHuella({ puente, disponible: "true", pinActivo: true }), false);
+  assert.equal(puedeOfrecerHuella(null), false);
+});
